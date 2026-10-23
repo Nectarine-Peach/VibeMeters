@@ -20,6 +20,13 @@ if (!(Test-Path -LiteralPath (Join-Path $runtimeTarget 'node.exe'))) {
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\README.md') -Destination $output
 $packageFiles = @((Join-Path $output 'VibeMeters.exe'), (Join-Path $output 'README.md'))
 $packageFiles += Join-Path $output 'runtime'
+$designSource = Join-Path $PSScriptRoot '..\docs\design'
+if (Test-Path -LiteralPath $designSource) {
+    $designTarget = Join-Path $output 'docs\design'
+    New-Item -ItemType Directory -Force -Path $designTarget | Out-Null
+    Copy-Item -Path (Join-Path $designSource '*') -Destination $designTarget -Force
+    $packageFiles += Join-Path $output 'docs'
+}
 foreach ($document in @('RESEARCH.md', 'VERIFICATION.md')) {
     $source = Join-Path $PSScriptRoot "..\$document"
     if (Test-Path -LiteralPath $source) {

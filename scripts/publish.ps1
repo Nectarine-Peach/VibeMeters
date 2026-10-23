@@ -27,5 +27,23 @@ foreach ($document in @('RESEARCH.md', 'VERIFICATION.md')) {
         $packageFiles += Join-Path $output $document
     }
 }
-Compress-Archive -LiteralPath $packageFiles -DestinationPath (Join-Path $PSScriptRoot '..\dist\VibeMeters-win-x64.zip') -CompressionLevel Fastest -Force
+$archivePath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\dist\VibeMeters-win-x64.zip'))
+$temporaryArchive = $archivePath + '.tmp'
+$outputRoot = [IO.Path]::GetFullPath($output)
+$archiveStream = [IO.File]::Open($temporaryArchive, [IO.FileMode]::Create)
+$archive = [IO.Compression.ZipArchive]::new($archiveStream, [IO.Compression.ZipArchiveMode]::Create)
+try {
+    foreach ($packagePath in $packageFiles) {
+        $sourcePath = [IO.Path]::GetFullPath($packagePath)
+        $sources = if ([IO.Directory]::Exists($sourcePath)) { [IO.Directory]::GetFiles($sourcePath, '*', [IO.SearchOption]::AllDirectories) } else { @($sourcePath) }
+        foreach ($sourceFile in $sources) {
+            $entryName = [IO.Path]::GetRelativePath($outputRoot, $sourceFile).Replace('\', '/')
+            [IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $sourceFile, $entryName, [IO.Compression.CompressionLevel]::Fastest) | Out-Null
+        }
+    }
+} finally {
+    $archive.Dispose()
+    $archiveStream.Dispose()
+}
+[IO.File]::Move($temporaryArchive, $archivePath, $true)
 Write-Host "Ready: $output"

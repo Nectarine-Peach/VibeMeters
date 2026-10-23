@@ -301,8 +301,13 @@ internal sealed class VisualVerification
         var drawing=new DrawingVisual();
         using(var context=drawing.RenderOpen())
         {
+            // Window.Background belongs to the native window's client surface, outside
+            // the captured content root. Paint that surface before its visual tree.
+            var clientBounds=new Rect(new Size(root.ActualWidth,root.ActualHeight));
+            var radius=root is Border frame?frame.CornerRadius.TopLeft:0;
+            context.DrawRoundedRectangle(window.Background,null,clientBounds,radius,radius);
             var brush=new VisualBrush(root) { Stretch=Stretch.Fill,AlignmentX=AlignmentX.Left,AlignmentY=AlignmentY.Top };
-            context.DrawRectangle(brush,null,new Rect(new Size(root.ActualWidth,root.ActualHeight)));
+            context.DrawRectangle(brush,null,clientBounds);
         }
         var bitmap=new RenderTargetBitmap(width,height,dpi.PixelsPerInchX,dpi.PixelsPerInchY,PixelFormats.Pbgra32);
         bitmap.Render(drawing);

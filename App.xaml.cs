@@ -35,6 +35,7 @@ public partial class App : Application
     private HashSet<UsageProviderKind> _activeProviders = new();
     private int _exitCode;
     private bool _fitDesignOnce;
+    private bool _smokeTest;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -42,11 +43,13 @@ public partial class App : Application
         // A static, tiny 2D widget does not benefit from a dedicated Direct3D renderer.
         // Software rendering avoids a persistent GPU device and compositor threads.
         RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
-        _demo = e.Args.Contains("--demo") || e.Args.Contains("--smoke-test");
-        _mutex = new Mutex(true, _demo ? "Local\\VibeMeters.Demo" : "Local\\VibeMeters.App", out bool first);
-        _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, _demo ? "Local\\VibeMeters.Demo.Activate" : "Local\\VibeMeters.Activate");
+        _smokeTest = e.Args.Contains("--smoke-test");
+        _demo = e.Args.Contains("--demo") || _smokeTest;
+        _mutex = new Mutex(true, _smokeTest ? "Local\\VibeMeters.SmokeTest" : _demo ? "Local\\VibeMeters.Demo" : "Local\\VibeMeters.App", out bool first);
+        _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, _smokeTest ? "Local\\VibeMeters.SmokeTest.Activate" : _demo ? "Local\\VibeMeters.Demo.Activate" : "Local\\VibeMeters.Activate");
         if (!first) { _activateEvent.Set(); Shutdown(); return; }
         _settings = _demo ? new AppSettings() : SettingsStore.Load();
+        if (_smokeTest) _settings.RefreshIntervalSeconds = 0;
         if (_settings.CompactMode) { _settings.WindowWidth = 240; _settings.WindowHeight = 148; _settings.CompactMode = false; }
         _fitDesignOnce = !_demo && _settings.DesignLayoutVersion < 2;
         if (_fitDesignOnce) { _settings.WindowWidth = 360; _settings.WindowHeight = 400; _settings.DesignLayoutVersion = 2; }
@@ -66,7 +69,7 @@ public partial class App : Application
         _window.SourceInitialized += (_, _) => RestorePosition();
         CreateTray();
         OnThemeChanged();
-        _providers = UsageProviderFactory.CreateDefault();
+        _providers = _smokeTest ? Array.Empty<IUsageProvider>() : UsageProviderFactory.CreateDefault();
         if (!_demo) WatchCredentials();
         _timer.Tick += async (_, _) => await RefreshAsync();
         ApplySettings();
@@ -141,7 +144,7 @@ public partial class App : Application
         _window.ShowInTaskbar = _settings.ShowInTaskbar;
         foreach (var snapshot in _latest.Values) _window.RenderSnapshot(snapshot);
         UpdateTray();
-        if (enabledNewProvider && _lastRefresh != default)
+        if (enabledNewProvider && !_smokeTest && _lastRefresh != default)
         {
             if (_refreshing) _credentialsChanged = true;
             else Dispatcher.InvokeAsync(async () => await RefreshAsync());
@@ -268,69 +271,21 @@ public partial class App : Application
 
     private async Task SmokeTestAsync()
     {
-        var output = Path.Combine(AppContext.BaseDirectory, "artifacts");
+        var output=Path.Combine(AppContext.BaseDirectory,"artifacts");
         Directory.CreateDirectory(output);
-        var results = new List<string>();
-        void Check(string name, bool passed) { results.Add($"{(passed ? "PASS" : "FAIL")}: {name}"); if (!passed) _exitCode = 1; }
+        _timer.Stop();
         try
         {
-            await Task.Delay(600);
-            Check("initial window", _window!.IsVisible && _window.ShowInTaskbar && !_window.Topmost);
-            _settings.AlwaysOnTop = true; ApplySettings(); Check("always on top", _window.Topmost);
-            _settings.ShowInTaskbar = false; ApplySettings(); Check("taskbar disabled", !_window.ShowInTaskbar);
-            _settings.ShowInTaskbar = true; ApplySettings();
-            _window.WindowState = WindowState.Minimized; Check("minimize keeps taskbar window", _window.IsVisible);
-            _window.WindowState = WindowState.Normal;
-            _window.Hide(); Check("tray hide", !_window.IsVisible); ShowWindow(); Check("restore", _window.IsVisible);
-            foreach (var size in new[] { (340, 320), (220, 140), (260, 180), (600, 300) })
-            {
-                _window.Width = size.Item1; _window.Height = size.Item2;
-                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-                CaptureWindow(Path.Combine(output, $"window-{size.Item1}x{size.Item2}.png"));
-                var micro = (FrameworkElement)_window.FindName("MicroPanel");
-                Check($"responsive {size.Item1}x{size.Item2}", micro.Visibility == (size.Item1 < 280 || size.Item2 < 220 ? Visibility.Visible : Visibility.Collapsed));
-            }
-            _window.SetCompactMode(true);
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            Check("mini mode", _settings.CompactMode);
-            _window.SetCompactMode(false);
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            Check("mini restores previous size", _window.Width == 600 && _window.Height == 300);
-            _window.Width = 340; _window.Height = 320;
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            var settingsButton = (System.Windows.Controls.Button)_window.FindName("SettingsButton");
-            settingsButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            CaptureWindow(Path.Combine(output, "settings.png"));
-            Check("settings overlay", ((FrameworkElement)_window.FindName("SettingsPanel")).Visibility == Visibility.Visible);
-            settingsButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
-            _window.RenderSnapshot(new UsageSnapshot(UsageProviderKind.Claude, UsageStatus.AuthenticationRequired, Array.Empty<UsageWindow>(), DateTimeOffset.Now, Message: "로그인을 완료한 뒤 자동으로 다시 확인합니다."));
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            CaptureWindow(Path.Combine(output, "login-required.png"));
-            Check("login recovery action", ((FrameworkElement)_window.FindName("ClaudeConnectButton")).Visibility == Visibility.Visible);
-            _window.Width = 220; _window.Height = 140;
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            _window.SetCompactMode(true);
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            _window.SetCompactMode(false);
-            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
-            Check("mini restores a manually tiny window", _window.Width == 220 && _window.Height == 140);
-            CaptureWindow(Path.Combine(output, "micro-login-required.png"));
-            Check("login state in micro layout", ((FrameworkElement)_window.FindName("MicroPanel")).Visibility == Visibility.Visible);
+            var failures=await VisualVerification.RunAsync(_window!,_settings,ApplySettings,ShowWindow,Render,output);
+            _exitCode=failures==0?0:1;
         }
-        catch (Exception ex) { _exitCode = 1; results.Add("FAIL: " + ex.GetType().Name + " · " + ex.Message); }
-        finally { File.WriteAllLines(Path.Combine(output, "smoke-test.txt"), results); ExitApplication(); }
+        catch(Exception ex)
+        {
+            _exitCode=1;
+            File.AppendAllText(Path.Combine(output,"smoke-test.txt"),$"FAIL: unhandled diagnostic exception · {ex}\n");
+        }
+        finally { ExitApplication(); }
     }
-
-    private void CaptureWindow(string path)
-    {
-        _window!.UpdateLayout();
-        var bitmap = new RenderTargetBitmap((int)_window.ActualWidth, (int)_window.ActualHeight, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(_window);
-        var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        using var file = File.Create(path); encoder.Save(file);
-    }
-
     private void ExitApplication()
     {
         _exiting = true; _timer.Stop(); _lifetime.Cancel();
@@ -386,4 +341,3 @@ public partial class App : Application
         public override System.Drawing.Color SeparatorLight => MenuColor("SurfaceBackground");
     }
 }
-

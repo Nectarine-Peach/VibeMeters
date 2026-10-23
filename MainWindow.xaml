@@ -28,35 +28,8 @@
      <Button Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" Click="Hide_Click" ToolTip="트레이로 숨기기" AutomationProperties.Name="트레이로 숨기기"/>
     </StackPanel>
    </Grid>
-   <ScrollViewer x:Name="UsageScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-    <Grid x:Name="ProviderGrid" Margin="0,4,0,3">
-     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="0"/></Grid.ColumnDefinitions>
-     <Border x:Name="CodexCard" Background="#1C282D" CornerRadius="7" Padding="10,7" Margin="0,0,0,6"><StackPanel>
-      <Grid x:Name="CodexHeading" Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="Codex" FontWeight="SemiBold" Foreground="#8BE2C3"/><TextBlock x:Name="CodexPlan" Grid.Column="1" Text="연결 확인 중" Foreground="{StaticResource Muted}" FontSize="10" TextTrimming="CharacterEllipsis" MaxWidth="155"/></Grid>
-      <StackPanel x:Name="CodexRows"/><TextBlock x:Name="CodexMessage" Text="사용량을 불러오는 중…" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,2,0,0"/>
-      <Button x:Name="CodexConnectButton" Content="Codex 로그인 ↗" HorizontalAlignment="Left" FontSize="10" Padding="0,3" Click="CodexConnect_Click" Visibility="Collapsed"/>
-     </StackPanel></Border>
-     <Border x:Name="ClaudeCard" Grid.Row="1" Background="#2B2527" CornerRadius="7" Padding="10,7"><StackPanel>
-      <Grid x:Name="ClaudeHeading" Margin="0,0,0,4"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="Claude" FontWeight="SemiBold" Foreground="#ECA98C"/><TextBlock x:Name="ClaudePlan" Grid.Column="1" Text="연결 확인 중" Foreground="{StaticResource Muted}" FontSize="10" TextTrimming="CharacterEllipsis" MaxWidth="155"/></Grid>
-      <StackPanel x:Name="ClaudeRows"/><TextBlock x:Name="ClaudeMessage" Text="사용량을 불러오는 중…" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,2,0,0"/>
-      <Button x:Name="ClaudeConnectButton" Content="Claude 로그인 ↗" HorizontalAlignment="Left" FontSize="10" Padding="0,3" Click="ClaudeConnect_Click" Visibility="Collapsed"/>
-     </StackPanel></Border>
-    </Grid>
-   </ScrollViewer>
-   <StackPanel x:Name="MicroPanel" Grid.Row="1" VerticalAlignment="Center" Visibility="Collapsed"><Grid x:Name="CodexMicro" Margin="1,0,1,5"/><Grid x:Name="ClaudeMicro" Margin="1,0,1,0"/></StackPanel>
-   <Border x:Name="SettingsPanel" Grid.Row="1" Visibility="Collapsed" Background="#1D2531" CornerRadius="7" Padding="10" Margin="0,3">
-    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel>
-     <TextBlock Text="설정 및 계정" FontWeight="SemiBold" Margin="0,0,0,10"/>
-     <TextBlock Text="새로고침 간격" FontSize="11" Margin="0,0,0,5"/>
-     <ComboBox x:Name="IntervalCombo" SelectedIndex="2" SelectionChanged="Interval_SelectionChanged" AutomationProperties.Name="새로고침 간격"><ComboBoxItem Content="30초" Tag="30"/><ComboBoxItem Content="1분" Tag="60"/><ComboBoxItem Content="2분" Tag="120"/><ComboBoxItem Content="5분" Tag="300"/><ComboBoxItem Content="15분" Tag="900"/><ComboBoxItem Content="수동" Tag="0"/></ComboBox>
-     <CheckBox x:Name="TaskbarCheck" Content="작업표시줄에 표시" Click="Taskbar_Click"/><CheckBox x:Name="StartupCheck" Content="Windows 시작 시 실행" Click="Startup_Click"/>
-     <CheckBox x:Name="NotifyCheck" Content="남은 한도 20%·5% 알림" Click="Notify_Click"/><TextBlock Text="계정 연결" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,14,0,3"/>
-     <WrapPanel><Button x:Name="CodexLoginButton" Content="Codex 로그인 ↗" Click="CodexConnect_Click" FontSize="11"/><Button Content="사용량 ↗" Click="CodexDashboard_Click" FontSize="10" ToolTip="Codex 사용량 페이지"/></WrapPanel>
-     <WrapPanel><Button x:Name="ClaudeLoginButton" Content="Claude 로그인 ↗" Click="ClaudeConnect_Click" FontSize="11"/><Button Content="사용량 ↗" Click="ClaudeDashboard_Click" FontSize="10" ToolTip="Claude 사용량 페이지"/></WrapPanel>
-     <TextBlock x:Name="LoginStatusText" Text="로그인 후 사용량을 자동으로 다시 확인합니다." TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,7,0,5"/>
-    </StackPanel></ScrollViewer>
-   </Border>
-   <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+   <Grid x:Name="ProviderGrid" Grid.Row="1" Margin="0,4,0,3"/>
+   <Grid x:Name="MicroPanel" Grid.Row="1" Margin="0,2" Visibility="Collapsed"/>   <Grid Grid.Row="2"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
     <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock x:Name="StatusText" Text="연결 준비 중" Foreground="{StaticResource Muted}" FontSize="10" TextTrimming="CharacterEllipsis" MaxWidth="155"/><TextBlock x:Name="LastUpdatedText" Foreground="#9AA6B8" FontSize="10" Margin="6,0,0,0"/></StackPanel>
     <Button Grid.Column="1" x:Name="RefreshButton" Content="&#xE72C;" FontFamily="Segoe MDL2 Assets" Click="Refresh_Click" ToolTip="지금 새로고침 (F5)" AutomationProperties.Name="지금 새로고침"/>
     <Button Grid.Column="2" x:Name="SettingsButton" Content="&#xE713;" FontFamily="Segoe MDL2 Assets" Click="Settings_Click" ToolTip="설정 / 계정" AutomationProperties.Name="설정 및 계정"/>
@@ -64,4 +37,5 @@
   </Grid>
  </Border>
 </Window>
+
 

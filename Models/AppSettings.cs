@@ -12,4 +12,15 @@ public sealed class AppSettings
     public double WindowHeight { get; set; } = 320;
     public bool CompactMode { get; set; }
     public bool NotifyLowQuota { get; set; }
+    public bool ShowCodex { get; set; } = true;
+    public bool ShowClaude { get; set; } = true;
+    public bool ShowGemini { get; set; }
+
+    public bool IsProviderVisible(UsageProviderKind provider) => provider switch
+    {
+        UsageProviderKind.Codex => ShowCodex,
+        UsageProviderKind.Claude => ShowClaude,
+        UsageProviderKind.Gemini => ShowGemini,
+        _ => false
+    };
 }

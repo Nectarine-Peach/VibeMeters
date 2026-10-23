@@ -26,6 +26,7 @@ public static class SettingsStore
         if (settings.Top.HasValue && !double.IsFinite(settings.Top.Value)) settings.Top = null;
         settings.WindowWidth = double.IsFinite(settings.WindowWidth) ? Math.Clamp(settings.WindowWidth, 220, 1000) : 340;
         settings.WindowHeight = double.IsFinite(settings.WindowHeight) ? Math.Clamp(settings.WindowHeight, 140, 1000) : 320;
+        if (!settings.ShowCodex && !settings.ShowClaude && !settings.ShowGemini) settings.ShowCodex = true;
         return settings;
     }
     public static void Save(AppSettings settings)

@@ -41,6 +41,7 @@ public sealed class UsageProvider : IUsageProvider
     private DateTimeOffset _nextAttempt;
     private UsageSnapshot? _last;
     private int _failures;
+    private string? _credentialFingerprint;
 
     public UsageProviderKind Kind { get; }
 
@@ -57,12 +58,23 @@ public sealed class UsageProvider : IUsageProvider
         try
         {
             var now = DateTimeOffset.UtcNow;
-            if (_last is not null && now < _nextAttempt) return _last;
             UsageCredential? credential;
             try { credential = await _credentials.ReadAsync(Kind, cancellationToken).ConfigureAwait(false); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             { return Save(UsageStatus.NotConnected, "로그인 정보를 읽을 수 없습니다. 해당 CLI에서 다시 로그인해 주세요."); }
             if (credential is null) return Save(UsageStatus.NotConnected, Kind == UsageProviderKind.Codex ? "Codex CLI에서 ChatGPT 계정으로 로그인해 주세요." : "Claude Code에서 구독 계정으로 로그인해 주세요.");
+            // Credential updates must bypass an earlier failure's backoff after official CLI login.
+            // Retain only a one-way digest, never a second copy of the access token.
+            var fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+                System.Text.Encoding.UTF8.GetBytes(credential.AccessToken + "\n" + credential.AccountId)));
+            if (!string.Equals(fingerprint, _credentialFingerprint, StringComparison.Ordinal))
+            {
+                _credentialFingerprint = fingerprint;
+                _failures = 0;
+                _nextAttempt = default;
+                _last = null;
+            }
+            if (_last is not null && now < _nextAttempt) return _last;
             if (credential.ExpiresAt is { } expiry && expiry <= now)
                 return Save(UsageStatus.AuthenticationRequired, "로그인이 만료되었습니다. 해당 CLI를 실행하여 다시 로그인해 주세요.");
 

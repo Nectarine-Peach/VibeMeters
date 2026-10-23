@@ -36,7 +36,7 @@ public sealed class CredentialReader : ICredentialReader
 
     public async Task<UsageCredential?> ReadAsync(UsageProviderKind provider, CancellationToken cancellationToken = default)
     {
-        var path = provider == UsageProviderKind.Codex ? Path.Combine(_codexHome, "auth.json") : Path.Combine(_claudeHome, ".credentials.json");
+        var path = GetCredentialPath(provider);
         if (!File.Exists(path)) return null;
         // Shared reading avoids interfering with the CLI's atomic token updates.
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 4096, true);
@@ -59,6 +59,9 @@ public sealed class CredentialReader : ICredentialReader
         }
         return string.IsNullOrWhiteSpace(access) ? null : new UsageCredential { AccessToken = access, Plan = GetString(oauth, "subscriptionType"), ExpiresAt = expiry };
     }
+
+    public string GetCredentialPath(UsageProviderKind provider) => provider == UsageProviderKind.Codex
+        ? Path.Combine(_codexHome, "auth.json") : Path.Combine(_claudeHome, ".credentials.json");
 
     private static string? GetString(JsonElement parent, string key) => parent.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 }

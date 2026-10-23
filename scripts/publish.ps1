@@ -19,12 +19,16 @@ if (!(Test-Path -LiteralPath (Join-Path $runtimeTarget 'node.exe'))) {
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\README.md') -Destination $output
 $packageFiles = @((Join-Path $output 'VibeMeters.exe'), (Join-Path $output 'README.md'))
+if (Test-Path -LiteralPath (Join-Path $PSScriptRoot '..\README.ko.md')) {
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\README.ko.md') -Destination $output
+    $packageFiles += Join-Path $output 'README.ko.md'
+}
 $packageFiles += Join-Path $output 'runtime'
-$designSource = Join-Path $PSScriptRoot '..\docs\design'
-if (Test-Path -LiteralPath $designSource) {
-    $designTarget = Join-Path $output 'docs\design'
-    New-Item -ItemType Directory -Force -Path $designTarget | Out-Null
-    Copy-Item -Path (Join-Path $designSource '*') -Destination $designTarget -Force
+$docsSource = Join-Path $PSScriptRoot '..\docs'
+if (Test-Path -LiteralPath $docsSource) {
+    $docsTarget = Join-Path $output 'docs'
+    & robocopy $docsSource $docsTarget /E /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+    if ($LASTEXITCODE -ge 8) { throw 'Documentation copy failed.' }
     $packageFiles += Join-Path $output 'docs'
 }
 foreach ($document in @('RESEARCH.md', 'VERIFICATION.md')) {

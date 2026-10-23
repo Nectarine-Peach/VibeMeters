@@ -1,72 +1,121 @@
 # VibeMeters
 
-v1.4.2: 미니 창도 큰 창과 같은 카드 구성을 사용합니다. 서비스 제목·구분선 아래에 각 한도의 ‘항목–막대–비율’을 한 줄씩 세로로 쌓고, 창 크기에 따라 글자와 여백을 함께 조절합니다.
+**Your AI subscription quotas, in a small Windows tray window.**
 
-v1.4.1: 시안의 표준 창 비례와 가로형 ‘항목–막대–비율’ 배치를 그대로 적용합니다. 이전 버전에서 저장된 초소형 크기는 이번 업데이트 첫 실행에 한 번만 표준 폭 360으로 전환합니다. C/A/G 서비스 배지는 제거하며 서비스 선택과 수치 기준은 유지합니다.
+[한국어](README.ko.md) · **English** · [Verification notes](VERIFICATION.md) · [Design reference](docs/design/README.md)
 
-v1.4.0: ImageGen으로 만든 디자인 시안을 바탕으로 서비스 배지·중립색 패널·수치와 막대 정렬·상단 아이콘·설정 화면을 다시 구성했습니다. 다크·라이트·시스템 테마와 서비스별 표시 기준을 유지합니다. [디자인 시안과 생성 프롬프트](docs/design/README.md)를 함께 제공합니다.
+Keep Codex, Claude, and Gemini usage visible without opening their dashboards. Pin a compact window above your work, choose the services you use, and see remaining or used quota at a glance.
 
-v1.3.1: 작은 창의 서비스·수치 정렬과 여백을 정리하고, 조회 제한 상태를 작은 점과 짧은 줄바꿈 툴팁으로 표시합니다. 캐시 수치는 대비를 유지합니다. Claude 사용량 조회에는 최소 2분 간격과 더 긴 제한 대기를 적용했습니다.
+Built with native WPF and .NET 8 for **Windows 10/11 x64**. No embedded browser. No account required for VibeMeters itself.
 
-v1.3: Gemini 앱 내부 할당량, 시스템·다크·라이트 테마, 서비스별 남은 양/사용한 양 설정을 제공합니다. 새로고침과 설정은 상단에 통합했고 최근 확인 문구와 미니 전환 버튼은 제거했습니다. 이번 버전은 사용자 요청에 따라 테스트·실행 검증을 생략하고 배포용 빌드와 실행만 진행했습니다.
+## The same layout, at any size
 
-Codex와 Claude 구독의 **남은 사용량**을 확인하는 작은 Windows 트레이 앱입니다. WPF/.NET 8 기반이며 브라우저 엔진과 상주 CLI 프로세스를 사용하지 않습니다.
+Standard and mini windows share the same service cards: **service heading → quota label, meter, percentage**. Resizing adjusts type and spacing while keeping quota rows stacked vertically.
 
-## 실행
+| Standard window | Mini window |
+| :---: | :---: |
+| <img src="docs/screenshots/window-standard-dark.png" alt="Standard dark window with vertically stacked quota rows" width="360"> | <img src="docs/screenshots/window-mini-dark.png" alt="Mini dark window preserving the same quota row layout" width="220"> |
 
-Windows 10/11 x64에서 `dist/VibeMeters-win-x64/VibeMeters.exe`를 실행하세요. 배포본은 .NET을 포함하므로 별도 설치가 필요하지 않습니다. ZIP을 원하는 고정 폴더에 압축 해제한 후 실행하세요. Windows 시작 시 실행을 켰다면 앱 위치를 옮긴 뒤 해당 옵션을 다시 켜 주세요. 개인 빌드로 코드 서명이 없어 Windows가 게시자를 확인하지 못할 수 있습니다.
+<details>
+<summary>Settings</summary>
 
-Gemini 조회에는 ZIP에 함께 포함된 `runtime/gemini-quota` 폴더가 필요합니다. EXE와 이 폴더를 함께 유지하세요. Node와 공식 Gemini CLI 코어는 앱 전용으로 포함되며 전역 Gemini CLI를 업그레이드하지 않습니다.
+<img src="docs/screenshots/settings-dark.png" alt="Provider selection, display basis, theme, refresh, and account settings" width="400">
 
-Codex CLI에서 ChatGPT 구독 계정으로, Claude Code에서 Claude 구독 계정으로 로그인하면 자동 연결됩니다. Claude 인증 오류는 Claude Code의 `/login`으로 다시 로그인한 뒤 앱에서 새로고침하세요. Codex는 `codex login`을 사용합니다. API 키의 비용·토큰 통계가 아닌 계정 구독 한도를 표시합니다.
+</details>
 
-**v1.1 앱 내 로그인:** 카드의 로그인 버튼, 설정의 계정 연결 또는 트레이의 Claude/Codex 로그인을 누르면 설치된 공식 CLI의 로그인 창이 열립니다. Claude는 `claude auth login --claudeai`를 실행합니다. 열리는 터미널·브라우저에서 로그인을 완료하면 인증 파일 변경을 감지해 자동 조회합니다. 로그인 창을 열었다는 안내는 인증 완료를 뜻하지 않습니다. Claude 웹/데스크톱 앱 로그인만으로는 현재 Windows Claude Code 인증이 갱신되지 않을 수 있습니다.
+Images are rendered from the native Windows app using **demo data**, not AI-generated mockups or live account quotas. Capture details are documented in the verification notes.
 
-**Gemini:** 설정에서 Gemini를 켜면 모델별 잔여 비율과 초기화 시간을 앱 내부에 표시합니다. 공식 `@google/gemini-cli-core` 0.65.0을 짧게 실행되는 숨겨진 Node 프로세스에서 호출합니다. 모델 생성 요청이나 통계 터미널을 열지 않습니다. 기본적인 Google 로그인과 기존 프로젝트가 필요하며 로그인 버튼은 브라우저 인증을 시작합니다. 자동 조회는 브라우저를 열지 않습니다. 조회 값은 최소 5분 캐시하고 요청 제한은 10분 대기합니다. 계정이 비율을 제공하지 않으면 값을 추정하지 않습니다. CLI 내부 인터페이스를 사용하므로 공개 사용량 API와 같은 호환성 보장은 없습니다. [구현 조사](RESEARCH.md)를 참고하세요.
+## Features
 
-## 조작
+- **Codex, Claude, and Gemini** in one window. Show any combination, including just one service.
+- **Remaining or used percentage per service**, reflected in both the window and tray meters.
+- **Resizable, scroll-free cards** starting at 220 × 140 logical pixels. Minimum height grows when more quota rows need room; wide windows can arrange cards side by side.
+- **Always on top**, tray residence, optional taskbar icon, and optional Windows startup.
+- **Dark, light, or system theme** across the main window, settings, menus, and tooltips.
+- **Automatic or manual refresh**, cached results, request cooldowns, and optional alerts at 20% / 5% remaining quota.
+- **Native rendering without continuous animation.** Codex and Claude use in-process HTTP requests; Gemini uses a short-lived hidden Node process rather than a resident CLI.
 
-- 트레이 아이콘 클릭: 창 열기. 우클릭: 창 열기, 새로고침, 항상 위, 종료.
-- 창의 핀: 항상 위. `F5`: 새로고침. `Esc` 및 닫기: 트레이로 숨기기.
-- 최소화: 작업표시줄 표시가 켜져 있으면 작업표시줄로 최소화합니다.
-- 설정: 갱신 간격 30초·1분·2분(기본)·5분·15분·수동, 작업표시줄 표시, Windows 시작 시 실행.
-- 설정의 **표시할 서비스**에서 Codex·Claude·Gemini 중 원하는 서비스만 선택합니다. 최소 한 개를 유지하며 숨긴 서비스의 자동 조회와 트레이 막대도 제외합니다. Gemini는 기본적으로 꺼져 있습니다.
-- 각 서비스 행에서 **남은 양(사용 가능)** 또는 **사용한 양**을 선택합니다. 수치와 막대, 트레이 지표가 같은 기준으로 바뀌고 서비스 이름 옆에도 남음/사용을 표시합니다. 부족 경고와 알림은 표시 기준에 관계없이 실제 남은 한도를 사용합니다.
-- 테마는 **시스템 / 다크 / 라이트** 중 선택하며 즉시 저장됩니다. 시스템 모드에서는 Windows의 앱 색 모드 변경을 따릅니다. 메인·설정·툴팁·트레이 메뉴에 함께 적용합니다.
-- 테두리 드래그로 크기 조절: 기본 폭 360, 최소 220×140. 작은 창에서도 같은 카드 구성과 한도별 행을 유지하며 글자와 여백을 조절합니다. 선택한 서비스와 한도 수가 많으면 모든 행을 표시할 수 있도록 최소 높이를 늘립니다. 메인 창은 스크롤을 사용하지 않습니다. 충분히 넓히면 카드를 가로로 배치합니다. 크기는 논리 픽셀 기준입니다.
-- 설정은 메인 창 크기를 바꾸지 않는 별도 창으로 열립니다. 표시 서비스·동작·계정 연결을 그룹으로 구성하고 변경 즉시 저장합니다.
-- 별도 미니 전환 버튼 없이 창 크기에 따라 자동으로 표시 밀도를 조절합니다. 창 크기와 위치를 저장합니다. 상단에서 새로고침·설정·항상 위·최소화·숨김을 조작합니다.
-- 수치 위에 마우스를 올리면 정확한 초기화 시각과 확인 상태를 볼 수 있습니다. 미니 창의 경고 표시는 오래된 데이터나 인증 오류를 뜻하며 인증 오류의 서비스 이름을 누르면 로그인합니다.
-- 트레이 아이콘은 선택된 서비스를 Codex·Claude·Gemini 순서로 표시합니다. 막대는 서비스별 남음/사용 기준을 따릅니다. 남은 한도가 20% 이하이면 노랑, 5% 이하이면 빨강입니다. 수치가 없는 서비스는 회색 표시와 툴팁 안내를 사용합니다.
-- 선택 가능한 20%·5% 알림은 새 사용량이 임계점을 내려갈 때만 표시합니다. 시작 직후나 같은 수치를 반복 조회할 때는 중복 알림을 띄우지 않습니다.
-- 작업표시줄은 일반 앱 아이콘과 최소화 기능만 제공합니다. 혼동을 주던 진행 막대는 제거했습니다.
-- 두 번째 실행은 기존 창을 엽니다. 종료는 트레이 메뉴에서 선택합니다.
+## Get started
 
-## 조회와 자원 사용
+A downloadable GitHub release has not been published yet. [Build from source](#build-from-source) to create `dist/VibeMeters-win-x64.zip`. Future packages will be listed on the [Releases page](https://github.com/Nectarine-Peach/VibeMeters/releases).
 
-서버 푸시를 제공하지 않는 조회 방식이므로 실시간 스트리밍 대신 설정한 주기로 확인합니다. 두 서비스는 병렬 조회하며 중복 요청을 방지합니다. 네트워크 시간 제한 15초, 응답 최대 1MiB, HTTP 연결 재사용, 실패·429 응답의 지수 백오프 및 Retry-After 대기를 적용합니다. 창이 숨겨져도 설정한 주기로 확인하며 PC 잠금·절전에서는 정지합니다. 애니메이션이나 프레임 단위 폴링이 없고 화면은 새 응답 때만 갱신합니다.
+1. Extract the **entire ZIP** into a permanent folder and run `VibeMeters.exe`. The Windows package includes .NET; running it needs no separate .NET installation.
+2. Open Settings with the gear icon, choose your services, and connect your accounts.
+3. Resize the window and use the pin icon to keep it above other apps.
 
-Claude의 **조회 제한(HTTP 429)**은 사용량 조회 요청이 거절되었다는 뜻으로, 구독의 5시간·주간 한도 소진과 구분됩니다. 정확한 공개 요청 횟수 기준은 확인되지 않았습니다. 공식 저장소에는 30~60초 주기의 조회 뒤 지속적으로 429를 받았다는 [사용자 보고](https://github.com/anthropics/claude-code/issues/31637)가 있습니다. 이는 보고된 사례이며 공식적인 제한 수치가 아닙니다.
+Keep the EXE and bundled `runtime` folder together; Gemini requires that folder. The package is not code-signed, so Windows may show an unknown-publisher warning.
 
-앱은 Claude 성공 조회를 최소 120초 간격으로 캐시합니다. 조회 제한 후에는 5→10→20→30→60분 대기하며 서버의 Retry-After가 더 길면 이를 따릅니다. 수동 새로고침과 토큰 자동 갱신도 대기를 우회하지 않습니다. 이 정책이 제한 발생을 방지한다고 보장하지는 않습니다. 현재 대기는 앱 재시작 이후까지 저장하지 않습니다.
+### Connect your accounts
 
-Codex·Claude 인증은 `%USERPROFILE%\.codex\auth.json`, `%USERPROFILE%\.claude\.credentials.json`에서 읽습니다. `CODEX_HOME`과 `CLAUDE_CONFIG_DIR`도 지원합니다. 이 두 서비스의 토큰은 앱에서 복사·기록·갱신하지 않습니다. Gemini는 공식 코어의 인증 저장 및 갱신 동작을 사용하므로 공식 코어가 자신의 로그인 캐시를 갱신할 수 있습니다. 토큰은 .NET 앱의 설정·로그·응답에 전달하지 않습니다. Codex·Claude의 Windows Credential Manager 전용 로그인은 현재 지원하지 않습니다.
+| Service | Setup | What is shown |
+| --- | --- | --- |
+| **Codex** | Install the official Codex CLI and run `codex login`, or choose **Codex 로그인** in Settings. | Subscription quota windows returned for your ChatGPT account. |
+| **Claude** | Install Claude Code and run `claude auth login --claudeai`, or choose **Claude 로그인** in Settings. | Available subscription windows, such as five-hour and weekly quotas. |
+| **Gemini** | Enable Gemini in Settings and choose **Gemini 로그인** for official browser sign-in. A supported Google account and Code Assist project are required. | Model quota buckets and reset information returned by the official Gemini CLI core. |
 
-Codex는 `https://chatgpt.com/backend-api/wham/usage`, Claude는 `https://api.anthropic.com/api/oauth/usage`를 사용합니다. 제품 내부 엔드포인트는 변경·접근 제한될 수 있으며 공식적인 안정성 계약이 없습니다. Claude의 제3자 앱 조회가 계정·서버 정책에 따라 거절되면 로그인 안내 또는 조회 오류를 표시합니다. [Codex 공식 클라이언트 소스](https://github.com/openai/codex/blob/main/codex-rs/backend-client/src/client.rs), [Codex App Server 문서](https://learn.chatgpt.com/docs/app-server).
+Codex and Claude login buttons launch the installed official CLI's login flow; complete any terminal/browser steps it opens. Signing in to a provider's website or desktop app alone may not create the CLI credentials VibeMeters needs. Gemini quotas appear **inside VibeMeters**; normal polling does not open a terminal or browser or send model-generation requests. Gemini is off by default.
 
-조회 실패 시 이전 수치를 유지하고 오류 메시지로 오래된 데이터임을 알립니다. 초기화까지 남은 시간은 마지막 조회 시점 기준이며 절대 초기화 시간도 함께 표시합니다. 설정은 `%LOCALAPPDATA%\VibeMeters\settings.json`, 자동시작은 현재 사용자의 Run 레지스트리에만 저장합니다.
+This app shows quota percentages, **not API-key billing, token costs, or a guaranteed number of prompts remaining**. Missing values are shown as unavailable rather than estimated.
 
-## 개발과 검증
+## Everyday use
 
-.NET 8 Windows SDK가 필요합니다.
+| Action | How |
+| --- | --- |
+| Refresh | Top refresh icon, **F5**, or tray menu |
+| Choose services, theme, or display basis | Top gear icon → Settings |
+| Keep the window on top | Top pin icon or tray menu |
+| Hide to tray | Close button or **Esc** |
+| Restore the window | Click the tray icon, or launch the app again |
+| Quit | Right-click the tray icon → **종료** |
+
+Settings save immediately; window size and position are remembered. The taskbar option provides a normal app icon and minimize behavior, not a quota widget or progress overlay. The minimize button appears in sufficiently wide windows.
+
+Refresh options are **30 seconds, 1, 2, 5, or 15 minutes, or manual**; the default is two minutes. Polling pauses while Windows is locked or sleeping. Hover over quota rows or status indicators for reset times and connection details. A warning indicator can mean cached data, a login problem, or a temporary server restriction.
+
+> **Language:** Documentation is available in English and Korean. Current application labels are Korean; an in-app English language switch is not included.
+
+## Refresh limits and troubleshooting
+
+Updates use polling rather than a real-time server stream. Provider cooldowns can make the effective interval longer than the selected setting.
+
+| Situation | What to do |
+| --- | --- |
+| Codex or Claude is not connected | Sign in through the official CLI or Settings, then refresh. Credential-file changes trigger a new check. |
+| Claude reports a temporary query limit | Wait for the retry time in the tooltip. HTTP 429 restricts the **usage lookup**; it does not by itself mean the subscription quota is exhausted. |
+| A previous percentage remains visible after an error | It is the last successful value. Read the status tooltip before treating it as current. |
+| Gemini has no quota information | Check Google login and project access. Some accounts do not return supported buckets. Keep the bundled runtime beside the EXE. |
+| Startup stops working after moving the app | Toggle Windows startup off and on in Settings to update the saved path. |
+
+Claude successful lookups have a **two-minute minimum**. After HTTP 429, VibeMeters waits **5 → 10 → 20 → 30 → 60 minutes**, or longer if requested by the server. Manual refresh does not bypass this wait. Gemini results are cached for at least **five minutes**, with a **ten-minute wait** after rate limiting. These are app policies, not published provider request allowances, and do not guarantee that throttling will never occur.
+
+## Privacy and compatibility
+
+- Codex reads `%USERPROFILE%\.codex\auth.json` (`CODEX_HOME` supported); Claude reads `%USERPROFILE%\.claude\.credentials.json` (`CLAUDE_CONFIG_DIR` supported). VibeMeters does not persist or refresh these tokens. Credential-manager-only Codex/Claude logins are currently unsupported.
+- Gemini bundles official `@google/gemini-cli-core` **0.65.0**. Its normal authentication flow may store and refresh its own login cache. Raw tokens are not forwarded to the .NET app's settings or quota output.
+- Preferences live in `%LOCALAPPDATA%\VibeMeters\settings.json`. Optional startup registration uses the current user's Windows Run key. Credentials are not included in source or release packages.
+- Codex and Claude use provider account endpoints; Gemini uses an internal interface of the official CLI core. These integrations may change or be restricted by provider policies. VibeMeters is an independent project, unaffiliated with OpenAI, Anthropic, or Google.
+
+See [implementation research](RESEARCH.md) and [verification notes](VERIFICATION.md) for integration details and the scope of testing. No specific memory or CPU benchmark is claimed.
+
+## Build from source
+
+Requirements: Windows, the **.NET 8 SDK**, and **Node.js/npm** compatible with the pinned Gemini CLI core. The publish script installs locked npm dependencies if needed and bundles the available `node.exe` runtime.
 
 ```powershell
+git clone https://github.com/Nectarine-Peach/VibeMeters.git
+cd VibeMeters
 dotnet build -c Release
-dotnet run --project tests/VibeMeters.Tests.csproj -c Release
 .\scripts\publish.ps1
-.\dist\VibeMeters-win-x64\VibeMeters.exe --smoke-test
+.\dist\VibeMeters-win-x64\VibeMeters.exe
 ```
 
-`--demo`는 계정에 접근하지 않는 예시 데이터 미리보기입니다. 기존 HTTP·파서·설정 회귀 테스트는 격리된 임시 인증 파일과 가짜 HTTP 응답을 사용합니다. 배포 스크립트는 고정된 공식 Gemini 코어 의존성과 Node 런타임을 함께 포함합니다.
+Output: `dist/VibeMeters-win-x64/` and `dist/VibeMeters-win-x64.zip`. This is a self-contained Windows x64 package; include its runtime folder when distributing it.
 
-기존 v1.1 검증 결과는 [검증 기록](VERIFICATION.md)에 있습니다. v1.2 이후 변경에는 사용자 지시에 따라 테스트와 동작 검증을 실행하지 않았습니다. [유사 앱 조사](RESEARCH.md)도 참고하세요.
+Run the isolated provider/parser/settings regression suite with:
+
+```powershell
+dotnet run --project tests/VibeMeters.Tests.csproj -c Release
+```
+
+`VibeMeters.exe --demo` previews sample data without accessing provider accounts. When [reporting a bug](https://github.com/Nectarine-Peach/VibeMeters/issues), include the version, Windows display scaling, window size, provider, and visible error. **Never attach credential files or access tokens.**
+

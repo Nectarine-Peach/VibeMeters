@@ -11,7 +11,8 @@ if (!(Test-Path -LiteralPath (Join-Path $runtimeSource 'node_modules\@google\gem
 & $Dotnet publish $project -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o $output
 if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
 New-Item -ItemType Directory -Force -Path $runtimeTarget | Out-Null
-Copy-Item -Path (Join-Path $runtimeSource '*') -Destination $runtimeTarget -Recurse -Force
+& robocopy $runtimeSource $runtimeTarget /E /MT:8 /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+if ($LASTEXITCODE -ge 8) { throw 'Gemini runtime copy failed.' }
 if (!(Test-Path -LiteralPath (Join-Path $runtimeTarget 'node.exe'))) {
     $nodeExecutable = (Get-Command node.exe -ErrorAction Stop).Source
     Copy-Item -LiteralPath $nodeExecutable -Destination (Join-Path $runtimeTarget 'node.exe')
@@ -26,5 +27,5 @@ foreach ($document in @('RESEARCH.md', 'VERIFICATION.md')) {
         $packageFiles += Join-Path $output $document
     }
 }
-Compress-Archive -LiteralPath $packageFiles -DestinationPath (Join-Path $PSScriptRoot '..\dist\VibeMeters-win-x64.zip') -Force
+Compress-Archive -LiteralPath $packageFiles -DestinationPath (Join-Path $PSScriptRoot '..\dist\VibeMeters-win-x64.zip') -CompressionLevel Fastest -Force
 Write-Host "Ready: $output"

@@ -28,7 +28,7 @@ public partial class App : Application
     private readonly DispatcherTimer _timer = new();
     private IReadOnlyList<IUsageProvider> _providers = Array.Empty<IUsageProvider>();
     private readonly Dictionary<UsageProviderKind, UsageSnapshot> _latest = new();
-    private bool _refreshing, _exiting, _suspended, _demo;
+    private bool _refreshing, _exiting, _suspended, _demo, _locked, _sleeping;
     private DateTimeOffset _lastRefresh;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -144,8 +144,22 @@ public partial class App : Application
         var bounds = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
         if (bounds.Contains(new Rect(left, top, _window!.Width, 100))) { _window.Left = left; _window.Top = top; }
     }
-    private void OnPowerMode(object sender, PowerModeChangedEventArgs e) => Dispatcher.InvokeAsync(() => { _suspended = e.Mode == PowerModes.Suspend; ApplySettings(); if (e.Mode == PowerModes.Resume) _ = RefreshAsync(); });
-    private void OnSessionSwitch(object sender, SessionSwitchEventArgs e) => Dispatcher.InvokeAsync(() => { if (e.Reason == SessionSwitchReason.SessionLock) _suspended = true; else if (e.Reason == SessionSwitchReason.SessionUnlock) _suspended = false; ApplySettings(); if (!_suspended) _ = RefreshAsync(); });
+    private void OnPowerMode(object sender, PowerModeChangedEventArgs e) => Dispatcher.InvokeAsync(() =>
+    {
+        if (e.Mode == PowerModes.Suspend) _sleeping = true;
+        else if (e.Mode == PowerModes.Resume) _sleeping = false;
+        _suspended = _locked || _sleeping;
+        ApplySettings();
+        if (e.Mode == PowerModes.Resume && !_suspended) _ = RefreshAsync();
+    });
+    private void OnSessionSwitch(object sender, SessionSwitchEventArgs e) => Dispatcher.InvokeAsync(() =>
+    {
+        if (e.Reason == SessionSwitchReason.SessionLock) _locked = true;
+        else if (e.Reason == SessionSwitchReason.SessionUnlock) _locked = false;
+        _suspended = _locked || _sleeping;
+        ApplySettings();
+        if (e.Reason == SessionSwitchReason.SessionUnlock && !_suspended) _ = RefreshAsync();
+    });
 
     private async Task SmokeTestAsync()
     {
@@ -159,11 +173,19 @@ public partial class App : Application
         bool checks = _window.IsVisible && _window.ShowInTaskbar && !_window.Topmost;
         _settings.AlwaysOnTop = true; ApplySettings(); checks &= _window.Topmost;
         _settings.ShowInTaskbar = false; ApplySettings(); checks &= !_window.ShowInTaskbar;
+        _settings.ShowInTaskbar = true; ApplySettings();
         _window.WindowState = WindowState.Minimized;
         checks &= _window.IsVisible;
         _window.WindowState = WindowState.Normal;
         _window.Hide(); checks &= !_window.IsVisible; ShowWindow(); checks &= _window.IsVisible;
-        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "artifacts", "smoke-test.txt"), checks ? "PASS: render, taskbar, always-on-top, hide, restore" : "FAIL");
+        var settingsButton = (System.Windows.Controls.Button)_window.FindName("SettingsButton");
+        settingsButton.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        _window.UpdateLayout();
+        var settingsBitmap = new RenderTargetBitmap((int)_window.ActualWidth, (int)_window.ActualHeight, 96, 96, PixelFormats.Pbgra32);
+        settingsBitmap.Render(_window);
+        var settingsEncoder = new PngBitmapEncoder(); settingsEncoder.Frames.Add(BitmapFrame.Create(settingsBitmap));
+        using (var file = File.Create(Path.Combine(AppContext.BaseDirectory, "artifacts", "settings.png"))) settingsEncoder.Save(file);
+        File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "artifacts", "smoke-test.txt"), checks ? "PASS: render, taskbar, always-on-top, minimize, hide, restore, settings" : "FAIL");
         ExitApplication();
     }
 

@@ -116,6 +116,7 @@ public sealed class UsageProvider : IUsageProvider
 
     private UsageSnapshot Save(UsageStatus status, string message, DateTimeOffset? retryAfter = null)
     {
+        if (_last?.Windows.Count > 0) message = "이전 조회값 표시 중 · " + message;
         _last = new(Kind, status, _last?.Windows ?? [], DateTimeOffset.UtcNow, _last?.Plan, message, retryAfter);
         return _last;
     }

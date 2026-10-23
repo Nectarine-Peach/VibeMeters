@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\VibeMeters.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <AssemblyName>VibeMeters</AssemblyName>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+  <ItemGroup><Compile Remove="tests\**" /><Resource Include="Assets\VibeMeters.ico" /></ItemGroup>
+</Project>

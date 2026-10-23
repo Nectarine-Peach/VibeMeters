@@ -1,0 +1,35 @@
+using System;
+using System.IO;
+using System.Text.Json;
+using Microsoft.Win32;
+using VibeMeters.Models;
+
+namespace VibeMeters.Services;
+
+public static class SettingsStore
+{
+    private static readonly string Folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VibeMeters");
+    private static readonly string FilePath = Path.Combine(Folder, "settings.json");
+    public static AppSettings Load()
+    {
+        try
+        {
+            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath)) ?? new();
+            if (settings.RefreshIntervalSeconds != 0 && settings.RefreshIntervalSeconds is < 30 or > 86400) settings.RefreshIntervalSeconds = 120;
+            return settings;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { return new(); }
+    }
+    public static void Save(AppSettings settings)
+    {
+        Directory.CreateDirectory(Folder);
+        File.WriteAllText(FilePath + ".tmp", JsonSerializer.Serialize(settings));
+        File.Move(FilePath + ".tmp", FilePath, true);
+    }
+    public static void SetStartup(bool enabled)
+    {
+        using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
+        if (enabled) key.SetValue("VibeMeters", "\"" + Environment.ProcessPath + "\" --hidden");
+        else key.DeleteValue("VibeMeters", false);
+    }
+}

@@ -4,3 +4,5 @@ dist/
 tests/bin/
 tests/obj/
 *.user
+runtime/**/node_modules/
+runtime/**/node.exe

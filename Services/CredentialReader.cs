@@ -68,7 +68,7 @@ public sealed class CredentialReader : ICredentialReader
     {
         UsageProviderKind.Codex => Path.Combine(_codexHome, "auth.json"),
         UsageProviderKind.Claude => Path.Combine(_claudeHome, ".credentials.json"),
-        UsageProviderKind.Gemini => Path.Combine(_geminiHome, "settings.json"),
+            UsageProviderKind.Gemini => Path.Combine(_geminiHome, "oauth_creds.json"),
         _ => throw new ArgumentOutOfRangeException(nameof(provider))
     };
 

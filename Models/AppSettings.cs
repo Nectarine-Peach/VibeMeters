@@ -1,7 +1,10 @@
 namespace VibeMeters.Models;
 
+public enum AppTheme { System, Dark, Light }
+
 public sealed class AppSettings
 {
+    public AppTheme Theme { get; set; } = AppTheme.System;
     public int RefreshIntervalSeconds { get; set; } = 120;
     public bool AlwaysOnTop { get; set; }
     public bool ShowInTaskbar { get; set; } = true;

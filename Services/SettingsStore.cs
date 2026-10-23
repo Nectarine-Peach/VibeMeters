@@ -21,6 +21,7 @@ public static class SettingsStore
     }
     public static AppSettings Normalize(AppSettings settings)
     {
+        if (!Enum.IsDefined(settings.Theme)) settings.Theme = AppTheme.System;
         if (settings.RefreshIntervalSeconds != 0 && settings.RefreshIntervalSeconds is < 30 or > 86400) settings.RefreshIntervalSeconds = 120;
         if (settings.Left.HasValue && !double.IsFinite(settings.Left.Value)) settings.Left = null;
         if (settings.Top.HasValue && !double.IsFinite(settings.Top.Value)) settings.Top = null;

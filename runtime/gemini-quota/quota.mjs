@@ -1,8 +1,13 @@
 // Short-lived adapter using the official, app-private Gemini CLI core.
 // Official code owns authentication and token renewal; credentials never leave it.
 import { writeSync } from 'node:fs';
-process.stdout.write = () => true;
-process.stderr.write = () => true;
+const suppressWrite = (chunk, encoding, callback) => {
+  const done = typeof encoding === 'function' ? encoding : callback;
+  if (typeof done === 'function') queueMicrotask(done);
+  return true;
+};
+process.stdout.write = suppressWrite;
+process.stderr.write = suppressWrite;
 const finish = value => {
   if (!interactiveLogin) writeSync(1, JSON.stringify(value));
   // Graceful completion lets the official client's pending token-storage writes finish.

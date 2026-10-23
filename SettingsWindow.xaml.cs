@@ -28,6 +28,11 @@ public partial class SettingsWindow : Window
         UpdateServiceToggles();
         foreach(ComboBoxItem item in IntervalCombo.Items)
             if(int.TryParse(item.Tag?.ToString(),out var seconds)&&seconds==settings.RefreshIntervalSeconds) { IntervalCombo.SelectedItem=item; break; }
+        foreach(ComboBoxItem item in ThemeCombo.Items)
+            if(item.Tag?.ToString()==settings.Theme.ToString()) { ThemeCombo.SelectedItem=item; break; }
+        SetDisplayMode(CodexModeCombo,settings.GetDisplayMode(UsageProviderKind.Codex));
+        SetDisplayMode(ClaudeModeCombo,settings.GetDisplayMode(UsageProviderKind.Claude));
+        SetDisplayMode(GeminiModeCombo,settings.GetDisplayMode(UsageProviderKind.Gemini));
         _initialized=true;
         PreviewKeyDown+=(_,e)=> { if(e.Key==Key.Escape) { Close(); e.Handled=true; } };
     }
@@ -57,6 +62,29 @@ public partial class SettingsWindow : Window
     {
         if(!_initialized||IntervalCombo.SelectedItem is not ComboBoxItem item) return;
         _settings.RefreshIntervalSeconds=int.Parse(item.Tag.ToString()!,CultureInfo.InvariantCulture);
+        SettingsChanged?.Invoke();
+    }
+    private void Theme_SelectionChanged(object sender,SelectionChangedEventArgs e)
+    {
+        if(!_initialized||ThemeCombo.SelectedItem is not ComboBoxItem item) return;
+        if(Enum.TryParse<AppTheme>(item.Tag?.ToString(),out var theme))
+        {
+            _settings.Theme=theme;
+            SettingsChanged?.Invoke();
+        }
+    }
+    private static void SetDisplayMode(ComboBox combo,UsageDisplayMode mode)
+    {
+        foreach(ComboBoxItem item in combo.Items)
+            if(item.Tag?.ToString()==mode.ToString()) { combo.SelectedItem=item; break; }
+    }
+    private void DisplayMode_SelectionChanged(object sender,SelectionChangedEventArgs e)
+    {
+        if(!_initialized||sender is not ComboBox combo||combo.SelectedItem is not ComboBoxItem item) return;
+        if(!Enum.TryParse<UsageDisplayMode>(item.Tag?.ToString(),out var mode)) return;
+        if(combo==CodexModeCombo) _settings.CodexDisplayMode=mode;
+        else if(combo==ClaudeModeCombo) _settings.ClaudeDisplayMode=mode;
+        else if(combo==GeminiModeCombo) _settings.GeminiDisplayMode=mode;
         SettingsChanged?.Invoke();
     }
     public void SetLoginStatus(UsageProviderKind kind,bool busy,string message)

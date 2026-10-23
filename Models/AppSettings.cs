@@ -1,10 +1,14 @@
 namespace VibeMeters.Models;
 
 public enum AppTheme { System, Dark, Light }
+public enum UsageDisplayMode { Remaining, Used }
 
 public sealed class AppSettings
 {
     public AppTheme Theme { get; set; } = AppTheme.System;
+    public UsageDisplayMode CodexDisplayMode { get; set; }
+    public UsageDisplayMode ClaudeDisplayMode { get; set; }
+    public UsageDisplayMode GeminiDisplayMode { get; set; }
     public int RefreshIntervalSeconds { get; set; } = 120;
     public bool AlwaysOnTop { get; set; }
     public bool ShowInTaskbar { get; set; } = true;
@@ -25,5 +29,13 @@ public sealed class AppSettings
         UsageProviderKind.Claude => ShowClaude,
         UsageProviderKind.Gemini => ShowGemini,
         _ => false
+    };
+
+    public UsageDisplayMode GetDisplayMode(UsageProviderKind provider) => provider switch
+    {
+        UsageProviderKind.Codex => CodexDisplayMode,
+        UsageProviderKind.Claude => ClaudeDisplayMode,
+        UsageProviderKind.Gemini => GeminiDisplayMode,
+        _ => UsageDisplayMode.Remaining
     };
 }

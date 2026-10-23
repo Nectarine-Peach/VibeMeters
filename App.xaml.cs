@@ -46,6 +46,9 @@ public partial class App : Application
         _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, _demo ? "Local\\VibeMeters.Demo.Activate" : "Local\\VibeMeters.Activate");
         if (!first) { _activateEvent.Set(); Shutdown(); return; }
         _settings = _demo ? new AppSettings() : SettingsStore.Load();
+        if (_settings.CompactMode) { _settings.WindowWidth = 240; _settings.WindowHeight = 148; _settings.CompactMode = false; }
+        ThemeService.Apply(_settings.Theme);
+        ThemeService.ThemeChanged += OnThemeChanged;
         _window = new MainWindow(_settings);
         MainWindow = _window;
         _activationWait = ThreadPool.RegisterWaitForSingleObject(_activateEvent, (_, _) => Dispatcher.InvokeAsync(ShowWindow), null, Timeout.Infinite, false);
@@ -58,6 +61,7 @@ public partial class App : Application
         _window.StateChanged += (_, _) => { if (_window.WindowState == WindowState.Minimized && !_settings.ShowInTaskbar) _window.Hide(); };
         _window.SourceInitialized += (_, _) => RestorePosition();
         CreateTray();
+        OnThemeChanged();
         _providers = UsageProviderFactory.CreateDefault();
         if (!_demo) WatchCredentials();
         _timer.Tick += async (_, _) => await RefreshAsync();
@@ -77,10 +81,9 @@ public partial class App : Application
         menu.Items.Add("사용량 창 열기", null, (_, _) => Dispatcher.Invoke(ShowWindow));
         menu.Items.Add("지금 새로고침", null, (_, _) => Dispatcher.InvokeAsync(async () => await RefreshAsync()));
         menu.Items.Add("항상 위에 표시", null, (_, _) => Dispatcher.Invoke(() => { _settings.AlwaysOnTop = !_settings.AlwaysOnTop; _window!.Topmost = _settings.AlwaysOnTop; ApplySettings(); }));
-        menu.Items.Add("미니 모드", null, (_, _) => Dispatcher.Invoke(() => _window!.SetCompactMode(!_settings.CompactMode)));
         menu.Items.Add("Claude 로그인", null, (_, _) => Dispatcher.Invoke(() => StartLogin(UsageProviderKind.Claude)));
         menu.Items.Add("Codex 로그인", null, (_, _) => Dispatcher.Invoke(() => StartLogin(UsageProviderKind.Codex)));
-        menu.Items.Add("Gemini 사용량 열기", null, (_, _) => Dispatcher.Invoke(() => StartLogin(UsageProviderKind.Gemini)));
+        menu.Items.Add("Gemini 로그인", null, (_, _) => Dispatcher.Invoke(() => StartLogin(UsageProviderKind.Gemini)));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("종료", null, (_, _) => Dispatcher.Invoke(ExitApplication));
         _tray.ContextMenuStrip = menu;
@@ -126,6 +129,7 @@ public partial class App : Application
 
     private void ApplySettings()
     {
+        ThemeService.Apply(_settings.Theme);
         var visible = Enum.GetValues<UsageProviderKind>().Where(_settings.IsProviderVisible).ToHashSet();
         var enabledNewProvider = visible.Except(_activeProviders).Any();
         _activeProviders = visible;
@@ -163,7 +167,7 @@ public partial class App : Application
                 {
                     if (kind == UsageProviderKind.Gemini)
                     {
-                        Render(await new GeminiUsageProvider().FetchAsync());
+                        Render(new UsageSnapshot(kind, UsageStatus.Ready, new[] { new UsageWindow("Gemini Pro", 35, DateTimeOffset.Now.AddHours(5)), new UsageWindow("Gemini Flash", 12, DateTimeOffset.Now.AddHours(5)) }, DateTimeOffset.Now, "데모", "데모 데이터"));
                         continue;
                     }
                     Render(new UsageSnapshot(kind, UsageStatus.Ready, new[] { new UsageWindow("5시간", kind == UsageProviderKind.Codex ? 27 : 46, DateTimeOffset.Now.AddHours(2.4)), new UsageWindow("주간", kind == UsageProviderKind.Codex ? 39 : 18, DateTimeOffset.Now.AddDays(3)) }, DateTimeOffset.Now, kind == UsageProviderKind.Codex ? "Pro" : "Max", "데모 데이터"));
@@ -179,7 +183,7 @@ public partial class App : Application
                 catch { snapshot = new UsageSnapshot(provider.Kind, UsageStatus.Unavailable, Array.Empty<UsageWindow>(), DateTimeOffset.UtcNow, Message: "조회 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."); }
                 if (!_exiting) Render(snapshot);
             }));
-            if (!_exiting) _window.UpdateStatus($"최근 확인 {DateTime.Now:HH:mm:ss} · " + (_settings.RefreshIntervalSeconds == 0 ? "수동 갱신" : $"{_settings.RefreshIntervalSeconds}초 간격"));
+            if (!_exiting) _window.UpdateStatus(_settings.RefreshIntervalSeconds == 0 ? "수동 새로고침 · F5" : $"자동 새로고침 · {_settings.RefreshIntervalSeconds}초 간격");
         }
         finally
         {
@@ -204,13 +208,15 @@ public partial class App : Application
     {
         var selected = Enum.GetValues<UsageProviderKind>().Where(_settings.IsProviderVisible).ToDictionary(kind => kind,
             kind => _latest.TryGetValue(kind, out var snapshot) ? snapshot : new UsageSnapshot(kind, UsageStatus.NotConnected, Array.Empty<UsageWindow>(), DateTimeOffset.Now));
-        var labels = selected.Values.OrderBy(s => s.Provider).Select(s => $"{s.Provider}: " + (s.Status == UsageStatus.Ready && s.Windows.Count > 0 ? $"{s.Windows.Min(w => w.RemainingPercent):0}% 남음" : s.Provider == UsageProviderKind.Gemini ? "공식 CLI에서 확인" : "확인 필요"));
+        var labels = selected.Values.OrderBy(s => s.Provider).Select(s => $"{s.Provider}: " + (s.Status == UsageStatus.Ready && s.Windows.Count > 0
+            ? _settings.GetDisplayMode(s.Provider) == UsageDisplayMode.Used ? $"{s.Windows.Max(w => w.UsedPercent):0}% 사용" : $"{s.Windows.Min(w => w.RemainingPercent):0}% 남음"
+            : "확인 필요"));
         if (_tray != null)
         {
             var tooltip = string.Join(" / ", labels);
             _tray.Text = string.IsNullOrWhiteSpace(tooltip) ? "VibeMeters · 사용량 확인" : tooltip[..Math.Min(127, tooltip.Length)];
             var oldIcon = _tray.Icon;
-            _tray.Icon = TrayIconRenderer.Render(selected);
+            _tray.Icon = TrayIconRenderer.Render(selected, _settings);
             oldIcon?.Dispose();
         }
     }
@@ -331,12 +337,45 @@ public partial class App : Application
         _credentialDebounce.Stop();
         foreach (var watcher in _credentialWatchers) watcher.Dispose();
         SystemEvents.PowerModeChanged -= OnPowerMode; SystemEvents.SessionSwitch -= OnSessionSwitch;
+        ThemeService.ThemeChanged -= OnThemeChanged;
+        ThemeService.Dispose();
         if (_tray != null) { _tray.Visible = false; _tray.Icon?.Dispose(); _tray.Dispose(); }
         foreach (var provider in _providers.OfType<IDisposable>()) provider.Dispose();
         _activationWait?.Unregister(null);
         _activateEvent?.Dispose();
         _mutex?.Dispose();
         base.OnExit(e);
+    }
+
+    private void OnThemeChanged()
+    {
+        _window?.RefreshTheme();
+        if (_tray?.ContextMenuStrip is { } menu)
+        {
+            menu.BackColor = MenuColor("SurfaceBackground");
+            menu.ForeColor = MenuColor("PrimaryText");
+            menu.Renderer = new Forms.ToolStripProfessionalRenderer(new TrayMenuPalette());
+        }
+    }
+
+    private static System.Drawing.Color MenuColor(string key)
+    {
+        var color = ((SolidColorBrush)Current.Resources[key]).Color;
+        return System.Drawing.Color.FromArgb(color.A, color.R, color.G, color.B);
+    }
+
+    private sealed class TrayMenuPalette : Forms.ProfessionalColorTable
+    {
+        public TrayMenuPalette() { UseSystemColors = false; }
+        public override System.Drawing.Color ToolStripDropDownBackground => MenuColor("SurfaceBackground");
+        public override System.Drawing.Color MenuItemSelected => MenuColor("SurfaceHover");
+        public override System.Drawing.Color MenuItemBorder => MenuColor("PopupBorder");
+        public override System.Drawing.Color MenuBorder => MenuColor("WindowBorder");
+        public override System.Drawing.Color ImageMarginGradientBegin => MenuColor("SurfaceBackground");
+        public override System.Drawing.Color ImageMarginGradientMiddle => MenuColor("SurfaceBackground");
+        public override System.Drawing.Color ImageMarginGradientEnd => MenuColor("SurfaceBackground");
+        public override System.Drawing.Color SeparatorDark => MenuColor("WindowBorder");
+        public override System.Drawing.Color SeparatorLight => MenuColor("SurfaceBackground");
     }
 }
 

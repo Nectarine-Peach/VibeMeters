@@ -14,12 +14,21 @@ Standard and mini windows share the same service cards: **service heading → qu
 
 | Standard window | Mini window |
 | :---: | :---: |
-| <img src="docs/screenshots/window-standard-dark.png" alt="Standard dark window with vertically stacked quota rows" width="360"> | <img src="docs/screenshots/window-mini-dark.png" alt="Mini dark window preserving the same quota row layout" width="220"> |
+| <img src="docs/screenshots/window-standard-dark.png" alt="Standard dark window with vertically stacked quota rows" width="360"> | <img src="docs/screenshots/window-mini-dark.png" alt="Mini dark window preserving the same quota row layout" width="274"> |
 
 <details>
 <summary>Settings</summary>
 
 <img src="docs/screenshots/settings-dark.png" alt="Provider selection, display basis, theme, refresh, and account settings" width="400">
+
+</details>
+
+<details>
+<summary>Light theme, Gemini, and the minimum window</summary>
+
+| Light theme | All three services | Minimum size |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/window-standard-light.png" alt="Light theme" width="360"> | <img src="docs/screenshots/window-all-services-dark.png" alt="Codex, Claude and Gemini together" width="360"> | <img src="docs/screenshots/window-minimum-dark.png" alt="Minimum 220 by 140 logical pixel window" width="220"> |
 
 </details>
 
@@ -116,6 +125,15 @@ Run the isolated provider/parser/settings regression suite with:
 ```powershell
 dotnet run --project tests/VibeMeters.Tests.csproj -c Release
 ```
+
+To check the shown native window with isolated demo data and save rendered captures:
+
+```powershell
+dotnet build -c Release
+dotnet .\bin\Release\net8.0-windows\VibeMeters.dll --smoke-test
+```
+
+Results and PNGs are written to the build folder's `artifacts/` directory. The latest run passed **97 regression checks and 197 window/layout checks** at 125% display scaling; see [scope and limitations](VERIFICATION.md).
 
 `VibeMeters.exe --demo` previews sample data without accessing provider accounts. When [reporting a bug](https://github.com/Nectarine-Peach/VibeMeters/issues), include the version, Windows display scaling, window size, provider, and visible error. **Never attach credential files or access tokens.**
 

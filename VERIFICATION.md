@@ -1,3 +1,47 @@
+# Final verification / 최종 검증 — v1.4.2 · 2026-10-24
+
+**97 regression checks passed; 197 shown-window layout/state checks passed. Zero failures.** Release build completed with zero warnings and zero errors. Captures were visually inspected for standard, mini, minimum, light-theme, settings, and all-service layouts.
+
+**자동 회귀 97개와 실행 창 배치·상태 검사 197개를 모두 통과했습니다.** 배포 구성 빌드 경고·오류는 0개입니다. 표준·미니·최소 창, 라이트 테마, 설정, 세 서비스 화면의 캡처도 직접 확인했습니다.
+
+## Window matrix / 크기별 결과
+
+Tested on Windows x64 at **125% scaling (120 DPI)**. Sizes below are logical pixels; Windows can round fractional device pixels by up to one logical pixel.
+
+| Scenario / 구성 | Logical size / 논리 크기 | Result / 결과 |
+| --- | --- | --- |
+| Standard / 표준 | 360 × 267 | Pass / 통과 |
+| Mini / 미니 | 274 × 174 | Pass / 통과 |
+| Minimum / 최소 | 220 × 140 | Pass / 통과 |
+| Wide / 가로 | 600 × 300 | Pass / 통과 |
+| All services / 세 서비스 | 360 × 394 | Pass / 통과 |
+| All services minimum / 세 서비스 최소 | 220 × 160 | Pass / 통과 |
+
+All sizes keep vertically stacked quota rows, with label → central meter → right-aligned percentage. Claude's five-hour and weekly quotas remain separate rows. Card/content bounds, inline alignment, all visible quotas, no scroll viewers, and removal of initial badges were checked. More services increase the minimum height instead of hiding rows.
+
+미니·최소 창에서도 항목명 → 중앙 막대 → 오른쪽 수치 구성을 유지하며 Claude의 5시간·주간 한도를 세로 두 줄로 표시합니다. 카드와 내용의 경계, 정렬, 모든 한도 표시, 스크롤·서비스 배지 제거를 검사했습니다. 한도가 많으면 숨기지 않고 최소 높이를 늘립니다.
+
+## Scope / 검증 범위
+
+- Provider/parser/settings regressions include Gemini bridge JSON, invalid data, authentication states, 429 cooldown preservation, display modes, and saved preferences.
+- Shown-window checks exercise real WPF controls and event handlers: pin, taskbar state, minimize, hide/restore, separate settings, theme selections, per-service percentages, cached values, missing-data placeholders, and login-event dispatch.
+- **Captures use synthetic demo data**, with no provider instances, credential watchers, account requests, or user-settings writes. [Raw window-check report](docs/screenshots/verification.txt).
+- Windows Graphics Capture failed with `FrameArrived timed out` / `window capture timed out`, and input geometry was unavailable. The fallback captures the **shown application's real WPF client visual** using `RenderTargetBitmap` at its monitor DPI, including the window background. These are app-rendered captures, not AI mockups or desktop screenshots. Native compositor borders, tray/taskbar pixels, and physical mouse input are outside this result.
+- Live provider availability, login completion, other DPI settings, and multi-monitor transitions were not tested in this run.
+
+실행 창의 실제 WPF 렌더링을 캡처한 결과이며 AI 시안이 아닙니다. Windows 화면 캡처 도구의 시간 초과로 데스크톱 전체·OS 트레이 픽셀·실제 마우스 조작은 검증하지 못했습니다. 실제 계정 로그인·서버 조회와 다른 배율·모니터 이동도 이번 검증에 포함하지 않았습니다.
+
+## Reproduce / 재현
+
+```powershell
+dotnet run --project tests/VibeMeters.Tests.csproj -c Release
+dotnet build -c Release
+dotnet .\bin\Release\net8.0-windows\VibeMeters.dll --smoke-test
+```
+
+The isolated window check exits with code 0 on success and 1 on failure; PNG captures and `smoke-test.txt` are under `bin/Release/net8.0-windows/artifacts/`.
+
+---
 # v1.4.2 구현 기록 — 미니 창의 카드 구성 통일
 
 미니 전용 가로 분할 및 막대 하단 배치를 제거하고, 모든 크기에서 같은 카드 렌더러를 사용합니다. 큰 창의 서비스 제목·구분선·항목명·중앙 막대·오른쪽 비율 구성을 유지하며 가용 폭과 높이에 따라 글자와 여백을 조절합니다. 한도가 많으면 행을 숨기지 않고 필요한 최소 높이를 확보합니다.

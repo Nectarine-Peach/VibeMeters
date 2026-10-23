@@ -8,4 +8,4 @@ The generated board establishes charcoal/porcelain surfaces, consistent header c
 
 Implementation uses native WPF controls and vector shapes. In v1.4.1 the standard layout follows the board's measured proportions: 360 logical pixels wide, 42-pixel header, 86-pixel single-quota card, 116-pixel double-quota card and 11-pixel card gaps. Its height follows the selected services. Previously saved tiny sizes migrate to this standard layout once; later manual resizing remains available. Service selections are preserved. The user explicitly requested removal of the C/A/G badges, so these are the only intentional visual deviation from the board.
 
-Software tests, application screenshots, and runtime verification were omitted at the user's standing request. Production compilation and launch remain authorized.
+Tests were omitted for that earlier design iteration. Subsequent v1.4.2 verification uses shown-window WPF render captures with demo data; see the [current verification record](../../VERIFICATION.md) and [standard](../screenshots/window-standard-dark.png) / [mini](../screenshots/window-mini-dark.png) captures.

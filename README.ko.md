@@ -14,12 +14,21 @@ Codex·Claude·Gemini의 사용량을 한곳에서 확인하는 Windows 앱입�
 
 | 표준 창 | 미니 창 |
 | :---: | :---: |
-| <img src="docs/screenshots/window-standard-dark.png" alt="한도별 행을 세로로 표시한 VibeMeters 표준 다크 창" width="360"> | <img src="docs/screenshots/window-mini-dark.png" alt="표준 창과 같은 구성을 유지하는 VibeMeters 미니 다크 창" width="220"> |
+| <img src="docs/screenshots/window-standard-dark.png" alt="한도별 행을 세로로 표시한 VibeMeters 표준 다크 창" width="360"> | <img src="docs/screenshots/window-mini-dark.png" alt="표준 창과 같은 구성을 유지하는 VibeMeters 미니 다크 창" width="274"> |
 
 <details>
 <summary>설정 화면</summary>
 
 <img src="docs/screenshots/settings-dark.png" alt="서비스 선택, 표시 기준, 테마, 새로고침, 계정 연결 설정" width="400">
+
+</details>
+
+<details>
+<summary>라이트 테마·Gemini·최소 크기</summary>
+
+| 라이트 테마 | 세 서비스 함께 표시 | 최소 크기 |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/window-standard-light.png" alt="라이트 테마" width="360"> | <img src="docs/screenshots/window-all-services-dark.png" alt="Codex·Claude·Gemini 통합 표시" width="360"> | <img src="docs/screenshots/window-minimum-dark.png" alt="220×140 논리 픽셀 최소 창" width="220"> |
 
 </details>
 
@@ -116,6 +125,15 @@ dotnet build -c Release
 ```powershell
 dotnet run --project tests/VibeMeters.Tests.csproj -c Release
 ```
+
+데모 데이터로 실행 창을 검사하고 렌더링 캡처를 저장하려면 다음 명령을 사용합니다.
+
+```powershell
+dotnet build -c Release
+dotnet .\bin\Release\net8.0-windows\VibeMeters.dll --smoke-test
+```
+
+결과와 PNG는 빌드 폴더의 `artifacts/`에 저장됩니다. 최신 실행은 화면 배율 125%에서 **회귀 검사 97개, 실행 창·배치 검사 197개를 통과**했습니다. [검증 범위와 제약](VERIFICATION.md)을 참고하세요.
 
 `VibeMeters.exe --demo`는 제공자 계정에 접근하지 않는 예시 데이터 미리보기입니다. [버그 제보](https://github.com/Nectarine-Peach/VibeMeters/issues)에는 앱 버전, Windows 배율, 창 크기, 서비스 이름과 오류 문구를 알려 주세요. **인증 파일이나 액세스 토큰을 첨부하지 마세요.**
 

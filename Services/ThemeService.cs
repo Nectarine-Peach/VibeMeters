@@ -67,16 +67,16 @@ public static class ThemeService
 
     private static Dictionary<string, Color> DarkPalette() => Palette(new[]
     {
-        "#1B2024", "#3A4248", "#F1F4F5", "#C2CACF", "#939FA7", "#23292D", "#30383E", "#3B464D",
-        "#23292D", "#23292D", "#23292D", "#87DFC1", "#F4B68F", "#AAA7FF", "#41494F", "#F1B54E", "#F49A98",
-        "#47535C", "#5EB49B", "#F1F5F6", "#74878F", "#10241E", "#87DFC1", "#F4B68F", "#AAA7FF"
+        "#1C2024", "#3A4248", "#F1F4F5", "#C2CACF", "#939FA7", "#23292D", "#30383E", "#3B464D",
+        "#23292D", "#23292D", "#23292D", "#8EDDC0", "#F1B08B", "#A9A2FF", "#40474D", "#F1B54E", "#F49A98",
+        "#47535C", "#5EB49B", "#F1F5F6", "#74878F", "#10241E", "#8EDDC0", "#F1B08B", "#A9A2FF"
     });
 
     private static Dictionary<string, Color> LightPalette() => Palette(new[]
     {
-        "#F5F6F7", "#D9DFE3", "#192126", "#4E5962", "#64727C", "#FDFDFE", "#EAEFF2", "#DDE6E9",
-        "#FDFDFE", "#FDFDFE", "#FDFDFE", "#56B99A", "#DB9870", "#8D8BE6", "#E1E6E9", "#A66B0B", "#B9413F",
-        "#B4BEC5", "#4EAA8F", "#FFFFFF", "#94A6AE", "#10241E", "#83DCBB", "#F3B38D", "#AAA7FF"
+        "#F7F7F9", "#DFE3E7", "#15191F", "#545C68", "#68737D", "#FCFCFD", "#EAEFF2", "#DDE6E9",
+        "#FCFCFD", "#FCFCFD", "#FCFCFD", "#75D5AF", "#F5B18E", "#A29BFF", "#E6E8EB", "#A66B0B", "#B9413F",
+        "#B4BEC5", "#4EAA8F", "#FFFFFF", "#94A6AE", "#10241E", "#83DCBB", "#F3B38D", "#A9A2FF"
     });
 
     private static Dictionary<string, Color> Palette(string[] values)

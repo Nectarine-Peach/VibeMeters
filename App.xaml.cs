@@ -34,6 +34,7 @@ public partial class App : Application
     private readonly Dictionary<string, int> _alertLevels = new();
     private HashSet<UsageProviderKind> _activeProviders = new();
     private int _exitCode;
+    private bool _fitDesignOnce;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -47,9 +48,12 @@ public partial class App : Application
         if (!first) { _activateEvent.Set(); Shutdown(); return; }
         _settings = _demo ? new AppSettings() : SettingsStore.Load();
         if (_settings.CompactMode) { _settings.WindowWidth = 240; _settings.WindowHeight = 148; _settings.CompactMode = false; }
+        _fitDesignOnce = !_demo && _settings.DesignLayoutVersion < 2;
+        if (_fitDesignOnce) { _settings.WindowWidth = 360; _settings.WindowHeight = 400; _settings.DesignLayoutVersion = 2; }
         ThemeService.Apply(_settings.Theme);
         ThemeService.ThemeChanged += OnThemeChanged;
         _window = new MainWindow(_settings);
+        if (_fitDesignOnce) _window.FitDesignSize();
         MainWindow = _window;
         _activationWait = ThreadPool.RegisterWaitForSingleObject(_activateEvent, (_, _) => Dispatcher.InvokeAsync(ShowWindow), null, Timeout.Infinite, false);
         _window.Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/VibeMeters.ico"));
@@ -183,7 +187,11 @@ public partial class App : Application
                 catch { snapshot = new UsageSnapshot(provider.Kind, UsageStatus.Unavailable, Array.Empty<UsageWindow>(), DateTimeOffset.UtcNow, Message: "조회 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."); }
                 if (!_exiting) Render(snapshot);
             }));
-            if (!_exiting) _window.UpdateStatus(_settings.RefreshIntervalSeconds == 0 ? "수동 새로고침 · F5" : $"자동 새로고침 · {_settings.RefreshIntervalSeconds}초 간격");
+            if (!_exiting)
+            {
+                if (_fitDesignOnce) { _fitDesignOnce = false; _window.FitDesignSize(); ApplySettings(); }
+                _window.UpdateStatus(_settings.RefreshIntervalSeconds == 0 ? "수동 새로고침 · F5" : $"자동 새로고침 · {_settings.RefreshIntervalSeconds}초 간격");
+            }
         }
         finally
         {

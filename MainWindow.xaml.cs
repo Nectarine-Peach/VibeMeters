@@ -14,6 +14,7 @@ namespace VibeMeters;
 public partial class MainWindow : Window
 {
     private bool _initialized, _changingMode;
+    private bool _userShortenedWindow;
     private double _normalWidth = 360, _normalHeight = 360;
     private readonly Dictionary<UsageProviderKind, UsageSnapshot> _snapshots = new();
     private SettingsWindow? _settingsWindow;
@@ -45,7 +46,11 @@ public partial class MainWindow : Window
         SizeChanged += (_, _) =>
         {
             if (!_initialized || WindowState != WindowState.Normal) return;
-            if (!_changingMode) { Settings.WindowWidth = _normalWidth = Width; Settings.WindowHeight = _normalHeight = Height; }
+            if (!_changingMode)
+            {
+                Settings.WindowWidth = _normalWidth = Width; Settings.WindowHeight = _normalHeight = Height;
+                if(IsLoaded) _userShortenedWindow=Height<NaturalDesignHeight(Width)-1;
+            }
             RenderLayout();
         };
         Closed += (_, _) => _settingsWindow?.Close();
@@ -66,6 +71,25 @@ public partial class MainWindow : Window
     }
 
     public void ApplyProviderVisibility() => RenderLayout();
+    public void FitDesignSize()
+    {
+        if(!Dispatcher.CheckAccess()) { Dispatcher.Invoke(FitDesignSize); return; }
+        _changingMode=true;
+        _userShortenedWindow=false;
+        Width=360;
+        Height=Math.Max(MinHeight,NaturalDesignHeight(360));
+        Settings.WindowWidth=_normalWidth=Width;
+        Settings.WindowHeight=_normalHeight=Height;
+        _changingMode=false;
+        RenderLayout();
+    }
+    private double NaturalDesignHeight(double width)
+    {
+        var providers=Enum.GetValues<UsageProviderKind>().Where(Settings.IsProviderVisible).ToArray();
+        if(providers.Length==0) return 140;
+        var wide=providers.Length>1&&width>=Math.Max(520,providers.Length*240);
+        return 54+(wide?providers.Max(kind=>RequiredCardHeight(Snapshot(kind))):providers.Sum(kind=>RequiredCardHeight(Snapshot(kind)))+11*(providers.Length-1));
+    }
     public void RefreshTheme()
     {
         if(!Dispatcher.CheckAccess()) { Dispatcher.Invoke(RefreshTheme); return; }
@@ -78,15 +102,13 @@ public partial class MainWindow : Window
         var height = ActualHeight > 0 ? ActualHeight : Height;
         var providers = Enum.GetValues<UsageProviderKind>().Where(Settings.IsProviderVisible).ToArray();
         var wide = providers.Length > 1 && width >= Math.Max(520, providers.Length * 240);
-        var needed = providers.Sum(kind => RequiredCardHeight(Snapshot(kind)));
-        if (wide) needed = providers.Max(kind => RequiredCardHeight(Snapshot(kind)));
-        var narrow=width<280;
-        IsCompactLayout = narrow || height - 68 < needed;
-        WindowFrame.Padding=narrow?new Thickness(9,4,9,7):new Thickness(14,8,14,12);
-        HeaderRow.Height=new GridLength(narrow?32:38);
-        SubtitleText.Visibility = width >= 420 ? Visibility.Visible : Visibility.Collapsed;
-        TitleText.FontSize = narrow?11.5:14;
-        MinimizeButton.Visibility = width >= 280 ? Visibility.Visible : Visibility.Collapsed;
+        var narrow=width<300;
+        IsCompactLayout = narrow || _userShortenedWindow;
+        WindowFrame.Padding=narrow?new Thickness(9,4,9,7):new Thickness(10,0,10,10);
+        HeaderRow.Height=new GridLength(narrow?32:42);
+        SubtitleText.Visibility = Visibility.Collapsed;
+        TitleText.FontSize = narrow?11.5:15;
+        MinimizeButton.Visibility = width >= 520 ? Visibility.Visible : Visibility.Collapsed;
         ProviderGrid.Visibility = IsCompactLayout ? Visibility.Collapsed : Visibility.Visible;
         MicroPanel.Visibility = IsCompactLayout ? Visibility.Visible : Visibility.Collapsed;
         ClearGrid(ProviderGrid); ClearGrid(MicroPanel);
@@ -102,83 +124,69 @@ public partial class MainWindow : Window
             var snapshot = Snapshot(providers[i]);
             var host = IsCompactLayout ? MicroPanel : ProviderGrid;
             if (wide && !IsCompactLayout) host.ColumnDefinitions.Add(new ColumnDefinition());
-            else host.RowDefinitions.Add(new RowDefinition { Height = IsCompactLayout ? new GridLength(1,GridUnitType.Star) : new GridLength(RequiredCardHeight(snapshot),GridUnitType.Star) });
+            else host.RowDefinitions.Add(new RowDefinition { Height = IsCompactLayout ? new GridLength(1,GridUnitType.Star) : GridLength.Auto });
             var element = IsCompactLayout ? RenderMicro(snapshot) : RenderCard(snapshot);
-            element.Margin=wide&&!IsCompactLayout?new Thickness(0,0,i==providers.Length-1?0:10,0):new Thickness(0,0,0,i==providers.Length-1?0:IsCompactLayout?4:9);
+            element.Margin=wide&&!IsCompactLayout?new Thickness(0,0,i==providers.Length-1?0:11,0):new Thickness(0,0,0,i==providers.Length-1?0:IsCompactLayout?4:11);
             if (wide && !IsCompactLayout) Grid.SetColumn(element,i); else Grid.SetRow(element,i);
             host.Children.Add(element);
         }
     }
-    private static double RequiredCardHeight(UsageSnapshot snapshot)=>64+snapshot.Windows.Count*28+(snapshot.Windows.Count==0?24:0)+6;
+    private static double RequiredCardHeight(UsageSnapshot snapshot)=>56+30*(snapshot.Windows.Count==0?PlaceholderNames(snapshot.Provider).Length:snapshot.Windows.Count);
     private static void ClearGrid(Grid grid) { grid.Children.Clear(); grid.RowDefinitions.Clear(); grid.ColumnDefinitions.Clear(); }
     private UsageSnapshot Snapshot(UsageProviderKind kind) => _snapshots.TryGetValue(kind, out var snapshot) ? snapshot : new(kind, UsageStatus.NotConnected, Array.Empty<UsageWindow>(), DateTimeOffset.Now, Message:"계정을 연결하면 사용량이 표시됩니다.");
     private static Brush Accent(UsageProviderKind kind) => Palette(kind switch { UsageProviderKind.Codex => "CodexAccent", UsageProviderKind.Claude => "ClaudeAccent", _ => "GeminiAccent" });
     private string DisplayBasis(UsageProviderKind kind) => Settings.GetDisplayMode(kind)==UsageDisplayMode.Used ? "사용" : "남음";
     private double DisplayPercent(UsageProviderKind kind,UsageWindow quota) => Settings.GetDisplayMode(kind)==UsageDisplayMode.Used ? Math.Clamp(quota.UsedPercent,0,100) : quota.RemainingPercent;
 
-    private static Border ServiceBadge(UsageProviderKind provider,double size)
-    {
-        return new Border { Width=size,Height=size,CornerRadius=new CornerRadius(size<=16?4:6),Background=Palette(provider switch { UsageProviderKind.Codex=>"CodexBadge",UsageProviderKind.Claude=>"ClaudeBadge",_=>"GeminiBadge" }),Child=new TextBlock { Text=provider switch { UsageProviderKind.Codex=>"C",UsageProviderKind.Claude=>"A",_=>"G" },Foreground=Palette("BadgeText"),FontSize=size<=16?9:14,FontWeight=FontWeights.SemiBold,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center } };
-    }
     private FrameworkElement ProviderHeading(UsageSnapshot snapshot,bool compact,bool dense=false)
     {
-        var heading=new Grid { Height=compact?14:26,ToolTip=WrappedTip(ProviderTooltip(snapshot)) };
-        heading.ColumnDefinitions.Add(new ColumnDefinition());heading.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto });
-        var identity=new StackPanel { Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center };
-        var badge=ServiceBadge(snapshot.Provider,compact?14:26);
-        if(dense&&(snapshot.Status is UsageStatus.NotConnected or UsageStatus.AuthenticationRequired))
-        {
-            var connect=new Button { Content=badge,Style=(Style)FindResource("StatusButton"),Width=14,Height=14,ToolTip=WrappedTip($"{snapshot.Provider} 로그인\n{ProviderStatus(snapshot)}") };
-            connect.Click+=(_,_)=>LoginRequested?.Invoke(snapshot.Provider);identity.Children.Add(connect);
-        }
-        else identity.Children.Add(badge);
-        if(!dense) identity.Children.Add(new TextBlock { Text=snapshot.Provider.ToString(),Foreground=Palette("PrimaryText"),FontWeight=FontWeights.SemiBold,FontSize=compact?10:13,Margin=new Thickness(compact?5:10,0,0,0),VerticalAlignment=VerticalAlignment.Center });
-        identity.Children.Add(new Border { Background=Palette("SurfaceHover"),CornerRadius=new CornerRadius(4),Padding=new Thickness(compact?3:5,compact?0:2,compact?3:5,compact?0:2),Margin=new Thickness(compact?5:8,0,0,0),VerticalAlignment=VerticalAlignment.Center,Child=new TextBlock { Text=DisplayBasis(snapshot.Provider),Foreground=Palette("SecondaryText"),FontSize=compact?8:9,VerticalAlignment=VerticalAlignment.Center } });
+        var heading=new StackPanel { Height=compact?14:26,Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center,ToolTip=WrappedTip(ProviderTooltip(snapshot)) };
+        heading.Children.Add(new TextBlock { Text=snapshot.Provider.ToString(),Foreground=Palette("PrimaryText"),FontWeight=FontWeights.SemiBold,FontSize=compact?(dense?9:10):16,VerticalAlignment=VerticalAlignment.Center });
+        heading.Children.Add(new TextBlock { Text=DisplayBasis(snapshot.Provider),Foreground=Palette("SecondaryText"),FontSize=compact?8:11,Margin=new Thickness(compact?5:11,0,0,0),VerticalAlignment=VerticalAlignment.Center });
         if(snapshot.Status!=UsageStatus.Ready)
         {
-            var dot=new System.Windows.Shapes.Ellipse { Width=compact?4:5,Height=compact?4:5,Fill=Palette("WarningText"),VerticalAlignment=VerticalAlignment.Center };
+            var dot=new System.Windows.Shapes.Ellipse { Width=compact?4:6,Height=compact?4:6,Fill=Palette("WarningText"),VerticalAlignment=VerticalAlignment.Center };
             if(snapshot.Status is UsageStatus.NotConnected or UsageStatus.AuthenticationRequired)
             {
-                if(!dense)
-                {
-                    var connect=new Button { Content=dot,Style=(Style)FindResource("StatusButton"),Height=compact?14:18,Margin=new Thickness(3,0,0,0),ToolTip=WrappedTip($"{snapshot.Provider} 로그인\n{ProviderStatus(snapshot)}") };
-                    connect.Click+=(_,_)=>LoginRequested?.Invoke(snapshot.Provider);System.Windows.Automation.AutomationProperties.SetName(connect,$"{snapshot.Provider} 로그인");identity.Children.Add(connect);
-                }
+                var connect=new Button { Content=dot,Style=(Style)FindResource("StatusButton"),Width=compact?10:14,Height=compact?14:18,Margin=new Thickness(4,0,0,0),ToolTip=WrappedTip($"{snapshot.Provider} 로그인\n{ProviderStatus(snapshot)}") };
+                connect.Click+=(_,_)=>LoginRequested?.Invoke(snapshot.Provider);System.Windows.Automation.AutomationProperties.SetName(connect,$"{snapshot.Provider} 로그인");heading.Children.Add(connect);
             }
-            else identity.Children.Add(new Border { Child=dot,Margin=new Thickness(compact?5:8,0,0,0),VerticalAlignment=VerticalAlignment.Center });
-        }
-        heading.Children.Add(identity);
-        if(!compact)
-        {
-            var plan=new TextBlock { Text=snapshot.Plan,Foreground=Palette("MutedText"),FontSize=9,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis,MaxWidth=90 };
-            Grid.SetColumn(plan,1);heading.Children.Add(plan);
+            else heading.Children.Add(new Border { Child=dot,Margin=new Thickness(compact?5:9,0,0,0),VerticalAlignment=VerticalAlignment.Center });
         }
         return heading;
     }
+    private static string[] PlaceholderNames(UsageProviderKind provider)=>provider switch
+    {
+        UsageProviderKind.Codex=>new[]{"주간"},
+        UsageProviderKind.Claude=>new[]{"5시간","주간"},
+        _=>new[]{"Pro","Flash"}
+    };
     private FrameworkElement RenderCard(UsageSnapshot snapshot)
     {
-        var stack=new StackPanel { VerticalAlignment=VerticalAlignment.Center };
+        var stack=new StackPanel();
         stack.Children.Add(ProviderHeading(snapshot,false));
-        stack.Children.Add(new Border { Background=Palette("WindowBorder"),Height=1,Margin=new Thickness(0,9,0,4),Opacity=0.7 });
-        foreach(var quota in snapshot.Windows)
+        stack.Children.Add(new Border { Background=Palette("WindowBorder"),Height=1,Margin=new Thickness(0,8,0,1),Opacity=0.7 });
+        var entries=snapshot.Windows.Count==0
+            ?PlaceholderNames(snapshot.Provider).Select(name=>(Name:name,Quota:(UsageWindow?)null)).ToArray()
+            :snapshot.Windows.Select(quota=>(Name:quota.Name,Quota:(UsageWindow?)quota)).ToArray();
+        for(var i=0;i<entries.Length;i++)
         {
-            var row=new Grid { Height=28,ToolTip=WrappedTip(WindowTooltip(quota,snapshot)) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(48) });row.ColumnDefinitions.Add(new ColumnDefinition());row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(56) });
-            row.Children.Add(new TextBlock { Text=ShortQuotaName(quota.Name),Foreground=Palette("SecondaryText"),FontSize=11,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis });
-            var meter=new ProgressBar { Value=DisplayPercent(snapshot.Provider,quota),Foreground=quota.RemainingPercent<=10?Palette("CriticalText"):Accent(snapshot.Provider),Height=6,Margin=new Thickness(0,0,9,0),VerticalAlignment=VerticalAlignment.Center };
+            var entry=entries[i];var quota=entry.Quota;
+            var row=new Grid { Height=30,ToolTip=WrappedTip(quota==null?ProviderTooltip(snapshot)+"\n사용량 정보 없음 · 수치를 확인하면 표시합니다.":WindowTooltip(quota,snapshot)) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(42) });row.ColumnDefinitions.Add(new ColumnDefinition());row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(52) });
+            row.Children.Add(new TextBlock { Text=ShortQuotaName(entry.Name),Foreground=Palette("SecondaryText"),FontSize=12,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis });
+            var meter=new ProgressBar { Value=quota==null?0:DisplayPercent(snapshot.Provider,quota),Foreground=quota!=null&&quota.RemainingPercent<=10?Palette("CriticalText"):Accent(snapshot.Provider),Height=6,Margin=new Thickness(0,0,9,0),VerticalAlignment=VerticalAlignment.Center };
             Grid.SetColumn(meter,1);row.Children.Add(meter);
-            var value=QuotaValue(snapshot.Provider,quota,18);Grid.SetColumn(value,2);row.Children.Add(value);stack.Children.Add(row);
-        }
-        if(snapshot.Windows.Count==0)
-        {
-            if(snapshot.Status is UsageStatus.NotConnected or UsageStatus.AuthenticationRequired)
+            var value=quota==null?new TextBlock { Text="—",FontSize=18,Foreground=Palette("MutedText"),TextAlignment=TextAlignment.Right,VerticalAlignment=VerticalAlignment.Center }:QuotaValue(snapshot.Provider,quota,18);
+            Grid.SetColumn(value,2);row.Children.Add(value);
+            if(i<entries.Length-1)
             {
-                var login=new Button { Content="로그인하여 연결 ↗",HorizontalAlignment=HorizontalAlignment.Left,FontSize=11,Padding=new Thickness(0,6,0,3),ToolTip=WrappedTip(ProviderTooltip(snapshot)) };
-                login.Click+=(_,_)=>LoginRequested?.Invoke(snapshot.Provider);stack.Children.Add(login);
+                var separator=new Border { Height=1,Background=Palette("WindowBorder"),Opacity=0.45,VerticalAlignment=VerticalAlignment.Bottom };
+                Grid.SetColumnSpan(separator,3);row.Children.Add(separator);
             }
-            else stack.Children.Add(new TextBlock { Text=ProviderStatus(snapshot),FontSize=10,Foreground=Palette("SecondaryText"),TextTrimming=TextTrimming.CharacterEllipsis,ToolTip=WrappedTip(ProviderTooltip(snapshot)),Margin=new Thickness(0,8,0,4) });
+            stack.Children.Add(row);
         }
-        return new Border { Background=Palette("SurfaceBackground"),BorderBrush=Palette("WindowBorder"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(12,10,12,8),Child=stack };
+        return new Border { Height=RequiredCardHeight(snapshot),Background=Palette("SurfaceBackground"),BorderBrush=Palette("WindowBorder"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(9),Padding=new Thickness(12,10,12,8),Child=stack };
     }
     private FrameworkElement RenderMicro(UsageSnapshot snapshot)
     {
@@ -189,7 +197,7 @@ public partial class MainWindow : Window
         var meters=new Grid();
         if(dense)
         {
-            content.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(snapshot.Status==UsageStatus.Ready?42:49) });content.ColumnDefinitions.Add(new ColumnDefinition());
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(snapshot.Status==UsageStatus.Ready?62:72) });content.ColumnDefinitions.Add(new ColumnDefinition());
             content.Children.Add(heading);Grid.SetColumn(meters,1);content.Children.Add(meters);
         }
         else
@@ -302,6 +310,7 @@ public partial class MainWindow : Window
         _settingsWindow.Show();
     }
 }
+
 
 
 

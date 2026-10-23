@@ -24,6 +24,8 @@ public static class SettingsStore
         if (settings.RefreshIntervalSeconds != 0 && settings.RefreshIntervalSeconds is < 30 or > 86400) settings.RefreshIntervalSeconds = 120;
         if (settings.Left.HasValue && !double.IsFinite(settings.Left.Value)) settings.Left = null;
         if (settings.Top.HasValue && !double.IsFinite(settings.Top.Value)) settings.Top = null;
+        settings.WindowWidth = double.IsFinite(settings.WindowWidth) ? Math.Clamp(settings.WindowWidth, 220, 1000) : 340;
+        settings.WindowHeight = double.IsFinite(settings.WindowHeight) ? Math.Clamp(settings.WindowHeight, 140, 1000) : 320;
         return settings;
     }
     public static void Save(AppSettings settings)

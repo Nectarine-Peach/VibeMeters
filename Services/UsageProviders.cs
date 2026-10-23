@@ -22,7 +22,7 @@ public static class UsageProviderFactory
     public static IReadOnlyList<IUsageProvider> CreateDefault()
     {
         var credentials = new CredentialReader();
-        return [new UsageProvider(UsageProviderKind.Codex, credentials), new UsageProvider(UsageProviderKind.Claude, credentials)];
+        return [new UsageProvider(UsageProviderKind.Codex, credentials), new UsageProvider(UsageProviderKind.Claude, credentials), new GeminiUsageProvider()];
     }
 }
 
@@ -47,6 +47,8 @@ public sealed class UsageProvider : IUsageProvider
 
     public UsageProvider(UsageProviderKind kind, ICredentialReader credentials, HttpClient? httpClient = null)
     {
+        if (kind == UsageProviderKind.Gemini)
+            throw new ArgumentException("Gemini uses its official CLI through GeminiUsageProvider.", nameof(kind));
         Kind = kind;
         _credentials = credentials;
         _http = httpClient ?? SharedClient;
@@ -139,6 +141,8 @@ public static class UsageParser
     public static UsageSnapshot Parse(UsageProviderKind kind, JsonElement root, DateTimeOffset now, string? plan = null)
     {
         var windows = new List<UsageWindow>();
+        if (kind == UsageProviderKind.Gemini)
+            return new(kind, UsageStatus.Unavailable, windows, now, plan, "공식 Gemini CLI의 /stats에서 사용량을 확인하세요.");
         if (root.ValueKind != JsonValueKind.Object)
             return new(kind, UsageStatus.Unavailable, windows, now, plan, "서버가 올바른 사용량 정보를 제공하지 않았습니다.");
         if (kind == UsageProviderKind.Codex)

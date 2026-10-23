@@ -26,16 +26,20 @@ public sealed class CredentialReader : ICredentialReader
 {
     private readonly string _codexHome;
     private readonly string _claudeHome;
+    private readonly string _geminiHome;
 
     public CredentialReader(string? codexHome = null, string? claudeHome = null)
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         _codexHome = codexHome ?? Environment.GetEnvironmentVariable("CODEX_HOME") ?? Path.Combine(home, ".codex");
         _claudeHome = claudeHome ?? Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR") ?? Path.Combine(home, ".claude");
+        _geminiHome = Path.Combine(home, ".gemini");
     }
 
     public async Task<UsageCredential?> ReadAsync(UsageProviderKind provider, CancellationToken cancellationToken = default)
     {
+        // Gemini is opened in its official CLI; VibeMeters does not harvest its OAuth token.
+        if (provider == UsageProviderKind.Gemini) return null;
         var path = GetCredentialPath(provider);
         if (!File.Exists(path)) return null;
         // Shared reading avoids interfering with the CLI's atomic token updates.
@@ -60,8 +64,13 @@ public sealed class CredentialReader : ICredentialReader
         return string.IsNullOrWhiteSpace(access) ? null : new UsageCredential { AccessToken = access, Plan = GetString(oauth, "subscriptionType"), ExpiresAt = expiry };
     }
 
-    public string GetCredentialPath(UsageProviderKind provider) => provider == UsageProviderKind.Codex
-        ? Path.Combine(_codexHome, "auth.json") : Path.Combine(_claudeHome, ".credentials.json");
+    public string GetCredentialPath(UsageProviderKind provider) => provider switch
+    {
+        UsageProviderKind.Codex => Path.Combine(_codexHome, "auth.json"),
+        UsageProviderKind.Claude => Path.Combine(_claudeHome, ".credentials.json"),
+        UsageProviderKind.Gemini => Path.Combine(_geminiHome, "settings.json"),
+        _ => throw new ArgumentOutOfRangeException(nameof(provider))
+    };
 
     private static string? GetString(JsonElement parent, string key) => parent.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 }

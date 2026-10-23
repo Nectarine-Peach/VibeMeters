@@ -14,19 +14,28 @@ public static class LoginService
 {
     public static LoginResult StartLogin(UsageProviderKind provider)
     {
-        var name = provider == UsageProviderKind.Codex ? "codex" : "claude";
+        var name = provider switch { UsageProviderKind.Codex => "codex", UsageProviderKind.Claude => "claude", _ => "gemini" };
         var executable = FindExecutable(name);
         if (executable is null)
-            return new(false, provider == UsageProviderKind.Codex
-                ? "Codex CLI를 설치한 뒤 다시 로그인해 주세요."
-                : "Claude Code를 설치한 뒤 다시 로그인해 주세요.");
+            return new(false, provider switch
+            {
+                UsageProviderKind.Codex => "Codex CLI를 설치한 뒤 다시 로그인해 주세요.",
+                UsageProviderKind.Claude => "Claude Code를 설치한 뒤 다시 로그인해 주세요.",
+                _ => "Gemini CLI를 설치한 뒤 다시 열어 주세요."
+            });
         try
         {
             // Absolute trusted shell path and encoded PowerShell command avoid cmd.exe's
             // metacharacter expansion in npm shim paths. No token is passed to the process.
             var shell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
                 "WindowsPowerShell", "v1.0", "powershell.exe");
-            var arguments = provider == UsageProviderKind.Codex ? "login" : "auth login --claudeai";
+            var arguments = provider switch
+            {
+                UsageProviderKind.Codex => "login",
+                UsageProviderKind.Claude => "auth login --claudeai",
+                // Official interactive startup dispatches this local slash command after auth.
+                _ => "--prompt-interactive '/stats'"
+            };
             var script = "& '" + executable.Replace("'", "''", StringComparison.Ordinal) + "' " + arguments;
             var start = new ProcessStartInfo(shell)
             {
@@ -38,7 +47,9 @@ public static class LoginService
                 Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
             using var process = Process.Start(start);
             return process is null ? new(false, "로그인 창을 열 수 없습니다.")
-                : new(true, "공식 로그인 창을 열었습니다. 완료하면 사용량이 자동으로 갱신됩니다.");
+                : new(true, provider == UsageProviderKind.Gemini
+                    ? "공식 Gemini 사용량 창을 열었습니다. 필요하면 /auth로 로그인해 주세요."
+                    : "공식 로그인 창을 열었습니다. 완료하면 사용량이 자동으로 갱신됩니다.");
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
         {

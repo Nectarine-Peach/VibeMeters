@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Text.Json;
 using VibeMeters.Models;
 using VibeMeters.Services;
@@ -36,7 +37,7 @@ sealed class RegressionSuite
             Equal(DateTimeOffset.Parse("2026-10-23T20:00:00+09:00"), s.Windows[0].ResetsAt); Equal("sonnet 주간", s.Windows[2].Name);
             Equal(TimeSpan.FromDays(7), s.Windows[1].Duration);
         });
-        foreach (var kind in Enum.GetValues<UsageProviderKind>())
+        foreach (var kind in OAuthProviders)
         {
             foreach (var input in new[] { "{}", "null", "[]", "42", "\"text\"" })
                 Test($"{kind} unsupported root {input}", () => Equal(UsageStatus.Unavailable, Parse(kind, input).Status));
@@ -54,6 +55,35 @@ sealed class RegressionSuite
         Test("Claude invalid reset stays unknown", () => Equal<DateTimeOffset?>(null, Parse(UsageProviderKind.Claude, """{"five_hour":{"utilization":2,"resets_at":"invalid"}}""").Windows[0].ResetsAt));
         Test("Fallback plan retained", () => Equal("pro", Parse(UsageProviderKind.Claude, "{}", "pro").Plan));
         Test("Credential string redacts token", () => True(!Credential().ToString().Contains("test-secret", StringComparison.Ordinal)));
+        Test("Gemini official bridge parses model quotas, plan and reset", () =>
+        {
+            var s = ParseGemini("""{"status":"Ready","plan":"Google AI Pro","windows":[{"name":"2.5-pro","remainingPercent":62.5,"resetsAt":"2026-10-24T12:00:00Z"},{"name":"2.5-flash","remainingPercent":0},{"name":"3-pro","remainingPercent":100}]}""");
+            Equal(UsageProviderKind.Gemini, s.Provider); Equal(UsageStatus.Ready, s.Status); Equal("Google AI Pro", s.Plan);
+            Equal(3, s.Windows.Count); Equal("2.5-pro", s.Windows[0].Name); Equal(62.5, s.Windows[0].RemainingPercent);
+            Equal(DateTimeOffset.Parse("2026-10-24T12:00:00Z"), s.Windows[0].ResetsAt);
+            Equal(0d, s.Windows[1].RemainingPercent); Equal(100d, s.Windows[2].RemainingPercent);
+        });
+        foreach (var value in new[] { "null", "\"25\"", "1e999", "true", "-1", "101" })
+            Test($"Gemini bridge rejects invalid remaining percentage {value}", () =>
+            {
+                var s = ParseGemini("{\"status\":\"Ready\",\"windows\":[{\"name\":\"pro\",\"remainingPercent\":" + value + "}]}");
+                Equal(UsageStatus.Unavailable, s.Status); Equal(0, s.Windows.Count);
+            });
+        foreach (var input in new[] { "null", "[]", "42", "{}", "{\"status\":\"Ready\"}", "{\"status\":\"Ready\",\"windows\":[{},null,42]}" })
+            Test($"Gemini bridge safely handles missing quota {input}", () => Equal(UsageStatus.Unavailable, ParseGemini(input).Status));
+        foreach (var (reason, status) in new[]
+        {
+            ("AUTH_REQUIRED", UsageStatus.AuthenticationRequired), ("RATE_LIMITED", UsageStatus.RateLimited),
+            ("PROJECT_REQUIRED", UsageStatus.Unavailable), ("RUNTIME_REQUIRED", UsageStatus.Unavailable),
+            ("NO_QUOTA", UsageStatus.Unavailable), ("NETWORK", UsageStatus.Unavailable)
+        })
+            Test($"Gemini bridge maps {reason}", () => Equal(status, ParseGemini("{\"status\":\"Unavailable\",\"reason\":\"" + reason + "\"}").Status));
+        Test("Gemini is routed to its dedicated official CLI provider", () =>
+        {
+            True(UsageProviderFactory.CreateDefault().Single(p => p.Kind == UsageProviderKind.Gemini) is GeminiUsageProvider);
+            try { _ = Provider(new StubHandler(_ => throw new Exception("Must not request")), kind: UsageProviderKind.Gemini); throw new Exception("Wrong provider accepted Gemini"); }
+            catch (ArgumentException) { }
+        });
 
         await TestAsync("No credentials do not make network request", async () =>
         {
@@ -119,9 +149,9 @@ sealed class RegressionSuite
             catch (OperationCanceledException) { }
         });
         await TestAsync("Credential files parsed from isolated fixture directory", CredentialFilesAsync);
-        foreach (var kind in Enum.GetValues<UsageProviderKind>())
+        foreach (var kind in OAuthProviders)
         {
-            foreach (var status in new[] { HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden, HttpStatusCode.TooManyRequests })
+            foreach (var status in new[] { HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden })
                 await TestAsync($"{kind} new login bypasses cached HTTP {(int)status}", async () =>
                 {
                     var credentials = new MutableCredentials(Credential());
@@ -134,6 +164,26 @@ sealed class RegressionSuite
                     var recovered = await provider.FetchAsync();
                     Equal(UsageStatus.Ready, recovered.Status); Equal(82d, recovered.Windows[0].RemainingPercent); Equal(2, handler.Calls);
                 });
+            await TestAsync($"{kind} token renewal cannot bypass HTTP 429 cooldown", async () =>
+            {
+                var credentials = new MutableCredentials(Credential());
+                var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.TooManyRequests));
+                var provider = new UsageProvider(kind, credentials, new HttpClient(handler));
+                var limited = await provider.FetchAsync();
+                credentials.Current = new UsageCredential { AccessToken = "new-login", AccountId = "new-account" };
+                var retried = await provider.FetchAsync();
+                Equal(UsageStatus.RateLimited, retried.Status); Equal(limited, retried); Equal(1, handler.Calls);
+                True(retried.RetryAfter > DateTimeOffset.UtcNow.AddSeconds(kind == UsageProviderKind.Claude ? 290 : 50));
+            });
+            await TestAsync($"{kind} successful polling floor survives token renewal", async () =>
+            {
+                var credentials = new MutableCredentials(Credential());
+                var handler = new StubHandler(_ => JsonResponse(kind == UsageProviderKind.Codex ? """{"rate_limit":{"primary_window":{"used_percent":18}}}""" : """{"five_hour":{"utilization":18}}"""));
+                var provider = new UsageProvider(kind, credentials, new HttpClient(handler));
+                var original = await provider.FetchAsync();
+                credentials.Current = new UsageCredential { AccessToken = "renewed-token", AccountId = "test-account" };
+                Equal(original, await provider.FetchAsync()); Equal(1, handler.Calls);
+            });
             await TestAsync($"{kind} expired credential replaced by login recovers", async () =>
             {
                 var credentials = new MutableCredentials(new UsageCredential { AccessToken = "expired", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1) });
@@ -161,11 +211,11 @@ sealed class RegressionSuite
             Test($"Settings normalize invalid interval {interval}", () => Equal(120, SettingsStore.Normalize(new AppSettings { RefreshIntervalSeconds = interval }).RefreshIntervalSeconds));
         Test("Settings clear non-finite coordinates", () => { var s = SettingsStore.Normalize(new AppSettings { Left = double.NaN, Top = double.PositiveInfinity }); Equal<double?>(null, s.Left); Equal<double?>(null, s.Top); });
         Test("Settings retain valid multi-monitor coordinates", () => { var s = SettingsStore.Normalize(new AppSettings { Left = -1500, Top = -300 }); Equal<double?>(-1500, s.Left); Equal<double?>(-300, s.Top); });
-        Test("Window defaults allow compact useful dashboard", () => { var s = new AppSettings(); Equal(340d, s.WindowWidth); Equal(320d, s.WindowHeight); True(!s.CompactMode); });
+        Test("Window defaults allow compact useful dashboard", () => { var s = new AppSettings(); Equal(360d, s.WindowWidth); Equal(360d, s.WindowHeight); True(!s.CompactMode); });
         foreach (var value in new[] { double.NaN, double.NegativeInfinity, double.PositiveInfinity })
             Test($"Non-finite window size {value} restores defaults", () =>
             {
-                var s = SettingsStore.Normalize(new AppSettings { WindowWidth = value, WindowHeight = value }); Equal(340d, s.WindowWidth); Equal(320d, s.WindowHeight);
+                var s = SettingsStore.Normalize(new AppSettings { WindowWidth = value, WindowHeight = value }); Equal(360d, s.WindowWidth); Equal(360d, s.WindowHeight);
             });
         Test("Tiny and enormous window dimensions stay bounded", () =>
         {
@@ -177,6 +227,29 @@ sealed class RegressionSuite
             var saved = new AppSettings { WindowWidth = 244, WindowHeight = 178, CompactMode = true, AlwaysOnTop = true };
             var restored = SettingsStore.Normalize(JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(saved))!);
             Equal(244d, restored.WindowWidth); Equal(178d, restored.WindowHeight); True(restored.CompactMode); True(restored.AlwaysOnTop);
+        });
+        Test("Hidden services cannot leave an empty dashboard", () =>
+        {
+            var s = SettingsStore.Normalize(new AppSettings { ShowCodex = false, ShowClaude = false, ShowGemini = false });
+            True(s.ShowCodex); True(!s.ShowClaude); True(!s.ShowGemini);
+        });
+        Test("Theme and service display choices survive JSON roundtrip", () =>
+        {
+            var saved = new AppSettings { Theme = AppTheme.Light, ShowCodex = false, ShowClaude = false, ShowGemini = true,
+                CodexDisplayMode = UsageDisplayMode.Used, ClaudeDisplayMode = UsageDisplayMode.Remaining, GeminiDisplayMode = UsageDisplayMode.Used };
+            var restored = SettingsStore.Normalize(JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(saved))!);
+            Equal(AppTheme.Light, restored.Theme); True(restored.IsProviderVisible(UsageProviderKind.Gemini));
+            True(!restored.IsProviderVisible(UsageProviderKind.Codex)); True(!restored.IsProviderVisible(UsageProviderKind.Claude));
+            Equal(UsageDisplayMode.Used, restored.GetDisplayMode(UsageProviderKind.Codex));
+            Equal(UsageDisplayMode.Remaining, restored.GetDisplayMode(UsageProviderKind.Claude));
+            Equal(UsageDisplayMode.Used, restored.GetDisplayMode(UsageProviderKind.Gemini));
+        });
+        Test("Invalid theme and usage modes restore safe defaults", () =>
+        {
+            var s = SettingsStore.Normalize(new AppSettings { Theme = (AppTheme)999, CodexDisplayMode = (UsageDisplayMode)(-1),
+                ClaudeDisplayMode = (UsageDisplayMode)999, GeminiDisplayMode = (UsageDisplayMode)999 });
+            Equal(AppTheme.System, s.Theme);
+            foreach (var kind in Enum.GetValues<UsageProviderKind>()) Equal(UsageDisplayMode.Remaining, s.GetDisplayMode(kind));
         });
         Console.WriteLine($"\n{_passed} passed; {_failed} failed.");
         return _failed == 0 ? 0 : 1;
@@ -213,6 +286,14 @@ sealed class RegressionSuite
     private void Test(string name, Action action) { try { action(); _passed++; Console.WriteLine("PASS " + name); } catch (Exception e) { _failed++; Console.WriteLine("FAIL " + name + ": " + e.Message); } }
     private async Task TestAsync(string name, Func<Task> action) { try { await action(); _passed++; Console.WriteLine("PASS " + name); } catch (Exception e) { _failed++; Console.WriteLine("FAIL " + name + ": " + e.Message); } }
     private static UsageSnapshot Parse(UsageProviderKind kind, string json, string? plan = null) { using var doc = JsonDocument.Parse(json); return UsageParser.Parse(kind, doc.RootElement, Now, plan); }
+    private static readonly UsageProviderKind[] OAuthProviders = [UsageProviderKind.Codex, UsageProviderKind.Claude];
+    // Exercise the sanitized bridge contract without launching Node, reading user credentials or contacting Google.
+    private static UsageSnapshot ParseGemini(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var bridge = typeof(GeminiUsageProvider).Assembly.GetType("VibeMeters.Services.GeminiCliBridge", throwOnError: true)!;
+        return (UsageSnapshot)bridge.GetMethod("Parse", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [doc.RootElement])!;
+    }
     private static UsageCredential Credential() => new() { AccessToken = "test-secret", AccountId = "test-account" };
     private static UsageProvider Provider(StubHandler handler, UsageCredential? credential, UsageProviderKind kind = UsageProviderKind.Codex) => new(kind, new StubCredentials(credential), new HttpClient(handler));
     private static UsageProvider Provider(StubHandler handler, UsageProviderKind kind = UsageProviderKind.Codex) => Provider(handler, Credential(), kind);

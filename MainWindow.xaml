@@ -12,25 +12,34 @@
    <Setter Property="Padding" Value="7,5"/><Setter Property="Cursor" Value="Hand"/><Setter Property="MinHeight" Value="24"/>
    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border x:Name="B" Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><ControlTemplate.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter TargetName="B" Property="Background" Value="{DynamicResource SurfaceHover}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="B" Property="Background" Value="{DynamicResource SurfacePressed}"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger></ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
   </Style>
+  <Style x:Key="HeaderButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+   <Setter Property="Width" Value="22"/><Setter Property="Height" Value="22"/><Setter Property="MinHeight" Value="20"/>
+   <Setter Property="Padding" Value="3"/><Setter Property="Margin" Value="1,0"/><Setter Property="FontSize" Value="10"/>
+  </Style>
+  <Style x:Key="StatusButton" TargetType="Button">
+   <Setter Property="Width" Value="14"/><Setter Property="Height" Value="18"/><Setter Property="Padding" Value="0"/><Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/>
+   <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button"><Border Background="Transparent"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border></ControlTemplate></Setter.Value></Setter>
+  </Style>
   <Style TargetType="CheckBox"><Setter Property="FocusVisualStyle" Value="{StaticResource KeyboardFocus}"/><Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/><Setter Property="Margin" Value="0,10,0,0"/></Style>
   <Style TargetType="ProgressBar"><Setter Property="Height" Value="3"/><Setter Property="Minimum" Value="0"/><Setter Property="Maximum" Value="100"/><Setter Property="Background" Value="{DynamicResource TrackBrush}"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ProgressBar"><Grid ClipToBounds="True"><Border Background="{TemplateBinding Background}" CornerRadius="1.5"/><Border x:Name="PART_Track" Background="Transparent"/><Border x:Name="PART_Indicator" HorizontalAlignment="Left" Background="{TemplateBinding Foreground}" CornerRadius="1.5"/></Grid></ControlTemplate></Setter.Value></Setter></Style>
  </Window.Resources>
- <Border BorderBrush="{DynamicResource WindowBorder}" BorderThickness="1" Padding="9,5,9,5">
+ <Border BorderBrush="{DynamicResource WindowBorder}" BorderThickness="1" Padding="9,4,9,7">
   <Grid>
-   <Grid.RowDefinitions><RowDefinition Height="28"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+   <Grid.RowDefinitions><RowDefinition Height="32"/><RowDefinition Height="*"/></Grid.RowDefinitions>
    <Grid MouseLeftButtonDown="Header_MouseLeftButtonDown" Background="Transparent">
     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock x:Name="TitleText" Text="VibeMeters" FontSize="13" FontWeight="SemiBold"/><TextBlock x:Name="SubtitleText" Text="  /  사용량" FontSize="10" Foreground="{DynamicResource SecondaryText}" VerticalAlignment="Center"/></StackPanel>
-    <StackPanel Grid.Column="1" Orientation="Horizontal">
-     <Button x:Name="RefreshButton" Content="&#xE72C;" FontFamily="Segoe MDL2 Assets" Click="Refresh_Click" ToolTip="지금 새로고침 (F5)" AutomationProperties.Name="지금 새로고침"/>
-     <Button x:Name="SettingsButton" Content="&#xE713;" FontFamily="Segoe MDL2 Assets" Click="Settings_Click" ToolTip="설정 / 계정" AutomationProperties.Name="설정 및 계정"/>
-     <Button x:Name="PinButton" Content="&#xE718;" FontFamily="Segoe MDL2 Assets" Click="Pin_Click" ToolTip="항상 위에 표시" AutomationProperties.Name="항상 위에 표시"/>
-     <Button x:Name="MinimizeButton" Content="&#xE921;" FontFamily="Segoe MDL2 Assets" Click="Minimize_Click" ToolTip="작업표시줄로 최소화" AutomationProperties.Name="최소화"/>
-     <Button Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" Click="Hide_Click" ToolTip="트레이로 숨기기" AutomationProperties.Name="트레이로 숨기기"/>
+    <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock x:Name="TitleText" Text="VibeMeters" FontSize="12" FontWeight="SemiBold"/><TextBlock x:Name="SubtitleText" Text="  사용량" FontSize="10" Foreground="{DynamicResource MutedText}" VerticalAlignment="Center"/></StackPanel>
+    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+     <Button x:Name="RefreshButton" Style="{StaticResource HeaderButton}" Content="&#xE72C;" FontFamily="Segoe MDL2 Assets" Click="Refresh_Click" ToolTip="지금 새로고침 (F5)" AutomationProperties.Name="지금 새로고침"/>
+     <Button x:Name="SettingsButton" Style="{StaticResource HeaderButton}" Content="&#xE713;" FontFamily="Segoe MDL2 Assets" Click="Settings_Click" ToolTip="설정 / 계정" AutomationProperties.Name="설정 및 계정"/>
+     <Button x:Name="PinButton" Style="{StaticResource HeaderButton}" Content="&#xE718;" FontFamily="Segoe MDL2 Assets" Click="Pin_Click" ToolTip="항상 위에 표시" AutomationProperties.Name="항상 위에 표시"/>
+     <Button x:Name="MinimizeButton" Style="{StaticResource HeaderButton}" Content="&#xE921;" FontFamily="Segoe MDL2 Assets" Click="Minimize_Click" ToolTip="작업표시줄로 최소화" AutomationProperties.Name="최소화"/>
+     <Button Style="{StaticResource HeaderButton}" Content="&#xE8BB;" FontFamily="Segoe MDL2 Assets" Click="Hide_Click" ToolTip="트레이로 숨기기" AutomationProperties.Name="트레이로 숨기기"/>
     </StackPanel>
    </Grid>
-   <Grid x:Name="ProviderGrid" Grid.Row="1" Margin="0,4,0,3"/>
-   <Grid x:Name="MicroPanel" Grid.Row="1" Margin="0,2" Visibility="Collapsed"/>
+   <Grid x:Name="ProviderGrid" Grid.Row="1" Margin="0,3,0,0"/>
+   <Grid x:Name="MicroPanel" Grid.Row="1" Margin="0,3,0,0" Visibility="Collapsed"/>
   </Grid>
  </Border>
 </Window>

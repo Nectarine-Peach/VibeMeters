@@ -65,7 +65,7 @@ public static class ThemeService
 
     private static Dictionary<string, Color> DarkPalette() => Palette(new[]
     {
-        "#141922", "#3A4659", "#E9EDF5", "#B9C6D8", "#98A9BF", "#1D2633", "#30405A", "#3A4F6D",
+        "#11161E", "#303B4B", "#EDF2F8", "#B7C3D3", "#8E9DB2", "#1A222E", "#283547", "#33455E",
         "#1C282D", "#2B2527", "#21283A", "#8BE2C3", "#ECA98C", "#A5B9FF", "#39465A", "#E7BE7C", "#F69898",
         "#46536A", "#477C71", "#F2F6FC", "#536780"
     });

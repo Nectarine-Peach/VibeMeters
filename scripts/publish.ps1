@@ -19,9 +19,12 @@ if (!(Test-Path -LiteralPath (Join-Path $runtimeTarget 'node.exe'))) {
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\README.md') -Destination $output
 $packageFiles = @((Join-Path $output 'VibeMeters.exe'), (Join-Path $output 'README.md'))
-if (Test-Path -LiteralPath (Join-Path $PSScriptRoot '..\README.ko.md')) {
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot '..\README.ko.md') -Destination $output
-    $packageFiles += Join-Path $output 'README.ko.md'
+foreach ($translatedReadme in @('README.en.md', 'README.ko.md')) {
+    $translatedSource = Join-Path $PSScriptRoot "..\$translatedReadme"
+    if (Test-Path -LiteralPath $translatedSource) {
+        Copy-Item -LiteralPath $translatedSource -Destination $output
+        $packageFiles += Join-Path $output $translatedReadme
+    }
 }
 $packageFiles += Join-Path $output 'runtime'
 $docsSource = Join-Path $PSScriptRoot '..\docs'

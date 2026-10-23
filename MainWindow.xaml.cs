@@ -78,8 +78,8 @@ public partial class MainWindow : Window
         if (compact) { _normalWidth = Width; _normalHeight = Height; }
         Settings.CompactMode = compact;
         _changingMode = true;
-        Width = compact ? 240 : Math.Max(280, _normalWidth);
-        Height = compact ? 148 : Math.Max(240, _normalHeight);
+        Width = compact ? 240 : Math.Max(MinWidth, _normalWidth);
+        Height = compact ? 148 : Math.Max(MinHeight, _normalHeight);
         _changingMode = false;
         UpdateLayoutMode();
         SettingsChanged?.Invoke();

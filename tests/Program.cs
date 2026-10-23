@@ -119,6 +119,41 @@ sealed class RegressionSuite
             catch (OperationCanceledException) { }
         });
         await TestAsync("Credential files parsed from isolated fixture directory", CredentialFilesAsync);
+        foreach (var kind in Enum.GetValues<UsageProviderKind>())
+        {
+            foreach (var status in new[] { HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden, HttpStatusCode.TooManyRequests })
+                await TestAsync($"{kind} new login bypasses cached HTTP {(int)status}", async () =>
+                {
+                    var credentials = new MutableCredentials(Credential());
+                    var handler = new StubHandler(r => r.Headers.Authorization?.Parameter == "test-secret"
+                        ? new HttpResponseMessage(status)
+                        : JsonResponse(kind == UsageProviderKind.Codex ? """{"rate_limit":{"primary_window":{"used_percent":18}}}""" : """{"five_hour":{"utilization":18}}"""));
+                    var provider = new UsageProvider(kind, credentials, new HttpClient(handler));
+                    var failed = await provider.FetchAsync(); True(failed.Status != UsageStatus.Ready);
+                    credentials.Current = new UsageCredential { AccessToken = "new-login" };
+                    var recovered = await provider.FetchAsync();
+                    Equal(UsageStatus.Ready, recovered.Status); Equal(82d, recovered.Windows[0].RemainingPercent); Equal(2, handler.Calls);
+                });
+            await TestAsync($"{kind} expired credential replaced by login recovers", async () =>
+            {
+                var credentials = new MutableCredentials(new UsageCredential { AccessToken = "expired", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1) });
+                var handler = new StubHandler(_ => JsonResponse(kind == UsageProviderKind.Codex ? """{"rate_limit":{"primary_window":{"used_percent":0}}}""" : """{"five_hour":{"utilization":0}}"""));
+                var provider = new UsageProvider(kind, credentials, new HttpClient(handler));
+                Equal(UsageStatus.AuthenticationRequired, (await provider.FetchAsync()).Status); Equal(0, handler.Calls);
+                credentials.Current = new UsageCredential { AccessToken = "valid", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) };
+                Equal(UsageStatus.Ready, (await provider.FetchAsync()).Status); Equal(1, handler.Calls);
+            });
+        }
+        await TestAsync("Account switch cannot inherit previous account quota", async () =>
+        {
+            var credentials = new MutableCredentials(Credential());
+            var handler = new StubHandler(r => r.Headers.GetValues("ChatGPT-Account-Id").Single() == "test-account"
+                ? JsonResponse("""{"rate_limit":{"primary_window":{"used_percent":15}}}""") : new HttpResponseMessage(HttpStatusCode.Unauthorized));
+            var provider = new UsageProvider(UsageProviderKind.Codex, credentials, new HttpClient(handler));
+            Equal(1, (await provider.FetchAsync()).Windows.Count);
+            credentials.Current = new UsageCredential { AccessToken = "test-secret", AccountId = "different-account" };
+            var switched = await provider.FetchAsync(); Equal(UsageStatus.AuthenticationRequired, switched.Status); Equal(0, switched.Windows.Count); Equal(2, handler.Calls);
+        });
         Test("Settings defaults are resource-friendly", () => { var s = new AppSettings(); Equal(120, s.RefreshIntervalSeconds); True(s.ShowInTaskbar); True(!s.AlwaysOnTop); True(!s.StartWithWindows); });
         foreach (var interval in new[] { 0, 30, 60, 120, 900, 86400 })
             Test($"Settings preserve valid interval {interval}", () => Equal(interval, SettingsStore.Normalize(new AppSettings { RefreshIntervalSeconds = interval }).RefreshIntervalSeconds));
@@ -126,6 +161,23 @@ sealed class RegressionSuite
             Test($"Settings normalize invalid interval {interval}", () => Equal(120, SettingsStore.Normalize(new AppSettings { RefreshIntervalSeconds = interval }).RefreshIntervalSeconds));
         Test("Settings clear non-finite coordinates", () => { var s = SettingsStore.Normalize(new AppSettings { Left = double.NaN, Top = double.PositiveInfinity }); Equal<double?>(null, s.Left); Equal<double?>(null, s.Top); });
         Test("Settings retain valid multi-monitor coordinates", () => { var s = SettingsStore.Normalize(new AppSettings { Left = -1500, Top = -300 }); Equal<double?>(-1500, s.Left); Equal<double?>(-300, s.Top); });
+        Test("Window defaults allow compact useful dashboard", () => { var s = new AppSettings(); Equal(340d, s.WindowWidth); Equal(320d, s.WindowHeight); True(!s.CompactMode); });
+        foreach (var value in new[] { double.NaN, double.NegativeInfinity, double.PositiveInfinity })
+            Test($"Non-finite window size {value} restores defaults", () =>
+            {
+                var s = SettingsStore.Normalize(new AppSettings { WindowWidth = value, WindowHeight = value }); Equal(340d, s.WindowWidth); Equal(320d, s.WindowHeight);
+            });
+        Test("Tiny and enormous window dimensions stay bounded", () =>
+        {
+            var small = SettingsStore.Normalize(new AppSettings { WindowWidth = -1, WindowHeight = 0 }); Equal(220d, small.WindowWidth); Equal(140d, small.WindowHeight);
+            var huge = SettingsStore.Normalize(new AppSettings { WindowWidth = double.MaxValue, WindowHeight = double.MaxValue }); Equal(1000d, huge.WindowWidth); Equal(1000d, huge.WindowHeight);
+        });
+        Test("Compact settings survive JSON roundtrip with chosen dimensions", () =>
+        {
+            var saved = new AppSettings { WindowWidth = 244, WindowHeight = 178, CompactMode = true, AlwaysOnTop = true };
+            var restored = SettingsStore.Normalize(JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(saved))!);
+            Equal(244d, restored.WindowWidth); Equal(178d, restored.WindowHeight); True(restored.CompactMode); True(restored.AlwaysOnTop);
+        });
         Console.WriteLine($"\n{_passed} passed; {_failed} failed.");
         return _failed == 0 ? 0 : 1;
     }
@@ -172,6 +224,12 @@ sealed class RegressionSuite
 sealed class StubCredentials(UsageCredential? credential) : ICredentialReader
 {
     public Task<UsageCredential?> ReadAsync(UsageProviderKind provider, CancellationToken cancellationToken = default) => Task.FromResult(credential);
+}
+
+sealed class MutableCredentials(UsageCredential? credential) : ICredentialReader
+{
+    public UsageCredential? Current { get; set; } = credential;
+    public Task<UsageCredential?> ReadAsync(UsageProviderKind provider, CancellationToken cancellationToken = default) => Task.FromResult(Current);
 }
 
 sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler

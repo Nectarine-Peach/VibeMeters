@@ -38,6 +38,9 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        // A static, tiny 2D widget does not benefit from a dedicated Direct3D renderer.
+        // Software rendering avoids a persistent GPU device and compositor threads.
+        RenderOptions.ProcessRenderMode = System.Windows.Interop.RenderMode.SoftwareOnly;
         _demo = e.Args.Contains("--demo") || e.Args.Contains("--smoke-test");
         _mutex = new Mutex(true, _demo ? "Local\\VibeMeters.Demo" : "Local\\VibeMeters.App", out bool first);
         _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, _demo ? "Local\\VibeMeters.Demo.Activate" : "Local\\VibeMeters.Activate");
@@ -256,6 +259,8 @@ public partial class App : Application
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             Check("mini mode", _settings.CompactMode);
             _window.SetCompactMode(false);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check("mini restores previous size", _window.Width == 600 && _window.Height == 300);
             _window.Width = 340; _window.Height = 320;
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             var settingsButton = (System.Windows.Controls.Button)_window.FindName("SettingsButton");
@@ -268,6 +273,15 @@ public partial class App : Application
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             CaptureWindow(Path.Combine(output, "login-required.png"));
             Check("login recovery action", ((FrameworkElement)_window.FindName("ClaudeConnectButton")).Visibility == Visibility.Visible);
+            _window.Width = 220; _window.Height = 140;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            _window.SetCompactMode(true);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            _window.SetCompactMode(false);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Check("mini restores a manually tiny window", _window.Width == 220 && _window.Height == 140);
+            CaptureWindow(Path.Combine(output, "micro-login-required.png"));
+            Check("login state in micro layout", ((FrameworkElement)_window.FindName("MicroPanel")).Visibility == Visibility.Visible);
         }
         catch (Exception ex) { _exitCode = 1; results.Add("FAIL: " + ex.GetType().Name + " · " + ex.Message); }
         finally { File.WriteAllLines(Path.Combine(output, "smoke-test.txt"), results); ExitApplication(); }

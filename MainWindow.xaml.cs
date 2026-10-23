@@ -14,7 +14,7 @@ namespace VibeMeters;
 public partial class MainWindow : Window
 {
     private bool _initialized, _changingMode;
-    private double _normalWidth = 340, _normalHeight = 320;
+    private double _normalWidth = 360, _normalHeight = 360;
     private readonly Dictionary<UsageProviderKind, UsageSnapshot> _snapshots = new();
     private SettingsWindow? _settingsWindow;
     public bool IsCompactLayout { get; private set; }
@@ -29,8 +29,8 @@ public partial class MainWindow : Window
     {
         Settings = settings;
         InitializeComponent();
-        Width = _normalWidth = Math.Clamp(double.IsFinite(settings.WindowWidth) ? settings.WindowWidth : 340, MinWidth, SystemParameters.VirtualScreenWidth);
-        Height = _normalHeight = Math.Clamp(double.IsFinite(settings.WindowHeight) ? settings.WindowHeight : 320, MinHeight, SystemParameters.VirtualScreenHeight);
+        Width = _normalWidth = Math.Clamp(double.IsFinite(settings.WindowWidth) ? settings.WindowWidth : 360, MinWidth, SystemParameters.VirtualScreenWidth);
+        Height = _normalHeight = Math.Clamp(double.IsFinite(settings.WindowHeight) ? settings.WindowHeight : 360, MinHeight, SystemParameters.VirtualScreenHeight);
         Topmost = settings.AlwaysOnTop;
         ShowInTaskbar = settings.ShowInTaskbar;
         if (settings.Left is double left && settings.Top is double top && IsVisiblePosition(left, top))
@@ -80,9 +80,12 @@ public partial class MainWindow : Window
         var wide = providers.Length > 1 && width >= Math.Max(520, providers.Length * 240);
         var needed = providers.Sum(kind => RequiredCardHeight(Snapshot(kind)));
         if (wide) needed = providers.Max(kind => RequiredCardHeight(Snapshot(kind)));
-        IsCompactLayout = width < 280 || height - 50 < needed;
-        SubtitleText.Visibility = width >= 380 ? Visibility.Visible : Visibility.Collapsed;
-        TitleText.FontSize = 12;
+        var narrow=width<280;
+        IsCompactLayout = narrow || height - 68 < needed;
+        WindowFrame.Padding=narrow?new Thickness(9,4,9,7):new Thickness(14,8,14,12);
+        HeaderRow.Height=new GridLength(narrow?32:38);
+        SubtitleText.Visibility = width >= 420 ? Visibility.Visible : Visibility.Collapsed;
+        TitleText.FontSize = narrow?11.5:14;
         MinimizeButton.Visibility = width >= 280 ? Visibility.Visible : Visibility.Collapsed;
         ProviderGrid.Visibility = IsCompactLayout ? Visibility.Collapsed : Visibility.Visible;
         MicroPanel.Visibility = IsCompactLayout ? Visibility.Visible : Visibility.Collapsed;
@@ -101,105 +104,115 @@ public partial class MainWindow : Window
             if (wide && !IsCompactLayout) host.ColumnDefinitions.Add(new ColumnDefinition());
             else host.RowDefinitions.Add(new RowDefinition { Height = IsCompactLayout ? new GridLength(1,GridUnitType.Star) : new GridLength(RequiredCardHeight(snapshot),GridUnitType.Star) });
             var element = IsCompactLayout ? RenderMicro(snapshot) : RenderCard(snapshot);
-            element.Margin=wide&&!IsCompactLayout?new Thickness(0,0,i==providers.Length-1?0:7,0):new Thickness(0,0,0,i==providers.Length-1?0:4);
+            element.Margin=wide&&!IsCompactLayout?new Thickness(0,0,i==providers.Length-1?0:10,0):new Thickness(0,0,0,i==providers.Length-1?0:IsCompactLayout?4:9);
             if (wide && !IsCompactLayout) Grid.SetColumn(element,i); else Grid.SetRow(element,i);
             host.Children.Add(element);
         }
     }
-    private static double RequiredCardHeight(UsageSnapshot snapshot)=>44+snapshot.Windows.Count*52+(snapshot.Windows.Count==0?30:0)+4;
+    private static double RequiredCardHeight(UsageSnapshot snapshot)=>64+snapshot.Windows.Count*28+(snapshot.Windows.Count==0?24:0)+6;
     private static void ClearGrid(Grid grid) { grid.Children.Clear(); grid.RowDefinitions.Clear(); grid.ColumnDefinitions.Clear(); }
     private UsageSnapshot Snapshot(UsageProviderKind kind) => _snapshots.TryGetValue(kind, out var snapshot) ? snapshot : new(kind, UsageStatus.NotConnected, Array.Empty<UsageWindow>(), DateTimeOffset.Now, Message:"계정을 연결하면 사용량이 표시됩니다.");
     private static Brush Accent(UsageProviderKind kind) => Palette(kind switch { UsageProviderKind.Codex => "CodexAccent", UsageProviderKind.Claude => "ClaudeAccent", _ => "GeminiAccent" });
     private string DisplayBasis(UsageProviderKind kind) => Settings.GetDisplayMode(kind)==UsageDisplayMode.Used ? "사용" : "남음";
     private double DisplayPercent(UsageProviderKind kind,UsageWindow quota) => Settings.GetDisplayMode(kind)==UsageDisplayMode.Used ? Math.Clamp(quota.UsedPercent,0,100) : quota.RemainingPercent;
 
-    private FrameworkElement ProviderHeading(UsageSnapshot snapshot,bool compact)
+    private static Border ServiceBadge(UsageProviderKind provider,double size)
     {
-        var heading=new Grid();
-        heading.ColumnDefinitions.Add(new ColumnDefinition());
-        heading.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto });
+        return new Border { Width=size,Height=size,CornerRadius=new CornerRadius(size<=16?4:6),Background=Palette(provider switch { UsageProviderKind.Codex=>"CodexBadge",UsageProviderKind.Claude=>"ClaudeBadge",_=>"GeminiBadge" }),Child=new TextBlock { Text=provider switch { UsageProviderKind.Codex=>"C",UsageProviderKind.Claude=>"A",_=>"G" },Foreground=Palette("BadgeText"),FontSize=size<=16?9:14,FontWeight=FontWeights.SemiBold,HorizontalAlignment=HorizontalAlignment.Center,VerticalAlignment=VerticalAlignment.Center } };
+    }
+    private FrameworkElement ProviderHeading(UsageSnapshot snapshot,bool compact,bool dense=false)
+    {
+        var heading=new Grid { Height=compact?14:26,ToolTip=WrappedTip(ProviderTooltip(snapshot)) };
+        heading.ColumnDefinitions.Add(new ColumnDefinition());heading.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto });
         var identity=new StackPanel { Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center };
-        var dot=new System.Windows.Shapes.Ellipse { Width=5,Height=5,Fill=snapshot.Status==UsageStatus.Ready?Accent(snapshot.Provider):Palette("WarningText"),VerticalAlignment=VerticalAlignment.Center };
-        if(snapshot.Status is UsageStatus.NotConnected or UsageStatus.AuthenticationRequired)
+        var badge=ServiceBadge(snapshot.Provider,compact?14:26);
+        if(dense&&(snapshot.Status is UsageStatus.NotConnected or UsageStatus.AuthenticationRequired))
         {
-            var connect=new Button { Content=dot,Style=(Style)FindResource("StatusButton"),ToolTip=WrappedTip($"{snapshot.Provider} 로그인\n{ProviderStatus(snapshot)}"),Margin=new Thickness(-3,0,0,0) };
-            connect.Click+=(_,_)=>LoginRequested?.Invoke(snapshot.Provider);
-            System.Windows.Automation.AutomationProperties.SetName(connect,$"{snapshot.Provider} 로그인");
-            identity.Children.Add(connect);
+            var connect=new Button { Content=badge,Style=(Style)FindResource("StatusButton"),Width=14,Height=14,ToolTip=WrappedTip($"{snapshot.Provider} 로그인\n{ProviderStatus(snapshot)}") };
+            connect.Click+=(_,_)=>LoginRequested?.Invoke(snapshot.Provider);identity.Children.Add(connect);
         }
-        else identity.Children.Add(new Border { Child=dot,Width=10,VerticalAlignment=VerticalAlignment.Center });
-        identity.Children.Add(new TextBlock { Text=snapshot.Provider.ToString(),Foreground=Palette("PrimaryText"),FontWeight=FontWeights.SemiBold,FontSize=compact?10:12,VerticalAlignment=VerticalAlignment.Center });
-        identity.Children.Add(new TextBlock { Text=DisplayBasis(snapshot.Provider),Foreground=Palette("MutedText"),FontSize=compact?8:10,Margin=new Thickness(compact?4:7,0,0,0),VerticalAlignment=VerticalAlignment.Center });
+        else identity.Children.Add(badge);
+        if(!dense) identity.Children.Add(new TextBlock { Text=snapshot.Provider.ToString(),Foreground=Palette("PrimaryText"),FontWeight=FontWeights.SemiBold,FontSize=compact?10:13,Margin=new Thickness(compact?5:10,0,0,0),VerticalAlignment=VerticalAlignment.Center });
+        identity.Children.Add(new Border { Background=Palette("SurfaceHover"),CornerRadius=new CornerRadius(4),Padding=new Thickness(compact?3:5,compact?0:2,compact?3:5,compact?0:2),Margin=new Thickness(compact?5:8,0,0,0),VerticalAlignment=VerticalAlignment.Center,Child=new TextBlock { Text=DisplayBasis(snapshot.Provider),Foreground=Palette("SecondaryText"),FontSize=compact?8:9,VerticalAlignment=VerticalAlignment.Center } });
+        if(snapshot.Status!=UsageStatus.Ready)
+        {
+            var dot=new System.Windows.Shapes.Ellipse { Width=compact?4:5,Height=compact?4:5,Fill=Palette("WarningText"),VerticalAlignment=VerticalAlignment.Center };
+            if(snapshot.Status is UsageStatus.NotConnected or UsageStatus.AuthenticationRequired)
+            {
+                if(!dense)
+                {
+                    var connect=new Button { Content=dot,Style=(Style)FindResource("StatusButton"),Height=compact?14:18,Margin=new Thickness(3,0,0,0),ToolTip=WrappedTip($"{snapshot.Provider} 로그인\n{ProviderStatus(snapshot)}") };
+                    connect.Click+=(_,_)=>LoginRequested?.Invoke(snapshot.Provider);System.Windows.Automation.AutomationProperties.SetName(connect,$"{snapshot.Provider} 로그인");identity.Children.Add(connect);
+                }
+            }
+            else identity.Children.Add(new Border { Child=dot,Margin=new Thickness(compact?5:8,0,0,0),VerticalAlignment=VerticalAlignment.Center });
+        }
         heading.Children.Add(identity);
         if(!compact)
         {
-            var plan=new TextBlock { Text=snapshot.Plan,Foreground=Palette("MutedText"),FontSize=10,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis,MaxWidth=120 };
+            var plan=new TextBlock { Text=snapshot.Plan,Foreground=Palette("MutedText"),FontSize=9,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis,MaxWidth=90 };
             Grid.SetColumn(plan,1);heading.Children.Add(plan);
         }
-        heading.ToolTip=WrappedTip(ProviderTooltip(snapshot));
         return heading;
     }
     private FrameworkElement RenderCard(UsageSnapshot snapshot)
     {
-        var accent=Accent(snapshot.Provider);
         var stack=new StackPanel { VerticalAlignment=VerticalAlignment.Center };
-        var heading=ProviderHeading(snapshot,false);heading.Margin=new Thickness(0,0,0,10);stack.Children.Add(heading);
+        stack.Children.Add(ProviderHeading(snapshot,false));
+        stack.Children.Add(new Border { Background=Palette("WindowBorder"),Height=1,Margin=new Thickness(0,9,0,4),Opacity=0.7 });
         foreach(var quota in snapshot.Windows)
         {
-            var section=new StackPanel { Margin=new Thickness(0,0,0,9),ToolTip=WrappedTip(WindowTooltip(quota,snapshot)) };
-            var line=new Grid();
-            line.ColumnDefinitions.Add(new ColumnDefinition());line.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto });
-            var label=new TextBlock { Text=quota.Name,Foreground=Palette("SecondaryText"),FontSize=11,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis };
-            line.Children.Add(label);
-            var value=QuotaValue(snapshot.Provider,quota,18);Grid.SetColumn(value,1);line.Children.Add(value);
-            section.Children.Add(line);
-            section.Children.Add(new ProgressBar { Value=DisplayPercent(snapshot.Provider,quota),Foreground=quota.RemainingPercent<=10?Palette("CriticalText"):accent,Height=3,Margin=new Thickness(0,4,0,0) });
-            var reset=new TextBlock { Text=ResetShort(quota.ResetsAt),FontSize=9,Foreground=Palette("MutedText"),HorizontalAlignment=HorizontalAlignment.Right,Margin=new Thickness(0,4,0,0) };
-            section.Children.Add(reset);stack.Children.Add(section);
+            var row=new Grid { Height=28,ToolTip=WrappedTip(WindowTooltip(quota,snapshot)) };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(48) });row.ColumnDefinitions.Add(new ColumnDefinition());row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(56) });
+            row.Children.Add(new TextBlock { Text=ShortQuotaName(quota.Name),Foreground=Palette("SecondaryText"),FontSize=11,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis });
+            var meter=new ProgressBar { Value=DisplayPercent(snapshot.Provider,quota),Foreground=quota.RemainingPercent<=10?Palette("CriticalText"):Accent(snapshot.Provider),Height=6,Margin=new Thickness(0,0,9,0),VerticalAlignment=VerticalAlignment.Center };
+            Grid.SetColumn(meter,1);row.Children.Add(meter);
+            var value=QuotaValue(snapshot.Provider,quota,18);Grid.SetColumn(value,2);row.Children.Add(value);stack.Children.Add(row);
         }
         if(snapshot.Windows.Count==0)
         {
-            var needsLogin=snapshot.Status is UsageStatus.NotConnected or UsageStatus.AuthenticationRequired;
-            if(needsLogin)
+            if(snapshot.Status is UsageStatus.NotConnected or UsageStatus.AuthenticationRequired)
             {
-                var login=new Button { Content="로그인하여 연결 ↗",HorizontalAlignment=HorizontalAlignment.Left,FontSize=11,Padding=new Thickness(0,4,0,4),ToolTip=WrappedTip(ProviderTooltip(snapshot)) };
+                var login=new Button { Content="로그인하여 연결 ↗",HorizontalAlignment=HorizontalAlignment.Left,FontSize=11,Padding=new Thickness(0,6,0,3),ToolTip=WrappedTip(ProviderTooltip(snapshot)) };
                 login.Click+=(_,_)=>LoginRequested?.Invoke(snapshot.Provider);stack.Children.Add(login);
             }
-            else stack.Children.Add(new TextBlock { Text=ProviderStatus(snapshot),FontSize=10,Foreground=Palette("SecondaryText"),TextTrimming=TextTrimming.CharacterEllipsis,ToolTip=WrappedTip(ProviderTooltip(snapshot)),Margin=new Thickness(0,5,0,5) });
+            else stack.Children.Add(new TextBlock { Text=ProviderStatus(snapshot),FontSize=10,Foreground=Palette("SecondaryText"),TextTrimming=TextTrimming.CharacterEllipsis,ToolTip=WrappedTip(ProviderTooltip(snapshot)),Margin=new Thickness(0,8,0,4) });
         }
-        var content=new Border { Padding=new Thickness(12,9,12,7),Child=stack };
-        var frame=new Grid();
-        frame.Children.Add(content);
-        frame.Children.Add(new Border { Background=accent,Width=2,HorizontalAlignment=HorizontalAlignment.Left,CornerRadius=new CornerRadius(1),Margin=new Thickness(0,12,0,12),Opacity=0.65 });
-        return new Border { Background=Palette("SurfaceBackground"),CornerRadius=new CornerRadius(8),Child=frame };
+        return new Border { Background=Palette("SurfaceBackground"),BorderBrush=Palette("WindowBorder"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(12),Padding=new Thickness(12,10,12,8),Child=stack };
     }
     private FrameworkElement RenderMicro(UsageSnapshot snapshot)
     {
         var providers=Enum.GetValues<UsageProviderKind>().Count(Settings.IsProviderVisible);
-        var dense=(ActualHeight>0?ActualHeight:Height)<180&&providers>=3;
+        var dense=(ActualHeight>0?ActualHeight:Height)<185&&providers>=3;
         var content=new Grid { VerticalAlignment=VerticalAlignment.Center,ToolTip=WrappedTip(ProviderTooltip(snapshot)) };
-        content.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(64) });
-        content.ColumnDefinitions.Add(new ColumnDefinition());
-        content.Children.Add(ProviderHeading(snapshot,true));
+        var heading=ProviderHeading(snapshot,true,dense);
+        var meters=new Grid();
+        if(dense)
+        {
+            content.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(snapshot.Status==UsageStatus.Ready?42:49) });content.ColumnDefinitions.Add(new ColumnDefinition());
+            content.Children.Add(heading);Grid.SetColumn(meters,1);content.Children.Add(meters);
+        }
+        else
+        {
+            content.RowDefinitions.Add(new RowDefinition { Height=new GridLength(14) });content.RowDefinitions.Add(new RowDefinition());
+            content.Children.Add(heading);Grid.SetRow(meters,1);meters.Margin=new Thickness(0,2,0,0);content.Children.Add(meters);
+        }
         var quotas=snapshot.Windows.Take(2).ToArray();
-        var meters=new Grid();Grid.SetColumn(meters,1);content.Children.Add(meters);
         for(var i=0;i<quotas.Length;i++)
         {
             var quota=quotas[i];meters.ColumnDefinitions.Add(new ColumnDefinition());
-            var section=new StackPanel { Margin=new Thickness(i==0?0:4,0,0,0),ToolTip=WrappedTip(WindowTooltip(quota,snapshot)) };
+            var section=new Grid { ToolTip=WrappedTip(WindowTooltip(quota,snapshot)),Margin=new Thickness(i==0?0:9,0,0,0) };
+            section.RowDefinitions.Add(new RowDefinition());section.RowDefinitions.Add(new RowDefinition { Height=GridLength.Auto });
             var line=new Grid();line.ColumnDefinitions.Add(new ColumnDefinition());line.ColumnDefinitions.Add(new ColumnDefinition { Width=GridLength.Auto });
-            line.Children.Add(new TextBlock { Text=ShortQuotaName(quota.Name),FontSize=8,Foreground=Palette("MutedText"),VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis,Margin=new Thickness(0,0,2,0) });
-            var value=QuotaValue(snapshot.Provider,quota,dense?12:14);Grid.SetColumn(value,1);line.Children.Add(value);
-            section.Children.Add(line);
-            section.Children.Add(new ProgressBar { Value=DisplayPercent(snapshot.Provider,quota),Foreground=quota.RemainingPercent<=10?Palette("CriticalText"):Accent(snapshot.Provider),Height=2,Margin=new Thickness(0,dense?2:4,0,0) });
+            line.Children.Add(new TextBlock { Text=ShortQuotaName(quota.Name),FontSize=8,Foreground=Palette("MutedText"),VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis,Margin=new Thickness(0,0,3,0) });
+            var value=QuotaValue(snapshot.Provider,quota,dense?12:13);Grid.SetColumn(value,1);line.Children.Add(value);section.Children.Add(line);
+            var meter=new ProgressBar { Value=DisplayPercent(snapshot.Provider,quota),Foreground=quota.RemainingPercent<=10?Palette("CriticalText"):Accent(snapshot.Provider),Height=2,Margin=new Thickness(0,dense?1:2,0,0) };
+            Grid.SetRow(meter,1);section.Children.Add(meter);
             System.Windows.Automation.AutomationProperties.SetName(section,$"{snapshot.Provider} {quota.Name} {DisplayBasis(snapshot.Provider)} {DisplayPercent(snapshot.Provider,quota):0.#}%");
             Grid.SetColumn(section,i);meters.Children.Add(section);
         }
-        if(quotas.Length==0)
-        {
-            meters.Children.Add(new TextBlock { Text=snapshot.Status is UsageStatus.NotConnected or UsageStatus.AuthenticationRequired?"로그인 필요":StatusLabel(snapshot.Status),Foreground=Palette("SecondaryText"),FontSize=10,VerticalAlignment=VerticalAlignment.Center,HorizontalAlignment=HorizontalAlignment.Right,TextTrimming=TextTrimming.CharacterEllipsis });
-        }
-        return new Border { Background=Palette("SurfaceBackground"),CornerRadius=new CornerRadius(6),Padding=new Thickness(7,dense?3:5,7,dense?3:5),Child=content };
+        if(quotas.Length==0) meters.Children.Add(new TextBlock { Text=snapshot.Status is UsageStatus.NotConnected or UsageStatus.AuthenticationRequired?"로그인 필요":StatusLabel(snapshot.Status),Foreground=Palette("SecondaryText"),FontSize=10,VerticalAlignment=VerticalAlignment.Center,HorizontalAlignment=HorizontalAlignment.Right,TextTrimming=TextTrimming.CharacterEllipsis });
+        return new Border { Background=Palette("SurfaceBackground"),BorderBrush=Palette("WindowBorder"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(7),Padding=new Thickness(6,dense?3:2,6,dense?3:2),Child=content };
     }
     private TextBlock QuotaValue(UsageProviderKind provider,UsageWindow quota,double size)
     {
@@ -207,7 +220,7 @@ public partial class MainWindow : Window
         Typography.SetNumeralAlignment(value,FontNumeralAlignment.Tabular);
         return value;
     }
-    private static string ShortQuotaName(string name)=>name.Contains("주")?"주간":name.Contains("세션")||name.Contains("시간")?"세션":name.Replace("모델","").Trim();
+    private static string ShortQuotaName(string name)=>name.Contains("주")?"주간":name.Contains("5시간")?"5시간":name.Contains("세션")||name.Contains("시간")?"세션":name.Replace("모델","").Trim();
     private static ToolTip WrappedTip(string text)=>new ToolTip { MaxWidth=280,Content=new TextBlock { Text=text,TextWrapping=TextWrapping.Wrap,MaxWidth=254,FontSize=11,LineHeight=17 } };
     private static string ProviderStatus(UsageSnapshot snapshot)
     {
@@ -289,6 +302,8 @@ public partial class MainWindow : Window
         _settingsWindow.Show();
     }
 }
+
+
 
 
 

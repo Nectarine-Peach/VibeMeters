@@ -31,6 +31,8 @@ public static class ThemeService
             foreach (var key in new[] { "WindowBorder", "PopupBorder", "TrackBrush", "ToggleOff" }) palette[key] = SystemColors.GrayTextColor;
             foreach (var key in new[] { "SurfaceHover", "SurfacePressed", "ToggleOn" }) palette[key] = SystemColors.HighlightColor;
             palette["ToggleThumb"] = SystemColors.HighlightTextColor;
+            palette["BadgeText"] = SystemColors.HighlightTextColor;
+            foreach(var key in new[] {"CodexBadge","ClaudeBadge","GeminiBadge"}) palette[key]=SystemColors.HighlightColor;
         }
         foreach (var item in palette)
         {
@@ -65,21 +67,21 @@ public static class ThemeService
 
     private static Dictionary<string, Color> DarkPalette() => Palette(new[]
     {
-        "#11161E", "#303B4B", "#EDF2F8", "#B7C3D3", "#8E9DB2", "#1A222E", "#283547", "#33455E",
-        "#1C282D", "#2B2527", "#21283A", "#8BE2C3", "#ECA98C", "#A5B9FF", "#39465A", "#E7BE7C", "#F69898",
-        "#46536A", "#477C71", "#F2F6FC", "#536780"
+        "#1B2024", "#3A4248", "#F1F4F5", "#C2CACF", "#939FA7", "#23292D", "#30383E", "#3B464D",
+        "#23292D", "#23292D", "#23292D", "#87DFC1", "#F4B68F", "#AAA7FF", "#41494F", "#F1B54E", "#F49A98",
+        "#47535C", "#5EB49B", "#F1F5F6", "#74878F", "#10241E", "#87DFC1", "#F4B68F", "#AAA7FF"
     });
 
     private static Dictionary<string, Color> LightPalette() => Palette(new[]
     {
-        "#F5F7FB", "#CAD3E0", "#17243A", "#41536C", "#586A82", "#FFFFFF", "#E7EDF7", "#D8E4F5",
-        "#E6F4ED", "#FFF0E8", "#EDF0FF", "#146B50", "#9B4725", "#4058AE", "#CBD5E1", "#85550C", "#AE3434",
-        "#A4B1C4", "#237B61", "#FFFFFF", "#A9B8CC"
+        "#F5F6F7", "#D9DFE3", "#192126", "#4E5962", "#64727C", "#FDFDFE", "#EAEFF2", "#DDE6E9",
+        "#FDFDFE", "#FDFDFE", "#FDFDFE", "#56B99A", "#DB9870", "#8D8BE6", "#E1E6E9", "#A66B0B", "#B9413F",
+        "#B4BEC5", "#4EAA8F", "#FFFFFF", "#94A6AE", "#10241E", "#83DCBB", "#F3B38D", "#AAA7FF"
     });
 
     private static Dictionary<string, Color> Palette(string[] values)
     {
-        var keys = new[] { "WindowBackground", "WindowBorder", "PrimaryText", "SecondaryText", "MutedText", "SurfaceBackground", "SurfaceHover", "SurfacePressed", "CodexSurface", "ClaudeSurface", "GeminiSurface", "CodexAccent", "ClaudeAccent", "GeminiAccent", "TrackBrush", "WarningText", "CriticalText", "ToggleOff", "ToggleOn", "ToggleThumb", "PopupBorder" };
+        var keys = new[] { "WindowBackground", "WindowBorder", "PrimaryText", "SecondaryText", "MutedText", "SurfaceBackground", "SurfaceHover", "SurfacePressed", "CodexSurface", "ClaudeSurface", "GeminiSurface", "CodexAccent", "ClaudeAccent", "GeminiAccent", "TrackBrush", "WarningText", "CriticalText", "ToggleOff", "ToggleOn", "ToggleThumb", "PopupBorder", "BadgeText", "CodexBadge", "ClaudeBadge", "GeminiBadge" };
         var result = new Dictionary<string, Color>();
         for (var index = 0; index < keys.Length; index++) result[keys[index]] = (Color)ColorConverter.ConvertFromString(values[index]);
         return result;

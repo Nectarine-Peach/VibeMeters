@@ -6,6 +6,8 @@ Codex·Claude·Gemini의 남은 한도와 사용량을 작은 Windows 창에서 
 
 **Windows 10/11 x64 · 트레이 상주 · 항상 위 · 다크/라이트 테마**
 
+[Windows용 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [릴리스 노트](https://github.com/Nectarine-Peach/VibeMeters/releases/latest)
+
 <img src="docs/screenshots/window-mini-dark.png" alt="한도별 행을 세로로 표시하는 VibeMeters 미니 창" width="274">
 
 데모 데이터로 실행한 실제 앱의 렌더링 화면입니다.
@@ -16,7 +18,7 @@ Codex·Claude·Gemini의 남은 한도와 사용량을 작은 Windows 창에서 
 2. 상단 톱니바퀴로 설정을 열고 표시할 서비스와 계정을 연결하세요.
 3. 창 크기를 조절하고 핀 아이콘으로 항상 위에 고정하세요.
 
-GitHub 배포본은 아직 게시하지 않았습니다. 아래 **소스에서 빌드·검증**을 펼치면 ZIP을 만드는 방법을 볼 수 있습니다.
+설치 프로그램 없이 실행합니다. 소스에서 직접 만들려면 아래 **소스에서 빌드·검증**을 펼치세요.
 
 ## 상세 가이드
 
@@ -123,7 +125,7 @@ dotnet build -c Release
 .\dist\VibeMeters-win-x64\VibeMeters.exe
 ```
 
-산출물은 `dist/VibeMeters-win-x64/`와 `dist/VibeMeters-win-x64.zip`입니다. runtime 폴더를 함께 배포해야 합니다. 향후 게시되는 배포본은 [릴리스 페이지](https://github.com/Nectarine-Peach/VibeMeters/releases)에서 제공합니다.
+산출물은 `dist/VibeMeters-win-x64/`와 `dist/VibeMeters-win-x64.zip`입니다. runtime 폴더를 함께 배포해야 합니다. 배포본과 변경 사항은 [릴리스 페이지](https://github.com/Nectarine-Peach/VibeMeters/releases)에서 확인하세요.
 
 격리된 제공자·파서·설정 회귀 테스트:
 

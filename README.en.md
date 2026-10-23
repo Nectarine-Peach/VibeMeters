@@ -6,6 +6,8 @@ Keep your **Codex, Claude, and Gemini quotas** visible in a small Windows tray w
 
 **Windows 10/11 x64 · Always on top · Dark / light / system theme**
 
+[Download ZIP for Windows](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [Release notes](https://github.com/Nectarine-Peach/VibeMeters/releases/latest)
+
 <img src="docs/screenshots/window-mini-dark.png" alt="VibeMeters mini window" width="274">
 
 *Native app capture with demo data.*
@@ -16,7 +18,7 @@ Keep your **Codex, Claude, and Gemini quotas** visible in a small Windows tray w
 2. Open **Settings (gear)**, choose your services, and sign in.
 3. Resize the window and use the **pin** to keep it on top.
 
-A GitHub release is not available yet. Expand **Build and verification** below to create the package.
+No installer is required. To build it yourself, expand **Build and verification** below.
 
 ## Detailed guides
 

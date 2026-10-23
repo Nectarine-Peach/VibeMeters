@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using VibeMeters.Models;
@@ -6,17 +7,49 @@ using VibeMeters.Models;
 namespace VibeMeters.Services;
 
 /// <summary>
-/// Gemini's supported quota view is the official CLI /stats command. Its OAuth
-/// backend is not a public usage API for third-party tools, so no percentage is invented.
+/// Reads quota through the official Gemini CLI core in a short-lived hidden process.
 /// </summary>
 public sealed class GeminiUsageProvider : IUsageProvider
 {
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private UsageSnapshot? _last;
+    private DateTimeOffset _nextAttempt;
+    private long _credentialStamp;
     public UsageProviderKind Kind => UsageProviderKind.Gemini;
 
-    public Task<UsageSnapshot> FetchAsync(CancellationToken cancellationToken = default)
+    public async Task<UsageSnapshot> FetchAsync(CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(new UsageSnapshot(Kind, UsageStatus.Unavailable, [], DateTimeOffset.UtcNow,
-            Message: "공식 Gemini CLI의 /stats에서 사용량을 확인하세요."));
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var stamp = CredentialStamp();
+            if (stamp != _credentialStamp)
+            {
+                _credentialStamp = stamp;
+                _last = null;
+                _nextAttempt = default;
+            }
+            if (_last is not null && DateTimeOffset.UtcNow < _nextAttempt) return _last;
+            var snapshot = await GeminiCliBridge.ReadAsync(cancellationToken).ConfigureAwait(false);
+            _credentialStamp = CredentialStamp(); // Official client may renew its own credentials.
+            _nextAttempt = DateTimeOffset.UtcNow.AddMinutes(snapshot.Status == UsageStatus.RateLimited ? 10 : 5);
+            if (snapshot.Status != UsageStatus.Ready && _last?.Windows.Count > 0)
+                snapshot = snapshot with { Windows = _last.Windows, Plan = _last.Plan,
+                    Message = "이전 조회값 표시 중 · " + snapshot.Message };
+            _last = snapshot;
+            return snapshot;
+        }
+        finally { _gate.Release(); }
+    }
+
+    private static long CredentialStamp()
+    {
+        try
+        {
+            var home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".gemini");
+            return Math.Max(File.GetLastWriteTimeUtc(Path.Combine(home, "oauth_creds.json")).Ticks,
+                File.GetLastWriteTimeUtc(Path.Combine(home, "token-storage.json")).Ticks);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return 0; }
     }
 }

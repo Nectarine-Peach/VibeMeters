@@ -14,6 +14,7 @@ public static class LoginService
 {
     public static LoginResult StartLogin(UsageProviderKind provider)
     {
+        if (provider == UsageProviderKind.Gemini) return GeminiCliBridge.StartLogin();
         var name = provider switch { UsageProviderKind.Codex => "codex", UsageProviderKind.Claude => "claude", _ => "gemini" };
         var executable = FindExecutable(name);
         if (executable is null)

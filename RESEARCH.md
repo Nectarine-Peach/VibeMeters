@@ -51,3 +51,22 @@ Google 공식 [할당량 문서](https://github.com/google-gemini/gemini-cli/blo
 공식 [CLI 옵션 문서](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/cli-reference.md)는 `--prompt-interactive`(`-i`)로 초기 입력을 실행하고 대화형 창을 유지하는 방식을 지원한다. 소스에서 [초기 입력 처리](https://github.com/google-gemini/gemini-cli/blob/main/packages/cli/src/ui/AppContainer.tsx)와 [슬래시 명령 처리](https://github.com/google-gemini/gemini-cli/blob/main/packages/cli/src/ui/hooks/useGeminiStream.ts)를 따라가면 `gemini --prompt-interactive '/stats'`로 공식 CLI의 통계 화면을 여는 방식을 도출할 수 있다. 이는 소스에 근거한 구현 판단이며 이번 변경에서 실행 확인하지 않았다. 로그인 완료 뒤 초기 명령을 처리하므로 로그인·사용량 접근 버튼에 적합하다. CLI에서 직접 입력하는 `/stats model`도 공식 문서에 안내되어 있다.
 
 `gemini -p '/stats' --output-format json`을 할당량 내보내기로 취급하면 안 된다. [비대화형 UI 구현](https://github.com/google-gemini/gemini-cli/blob/main/packages/cli/src/ui/noninteractive/nonInteractiveUi.ts)은 텍스트 정보만 출력하고, 통계 명령이 생성하는 STATS·MODEL_STATS 구조를 출력하지 않는다. [headless 문서](https://github.com/google-gemini/gemini-cli/blob/main/docs/cli/headless.md)의 JSON stats 역시 토큰·지연 통계를 설명하며 계정의 남은 구독 할당량 API를 약속하지 않는다.
+
+### 최종 구현 방향: 앱 내부 표시를 위한 CLI 코어 브리지
+
+앱 내부에 수치를 표시하는 요구에 따라, 공식 패키지 `@google/gemini-cli-core`를 짧게 실행되는 숨겨진 Node 프로세스에서 불러오는 방향으로 변경한다. 앞의 CLI 통계 창은 보조 접근 경로다. 브리지는 공식 런타임의 인증·갱신 처리와 `CodeAssistServer`의 할당량 메서드를 사용하고 모델 생성 요청은 호출하지 않는다. VibeMeters의 .NET 코드가 Google OAuth 토큰이나 요청 프로토콜을 재구현하는 방식과 구분된다. **공식 코드의 재사용이 제3자 모니터링용 공개 API 또는 Google의 지원 승인을 의미하지는 않는다.** 공급자 정책과 패키지 변경의 영향을 받는 통합이다.
+
+소스를 읽어 확인한 의존 경계:
+
+- 조사한 로컬 npm 설치는 Gemini CLI 0.17.1이며, 해당 코어에는 `retrieveUserQuota`가 없다. 전역 CLI를 바꾸지 않고 앱 전용 위치에 필요한 공식 코어 버전을 고정해 설치하는 방향을 사용한다.
+- 공식 태그 [v0.19.0 server.ts](https://github.com/google-gemini/gemini-cli/blob/v0.19.0/packages/core/src/code_assist/server.ts)에는 없고 [v0.20.0 server.ts](https://github.com/google-gemini/gemini-cli/blob/v0.20.0/packages/core/src/code_assist/server.ts)에는 `retrieveUserQuota` 메서드가 있다. 버전 문자열뿐 아니라 실제 메서드 유무로 가용성을 판단한다.
+- [코어 export](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/index.ts)는 `getOauthClient`, `AuthType`, `CodeAssistServer`, `Config`를 제공한다. `Config.refreshUserQuota()`는 더 높은 수준의 진입점이지만 초기화된 contentGenerator·project를 요구하고 실패를 undefined로 바꾸므로, 작은 브리지에서는 OAuth·server 메서드를 직접 조합하는 편이 오류 구분에 유리하다.
+- OAuth 런타임에는 사용 가능한 로그인 정보가 없을 때 대화형 인증으로 전환하는 경로가 있다. 백그라운드 조회에서는 브라우저 실행 억제와 비대화형 설정을 제공해 이를 인증 필요 상태로 바꾸고, 로그인 버튼을 눌렀을 때만 공식 로그인 절차를 연다.
+- `setupUser`는 신규 계정 온보딩을 시작할 수 있다. 조회만 하는 브리지는 `loadCodeAssist`로 계정의 기존 project·tier를 얻고, 해당 project로 `retrieveUserQuota`를 호출한다. 프로젝트가 없으면 임의 프로젝트를 만들거나 선택하지 않는다.
+- 반환되는 모델별 비율·초기화 시각만 정규화하여 앱에 전달한다. 토큰을 stdout·오류 메시지·설정에 전달하지 않는다. 짧은 실행 시간 제한과 provider 캐시를 두어 Node 프로세스가 계속 상주하지 않도록 한다.
+
+위 내용은 설치된 패키지와 공식 저장소 소스를 읽은 구현 조사다. 사용자 요청에 따라 브리지 실행·로그인 조회·빌드·테스트는 진행하지 않았다.
+
+## 테마 구성 권고
+
+라이트·다크와 선택 가능한 강조색은 사용량의 의미와 독립적으로 적용한다. 표면·카드·테두리·주요 글자·보조 글자·입력·포커스 색을 한 테마 사전에서 바꾸어 설정 창과 위젯의 일관성을 유지한다. 서비스 색과 부족 경고는 모든 테마에서 읽히도록 구분하고, 드롭다운·체크박스·툴팁도 함께 스타일을 적용한다. 테마 선택은 즉시 미리 보고 저장할 수 있도록 한다.

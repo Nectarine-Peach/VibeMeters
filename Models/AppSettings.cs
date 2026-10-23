@@ -15,8 +15,8 @@ public sealed class AppSettings
     public bool StartWithWindows { get; set; }
     public double? Left { get; set; }
     public double? Top { get; set; }
-    public double WindowWidth { get; set; } = 340;
-    public double WindowHeight { get; set; } = 320;
+    public double WindowWidth { get; set; } = 360;
+    public double WindowHeight { get; set; } = 360;
     public bool CompactMode { get; set; }
     public bool NotifyLowQuota { get; set; }
     public bool ShowCodex { get; set; } = true;

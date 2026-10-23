@@ -1,60 +1,27 @@
 # VibeMeters
 
-**Your AI subscription quotas, in a small Windows tray window.**
+[한국어](README.ko.md) · **English**
 
-[한국어](README.ko.md) · **English** · [Verification notes](VERIFICATION.md) · [Design reference](docs/design/README.md)
+Keep your **Codex, Claude, and Gemini quotas** visible in a small Windows tray window.
 
-Keep Codex, Claude, and Gemini usage visible without opening their dashboards. Pin a compact window above your work, choose the services you use, and see remaining or used quota at a glance.
+**Windows 10/11 x64 · Always on top · Dark / light / system theme**
 
-Built with native WPF and .NET 8 for **Windows 10/11 x64**. No embedded browser. No account required for VibeMeters itself.
+<img src="docs/screenshots/window-mini-dark.png" alt="VibeMeters mini window" width="274">
 
-## The same layout, at any size
+*Native app capture with demo data.*
 
-Standard and mini windows share the same service cards: **service heading → quota label, meter, percentage**. Resizing adjusts type and spacing while keeping quota rows stacked vertically.
+## Quick start
 
-| Standard window | Mini window |
-| :---: | :---: |
-| <img src="docs/screenshots/window-standard-dark.png" alt="Standard dark window with vertically stacked quota rows" width="360"> | <img src="docs/screenshots/window-mini-dark.png" alt="Mini dark window preserving the same quota row layout" width="274"> |
+1. Extract the **entire package**, keeping its `runtime` folder, and run `VibeMeters.exe`.
+2. Open **Settings (gear)**, choose your services, and sign in.
+3. Resize the window and use the **pin** to keep it on top.
 
-<details>
-<summary>Settings</summary>
+A GitHub release is not available yet. Expand **Build and verification** below to create the package.
 
-<img src="docs/screenshots/settings-dark.png" alt="Provider selection, display basis, theme, refresh, and account settings" width="400">
-
-</details>
+## Detailed guides
 
 <details>
-<summary>Light theme, Gemini, and the minimum window</summary>
-
-| Light theme | All three services | Minimum size |
-| :---: | :---: | :---: |
-| <img src="docs/screenshots/window-standard-light.png" alt="Light theme" width="360"> | <img src="docs/screenshots/window-all-services-dark.png" alt="Codex, Claude and Gemini together" width="360"> | <img src="docs/screenshots/window-minimum-dark.png" alt="Minimum 220 by 140 logical pixel window" width="220"> |
-
-</details>
-
-Images are rendered from the native Windows app using **demo data**, not AI-generated mockups or live account quotas. Capture details are documented in the verification notes.
-
-## Features
-
-- **Codex, Claude, and Gemini** in one window. Show any combination, including just one service.
-- **Remaining or used percentage per service**, reflected in both the window and tray meters.
-- **Resizable, scroll-free cards** starting at 220 × 140 logical pixels. Minimum height grows when more quota rows need room; wide windows can arrange cards side by side.
-- **Always on top**, tray residence, optional taskbar icon, and optional Windows startup.
-- **Dark, light, or system theme** across the main window, settings, menus, and tooltips.
-- **Automatic or manual refresh**, cached results, request cooldowns, and optional alerts at 20% / 5% remaining quota.
-- **Native rendering without continuous animation.** Codex and Claude use in-process HTTP requests; Gemini uses a short-lived hidden Node process rather than a resident CLI.
-
-## Get started
-
-A downloadable GitHub release has not been published yet. [Build from source](#build-from-source) to create `dist/VibeMeters-win-x64.zip`. Future packages will be listed on the [Releases page](https://github.com/Nectarine-Peach/VibeMeters/releases).
-
-1. Extract the **entire ZIP** into a permanent folder and run `VibeMeters.exe`. The Windows package includes .NET; running it needs no separate .NET installation.
-2. Open Settings with the gear icon, choose your services, and connect your accounts.
-3. Resize the window and use the pin icon to keep it above other apps.
-
-Keep the EXE and bundled `runtime` folder together; Gemini requires that folder. The package is not code-signed, so Windows may show an unknown-publisher warning.
-
-### Connect your accounts
+<summary>Account connections</summary>
 
 | Service | Setup | What is shown |
 | --- | --- | --- |
@@ -66,7 +33,12 @@ Codex and Claude login buttons launch the installed official CLI's login flow; c
 
 This app shows quota percentages, **not API-key billing, token costs, or a guaranteed number of prompts remaining**. Missing values are shown as unavailable rather than estimated.
 
-## Everyday use
+</details>
+
+<details>
+<summary>Settings and controls</summary>
+
+Choose any combination of services and set **remaining or used percentage per service**. Dark, light, and system themes are available. The scroll-free window starts at 220 × 140 logical pixels; more quota rows increase the minimum height. Optional alerts notify you at 20% / 5% remaining.
 
 | Action | How |
 | --- | --- |
@@ -83,7 +55,33 @@ Refresh options are **30 seconds, 1, 2, 5, or 15 minutes, or manual**; the defau
 
 > **Language:** Documentation is available in English and Korean. Current application labels are Korean; an in-app English language switch is not included.
 
-## Refresh limits and troubleshooting
+</details>
+
+<details>
+<summary>More screenshots</summary>
+
+### Standard and light theme
+
+| Dark | Light |
+| :---: | :---: |
+| <img src="docs/screenshots/window-standard-dark.png" alt="Standard dark window" width="360"> | <img src="docs/screenshots/window-standard-light.png" alt="Standard light window" width="360"> |
+
+### All services and minimum size
+
+| Codex, Claude, and Gemini | Minimum window |
+| :---: | :---: |
+| <img src="docs/screenshots/window-all-services-dark.png" alt="All three services" width="360"> | <img src="docs/screenshots/window-minimum-dark.png" alt="Minimum 220 by 140 logical pixel window" width="220"> |
+
+### Settings
+
+<img src="docs/screenshots/settings-dark.png" alt="Service, theme, refresh and account settings" width="400">
+
+These are app-rendered captures using demo data. See the [verification notes](VERIFICATION.md) for capture details.
+
+</details>
+
+<details>
+<summary>Refresh limits and troubleshooting</summary>
 
 Updates use polling rather than a real-time server stream. Provider cooldowns can make the effective interval longer than the selected setting.
 
@@ -97,7 +95,12 @@ Updates use polling rather than a real-time server stream. Provider cooldowns ca
 
 Claude successful lookups have a **two-minute minimum**. After HTTP 429, VibeMeters waits **5 → 10 → 20 → 30 → 60 minutes**, or longer if requested by the server. Manual refresh does not bypass this wait. Gemini results are cached for at least **five minutes**, with a **ten-minute wait** after rate limiting. These are app policies, not published provider request allowances, and do not guarantee that throttling will never occur.
 
-## Privacy and compatibility
+</details>
+
+<details>
+<summary>Privacy and compatibility</summary>
+
+Native WPF/.NET 8, with no embedded browser or continuous animation. Codex and Claude use in-process HTTP; Gemini uses a short-lived hidden Node process. The package includes .NET and is not code-signed.
 
 - Codex reads `%USERPROFILE%\.codex\auth.json` (`CODEX_HOME` supported); Claude reads `%USERPROFILE%\.claude\.credentials.json` (`CLAUDE_CONFIG_DIR` supported). VibeMeters does not persist or refresh these tokens. Credential-manager-only Codex/Claude logins are currently unsupported.
 - Gemini bundles official `@google/gemini-cli-core` **0.65.0**. Its normal authentication flow may store and refresh its own login cache. Raw tokens are not forwarded to the .NET app's settings or quota output.
@@ -106,7 +109,10 @@ Claude successful lookups have a **two-minute minimum**. After HTTP 429, VibeMet
 
 See [implementation research](RESEARCH.md) and [verification notes](VERIFICATION.md) for integration details and the scope of testing. No specific memory or CPU benchmark is claimed.
 
-## Build from source
+</details>
+
+<details>
+<summary>Build and verification</summary>
 
 Requirements: Windows, the **.NET 8 SDK**, and **Node.js/npm** compatible with the pinned Gemini CLI core. The publish script installs locked npm dependencies if needed and bundles the available `node.exe` runtime.
 
@@ -137,3 +143,6 @@ Results and PNGs are written to the build folder's `artifacts/` directory. The l
 
 `VibeMeters.exe --demo` previews sample data without accessing provider accounts. When [reporting a bug](https://github.com/Nectarine-Peach/VibeMeters/issues), include the version, Windows display scaling, window size, provider, and visible error. **Never attach credential files or access tokens.**
 
+</details>
+
+[Report a bug](https://github.com/Nectarine-Peach/VibeMeters/issues) · [Verification](VERIFICATION.md) · [Integration notes](RESEARCH.md)

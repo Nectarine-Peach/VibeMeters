@@ -15,10 +15,16 @@ public static class SettingsStore
         try
         {
             var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath)) ?? new();
-            if (settings.RefreshIntervalSeconds != 0 && settings.RefreshIntervalSeconds is < 30 or > 86400) settings.RefreshIntervalSeconds = 120;
-            return settings;
+            return Normalize(settings);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { return new(); }
+    }
+    public static AppSettings Normalize(AppSettings settings)
+    {
+        if (settings.RefreshIntervalSeconds != 0 && settings.RefreshIntervalSeconds is < 30 or > 86400) settings.RefreshIntervalSeconds = 120;
+        if (settings.Left.HasValue && !double.IsFinite(settings.Left.Value)) settings.Left = null;
+        if (settings.Top.HasValue && !double.IsFinite(settings.Top.Value)) settings.Top = null;
+        return settings;
     }
     public static void Save(AppSettings settings)
     {

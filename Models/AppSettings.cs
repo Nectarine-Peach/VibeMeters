@@ -17,6 +17,7 @@ public sealed class AppSettings
     public double? Top { get; set; }
     public double WindowWidth { get; set; } = 360;
     public double WindowHeight { get; set; } = 360;
+    public bool WindowVisible { get; set; } = true;
     public bool CompactMode { get; set; }
     public int DesignLayoutVersion { get; set; }
     public bool NotifyLowQuota { get; set; }

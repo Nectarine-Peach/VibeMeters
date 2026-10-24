@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using VibeMeters.Models;
 
@@ -22,6 +23,7 @@ public partial class MainWindow : Window
     public AppSettings Settings { get; }
     public event Action? RefreshRequested;
     public event Action? SettingsChanged;
+    public event Action? GeometryChanged;
     public event Action? HideRequested;
     public event Action<UsageProviderKind>? LoginRequested;
 
@@ -33,15 +35,22 @@ public partial class MainWindow : Window
         Height = _normalHeight = Math.Clamp(double.IsFinite(settings.WindowHeight) ? settings.WindowHeight : 360, MinHeight, SystemParameters.VirtualScreenHeight);
         Topmost = settings.AlwaysOnTop;
         ShowInTaskbar = settings.ShowInTaskbar;
-        if (settings.Left is double left && settings.Top is double top && IsVisiblePosition(left, top))
-        { WindowStartupLocation = WindowStartupLocation.Manual; Left = left; Top = top; }
+        if (settings.Left is double left && settings.Top is double top && double.IsFinite(left) && double.IsFinite(top))
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual; Left = left; Top = top;
+            SourceInitialized += (_, _) => EnsureVisibleBounds();
+        }
         UpdatePin();
         PreviewKeyDown += (_, args) =>
         {
             if (args.Key == Key.F5) { RefreshRequested?.Invoke(); args.Handled = true; }
             else if (args.Key == Key.Escape) { HideRequested?.Invoke(); args.Handled = true; }
         };
-        LocationChanged += (_, _) => { if (_initialized && WindowState == WindowState.Normal) { Settings.Left = Left; Settings.Top = Top; } };
+        LocationChanged += (_, _) =>
+        {
+            if (!_initialized || WindowState != WindowState.Normal) return;
+            CaptureWindowGeometry(); GeometryChanged?.Invoke();
+        };
         SizeChanged += (_, _) =>
         {
             if (!_initialized || WindowState != WindowState.Normal) return;
@@ -50,10 +59,54 @@ public partial class MainWindow : Window
                 Settings.WindowWidth = _normalWidth = Width; Settings.WindowHeight = _normalHeight = Height;
             }
             RenderLayout();
+            CaptureWindowGeometry(); GeometryChanged?.Invoke();
         };
+        StateChanged += (_, _) => { if (_initialized) { CaptureWindowGeometry(); GeometryChanged?.Invoke(); } };
         Closed += (_, _) => _settingsWindow?.Close();
         _initialized = true;
         RenderLayout();
+    }
+
+    public void CaptureWindowGeometry()
+    {
+        if (!Dispatcher.CheckAccess()) { Dispatcher.Invoke(CaptureWindowGeometry); return; }
+        var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
+        if (bounds.IsEmpty || !double.IsFinite(bounds.Left) || !double.IsFinite(bounds.Top) ||
+            !double.IsFinite(bounds.Width) || !double.IsFinite(bounds.Height) ||
+            bounds.Width < MinWidth || bounds.Height < MinHeight || bounds.Left <= -30000 || bounds.Top <= -30000) return;
+        Settings.Left = bounds.Left; Settings.Top = bounds.Top;
+        Settings.WindowWidth = _normalWidth = bounds.Width;
+        Settings.WindowHeight = _normalHeight = bounds.Height;
+    }
+
+    private void EnsureVisibleBounds()
+    {
+        var source = PresentationSource.FromVisual(this);
+        if (source?.CompositionTarget is not { } target) return;
+        var transform = target.TransformFromDevice;
+        var screens = System.Windows.Forms.Screen.AllScreens;
+        var areas = screens.Select(screen =>
+        {
+            var area = screen.WorkingArea;
+            return transform.TransformBounds(new Rect(area.X, area.Y, area.Width, area.Height));
+        }).ToArray();
+        var current = new Rect(double.IsFinite(Left) ? Left : double.MinValue / 2,
+            double.IsFinite(Top) ? Top : double.MinValue / 2, Width, Height);
+        // A small title-bar portion is enough to retain intentional placement across monitors.
+        var titleBounds = new Rect(current.Left, current.Top, current.Width, Math.Min(32, current.Height));
+        if (areas.Any(area =>
+        {
+            var visible = Rect.Intersect(area, titleBounds);
+            return !visible.IsEmpty && visible.Width >= 40 && visible.Height >= 20;
+        })) return;
+        var monitor = System.Windows.Forms.Screen.FromHandle(new WindowInteropHelper(this).Handle).WorkingArea;
+        var work = transform.TransformBounds(new Rect(monitor.X, monitor.Y, monitor.Width, monitor.Height));
+        Width = Math.Max(MinWidth, Math.Min(Width, work.Width));
+        Height = Math.Max(MinHeight, Math.Min(Height, work.Height));
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = Math.Clamp(double.IsFinite(Left) ? Left : work.Left, work.Left, Math.Max(work.Left, work.Right - Width));
+        Top = Math.Clamp(double.IsFinite(Top) ? Top : work.Top, work.Top, Math.Max(work.Top, work.Bottom - Height));
+        CaptureWindowGeometry();
     }
 
     public void SetCompactMode(bool compact)
@@ -291,7 +344,6 @@ public partial class MainWindow : Window
         return delta<=TimeSpan.Zero?"초기화 대기":delta.TotalDays>=1?$"{(int)delta.TotalDays}일 {delta.Hours}시간 ↻":delta.TotalHours>=1?$"{(int)delta.TotalHours}시간 {delta.Minutes}분 ↻":$"{Math.Max(1,(int)delta.TotalMinutes)}분 ↻";
     }
     private static string WindowTooltip(UsageWindow quota,UsageSnapshot snapshot)=>$"{snapshot.Provider} · {quota.Name}\n남음 {quota.RemainingPercent:0.#}% · 사용 {quota.UsedPercent:0.#}%\n{ResetShort(quota.ResetsAt)} · {quota.ResetsAt?.ToLocalTime().ToString("M/d HH:mm",CultureInfo.InvariantCulture)??"초기화 정보 없음"}\n{ProviderStatus(snapshot)}";
-    private static bool IsVisiblePosition(double left,double top)=>double.IsFinite(left)&&double.IsFinite(top)&&left+100>SystemParameters.VirtualScreenLeft&&left<SystemParameters.VirtualScreenLeft+SystemParameters.VirtualScreenWidth-40&&top+40>SystemParameters.VirtualScreenTop&&top<SystemParameters.VirtualScreenTop+SystemParameters.VirtualScreenHeight-40;
     protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
     { base.OnPropertyChanged(e); if(_initialized&&e.Property==TopmostProperty) { Settings.AlwaysOnTop=Topmost; UpdatePin(); } }
     private void UpdatePin() { PinButton.Foreground=Palette(Topmost?"CodexAccent":"SecondaryText"); PinButton.ToolTip=Topmost?"항상 위: 켜짐":"항상 위: 꺼짐"; }

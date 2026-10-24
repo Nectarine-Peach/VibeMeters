@@ -28,8 +28,8 @@ public static class SettingsStore
         if (settings.RefreshIntervalSeconds != 0 && settings.RefreshIntervalSeconds is < 30 or > 86400) settings.RefreshIntervalSeconds = 120;
         if (settings.Left.HasValue && !double.IsFinite(settings.Left.Value)) settings.Left = null;
         if (settings.Top.HasValue && !double.IsFinite(settings.Top.Value)) settings.Top = null;
-        settings.WindowWidth = double.IsFinite(settings.WindowWidth) ? Math.Clamp(settings.WindowWidth, 220, 1000) : 360;
-        settings.WindowHeight = double.IsFinite(settings.WindowHeight) ? Math.Clamp(settings.WindowHeight, 140, 1000) : 360;
+        settings.WindowWidth = double.IsFinite(settings.WindowWidth) ? Math.Clamp(settings.WindowWidth, 220, 16384) : 360;
+        settings.WindowHeight = double.IsFinite(settings.WindowHeight) ? Math.Clamp(settings.WindowHeight, 140, 16384) : 360;
         if (!settings.ShowCodex && !settings.ShowClaude && !settings.ShowGemini) settings.ShowCodex = true;
         return settings;
     }

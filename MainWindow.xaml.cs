@@ -83,7 +83,7 @@ public partial class MainWindow : Window
     {
         var source = PresentationSource.FromVisual(this);
         if (source?.CompositionTarget is not { } target) return;
-        var transform = target.TransformFromDevice;
+        var transform = new MatrixTransform(target.TransformFromDevice);
         var screens = System.Windows.Forms.Screen.AllScreens;
         var areas = screens.Select(screen =>
         {

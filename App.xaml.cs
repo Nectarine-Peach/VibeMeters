@@ -26,6 +26,8 @@ public partial class App : Application
     private readonly CancellationTokenSource _lifetime = new();
     private readonly DispatcherTimer _timer = new();
     private readonly DispatcherTimer _credentialDebounce = new() { Interval = TimeSpan.FromMilliseconds(750) };
+    private readonly DispatcherTimer _windowSaveDebounce = new() { Interval = TimeSpan.FromMilliseconds(400) };
+    private readonly HashSet<UsageProviderKind> _loginsInProgress = new();
     private readonly List<FileSystemWatcher> _credentialWatchers = new();
     private IReadOnlyList<IUsageProvider> _providers = Array.Empty<IUsageProvider>();
     private readonly Dictionary<UsageProviderKind, UsageSnapshot> _latest = new();
@@ -34,7 +36,6 @@ public partial class App : Application
     private readonly Dictionary<string, int> _alertLevels = new();
     private HashSet<UsageProviderKind> _activeProviders = new();
     private int _exitCode;
-    private bool _fitDesignOnce;
     private bool _smokeTest;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -51,22 +52,21 @@ public partial class App : Application
         _settings = _demo ? new AppSettings() : SettingsStore.Load();
         if (_smokeTest) _settings.RefreshIntervalSeconds = 0;
         if (_settings.CompactMode) { _settings.WindowWidth = 240; _settings.WindowHeight = 148; _settings.CompactMode = false; }
-        _fitDesignOnce = !_demo && _settings.DesignLayoutVersion < 2;
-        if (_fitDesignOnce) { _settings.WindowWidth = 360; _settings.WindowHeight = 400; _settings.DesignLayoutVersion = 2; }
+        _settings.DesignLayoutVersion = Math.Max(2, _settings.DesignLayoutVersion);
         ThemeService.Apply(_settings.Theme);
         ThemeService.ThemeChanged += OnThemeChanged;
         _window = new MainWindow(_settings);
-        if (_fitDesignOnce) _window.FitDesignSize();
         MainWindow = _window;
         _activationWait = ThreadPool.RegisterWaitForSingleObject(_activateEvent, (_, _) => Dispatcher.InvokeAsync(ShowWindow), null, Timeout.Infinite, false);
         _window.Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/VibeMeters.ico"));
         _window.RefreshRequested += async () => await RefreshAsync();
         _window.LoginRequested += StartLogin;
         _window.SettingsChanged += ApplySettings;
-        _window.HideRequested += () => _window.Hide();
-        _window.Closing += (_, args) => { if (!_exiting) { args.Cancel = true; _window.Hide(); } };
-        _window.StateChanged += (_, _) => { if (_window.WindowState == WindowState.Minimized && !_settings.ShowInTaskbar) _window.Hide(); };
-        _window.SourceInitialized += (_, _) => RestorePosition();
+        _window.GeometryChanged += ScheduleWindowStateSave;
+        _windowSaveDebounce.Tick += (_, _) => PersistWindowState();
+        _window.HideRequested += HideWindow;
+        _window.Closing += (_, args) => { if (!_exiting) { args.Cancel = true; HideWindow(); } };
+        _window.StateChanged += (_, _) => { if (_window.WindowState == WindowState.Minimized && !_settings.ShowInTaskbar) HideWindow(); };
         CreateTray();
         OnThemeChanged();
         _providers = _smokeTest ? Array.Empty<IUsageProvider>() : UsageProviderFactory.CreateDefault();
@@ -75,7 +75,8 @@ public partial class App : Application
         ApplySettings();
         SystemEvents.PowerModeChanged += OnPowerMode;
         SystemEvents.SessionSwitch += OnSessionSwitch;
-        if (!e.Args.Contains("--hidden")) _window.Show();
+        var startupLaunch = e.Args.Contains("--startup") || e.Args.Contains("--hidden");
+        if (!startupLaunch || _settings.WindowVisible) ShowWindow();
         _ = RefreshAsync();
         if (e.Args.Contains("--smoke-test")) _ = SmokeTestAsync();
     }
@@ -97,11 +98,28 @@ public partial class App : Application
         _tray.MouseClick += (_, e) => { if (e.Button == Forms.MouseButtons.Left) Dispatcher.Invoke(ShowWindow); };
     }
 
-    private void StartLogin(UsageProviderKind provider)
+    private async void StartLogin(UsageProviderKind provider)
     {
         if (_demo) { _window!.UpdateStatus("데모에서는 로그인을 실행하지 않습니다."); return; }
-        var result = LoginService.StartLogin(provider);
-        _window!.SetLoginStatus(provider, false, result.Message);
+        if (!_loginsInProgress.Add(provider)) return;
+        _window!.SetLoginStatus(provider, true, "백그라운드에서 로그인을 준비합니다. 브라우저에서 인증을 완료해 주세요.");
+        try
+        {
+            var progress = new Progress<string>(message =>
+            {
+                if (!_exiting) _window.SetLoginStatus(provider, true, message);
+            });
+            var result = await LoginService.LoginAsync(provider, _lifetime.Token, progress);
+            if (_exiting) return;
+            _window.SetLoginStatus(provider, false, result.Message);
+            if (result.Success)
+            {
+                if (_refreshing) _credentialsChanged = true;
+                else await RefreshAsync();
+            }
+        }
+        catch (OperationCanceledException) { if (!_exiting) _window.SetLoginStatus(provider, false, "로그인이 취소되었습니다."); }
+        finally { _loginsInProgress.Remove(provider); }
     }
 
     private void WatchCredentials()
@@ -128,10 +146,37 @@ public partial class App : Application
 
     private void ShowWindow()
     {
+        _settings.WindowVisible = true;
         _window!.Show();
         _window.WindowState = WindowState.Normal;
         _window.Activate();
+        ScheduleWindowStateSave();
         if (DateTimeOffset.UtcNow - _lastRefresh > TimeSpan.FromSeconds(30)) _ = RefreshAsync();
+    }
+
+    private void HideWindow()
+    {
+        _window!.CaptureWindowGeometry();
+        _settings.WindowVisible = false;
+        _window.Hide();
+        PersistWindowState();
+    }
+
+    private void ScheduleWindowStateSave()
+    {
+        if (_demo || _exiting) return;
+        _windowSaveDebounce.Stop();
+        _windowSaveDebounce.Start();
+    }
+
+    private void PersistWindowState()
+    {
+        _windowSaveDebounce.Stop();
+        if (_demo || _window is null) return;
+        _window.CaptureWindowGeometry();
+        try { SettingsStore.Save(_settings); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        { if (!_exiting) _window.UpdateStatus("창 상태를 저장하지 못했습니다. 폴더 권한을 확인해 주세요."); }
     }
 
     private void ApplySettings()
@@ -192,7 +237,6 @@ public partial class App : Application
             }));
             if (!_exiting)
             {
-                if (_fitDesignOnce) { _fitDesignOnce = false; _window.FitDesignSize(); ApplySettings(); }
                 _window.UpdateStatus(_settings.RefreshIntervalSeconds == 0 ? "수동 새로고침 · F5" : $"자동 새로고침 · {_settings.RefreshIntervalSeconds}초 간격");
             }
         }
@@ -246,15 +290,16 @@ public partial class App : Application
         }
     }
 
-    private void RestorePosition()
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
     {
-        if (_settings.Left is not double left || _settings.Top is not double top || !double.IsFinite(left) || !double.IsFinite(top)) return;
-        var bounds = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
-        if (bounds.Contains(new Rect(left, top, _window!.Width, 100))) { _window.Left = left; _window.Top = top; }
+        base.OnSessionEnding(e);
+        if (e.Cancel) return;
+        PersistWindowState();
+        _exiting = true;
     }
     private void OnPowerMode(object sender, PowerModeChangedEventArgs e) => Dispatcher.InvokeAsync(() =>
     {
-        if (e.Mode == PowerModes.Suspend) _sleeping = true;
+        if (e.Mode == PowerModes.Suspend) { PersistWindowState(); _sleeping = true; }
         else if (e.Mode == PowerModes.Resume) _sleeping = false;
         _suspended = _locked || _sleeping;
         ApplySettings();
@@ -262,7 +307,7 @@ public partial class App : Application
     });
     private void OnSessionSwitch(object sender, SessionSwitchEventArgs e) => Dispatcher.InvokeAsync(() =>
     {
-        if (e.Reason == SessionSwitchReason.SessionLock) _locked = true;
+        if (e.Reason == SessionSwitchReason.SessionLock) { PersistWindowState(); _locked = true; }
         else if (e.Reason == SessionSwitchReason.SessionUnlock) _locked = false;
         _suspended = _locked || _sleeping;
         ApplySettings();
@@ -288,14 +333,15 @@ public partial class App : Application
     }
     private void ExitApplication()
     {
+        PersistWindowState();
         _exiting = true; _timer.Stop(); _lifetime.Cancel();
         _credentialDebounce.Stop();
         foreach (var watcher in _credentialWatchers) watcher.Dispose();
-        if (!_demo && _window != null) { _settings.Left = _window.Left; _settings.Top = _window.Top; try { SettingsStore.Save(_settings); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
         Shutdown(_exitCode);
     }
     protected override void OnExit(ExitEventArgs e)
     {
+        PersistWindowState();
         _exiting = true; _timer.Stop(); _lifetime.Cancel();
         _credentialDebounce.Stop();
         foreach (var watcher in _credentialWatchers) watcher.Dispose();

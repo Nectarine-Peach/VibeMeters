@@ -42,7 +42,7 @@ public static class SettingsStore
     public static void SetStartup(bool enabled)
     {
         using var key = Registry.CurrentUser.CreateSubKey(@"Software\Microsoft\Windows\CurrentVersion\Run");
-        if (enabled) key.SetValue("VibeMeters", "\"" + Environment.ProcessPath + "\" --hidden");
+        if (enabled) key.SetValue("VibeMeters", "\"" + Environment.ProcessPath + "\" --startup");
         else key.DeleteValue("VibeMeters", false);
     }
 }

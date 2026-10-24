@@ -93,7 +93,7 @@ public sealed class UsageProvider : IUsageProvider
             }
             if (_last is not null && now < _nextAttempt) return _last;
             if (credential.ExpiresAt is { } expiry && expiry <= now)
-                return Save(UsageStatus.AuthenticationRequired, "로그인이 만료되었습니다. 해당 CLI를 실행하여 다시 로그인해 주세요.");
+                return Save(UsageStatus.AuthenticationRequired, "인증 갱신이 필요합니다. 설정에서 다시 로그인해 주세요.");
 
             var endpoint = Kind == UsageProviderKind.Codex ? "https://chatgpt.com/backend-api/wham/usage" : "https://api.anthropic.com/api/oauth/usage";
             using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
@@ -111,7 +111,7 @@ public sealed class UsageProvider : IUsageProvider
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                 {
                     _nextAttempt = DateTimeOffset.UtcNow.AddMinutes(5);
-                    return Save(UsageStatus.AuthenticationRequired, "인증이 만료되었거나 조회 권한이 없습니다. CLI에서 다시 로그인해 주세요.");
+                    return Save(UsageStatus.AuthenticationRequired, "인증이 만료되었거나 조회 권한이 없습니다. 설정에서 다시 로그인해 주세요.");
                 }
                 if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {

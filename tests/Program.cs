@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Reflection;
+using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using VibeMeters.Models;
 using VibeMeters.Services;
@@ -220,8 +222,26 @@ sealed class RegressionSuite
         Test("Tiny and enormous window dimensions stay bounded", () =>
         {
             var small = SettingsStore.Normalize(new AppSettings { WindowWidth = -1, WindowHeight = 0 }); Equal(220d, small.WindowWidth); Equal(140d, small.WindowHeight);
-            var huge = SettingsStore.Normalize(new AppSettings { WindowWidth = double.MaxValue, WindowHeight = double.MaxValue }); Equal(1000d, huge.WindowWidth); Equal(1000d, huge.WindowHeight);
+            var huge = SettingsStore.Normalize(new AppSettings { WindowWidth = double.MaxValue, WindowHeight = double.MaxValue }); Equal(16384d, huge.WindowWidth); Equal(16384d, huge.WindowHeight);
         });
+        Test("Large window geometry survives normalization and JSON roundtrip", () =>
+        {
+            var saved = new AppSettings { WindowWidth = 1480, WindowHeight = 1120, Left = -1820, Top = -260 };
+            var restored = SettingsStore.Normalize(JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(saved))!);
+            Equal(1480d, restored.WindowWidth); Equal(1120d, restored.WindowHeight);
+            Equal<double?>(-1820, restored.Left); Equal<double?>(-260, restored.Top);
+        });
+        Test("Window visibility defaults to visible for new and legacy settings", () =>
+        {
+            True(new AppSettings().WindowVisible);
+            True(SettingsStore.Normalize(JsonSerializer.Deserialize<AppSettings>("{\"WindowWidth\":244,\"WindowHeight\":178}")!).WindowVisible);
+        });
+        foreach (var visible in new[] { true, false })
+            Test($"Window visibility {visible} survives JSON roundtrip", () =>
+            {
+                var restored = SettingsStore.Normalize(JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(new AppSettings { WindowVisible = visible }))!);
+                Equal(visible, restored.WindowVisible);
+            });
         Test("Compact settings survive JSON roundtrip with chosen dimensions", () =>
         {
             var saved = new AppSettings { WindowWidth = 244, WindowHeight = 178, CompactMode = true, AlwaysOnTop = true };
@@ -251,6 +271,33 @@ sealed class RegressionSuite
             Equal(AppTheme.System, s.Theme);
             foreach (var kind in Enum.GetValues<UsageProviderKind>()) Equal(UsageDisplayMode.Remaining, s.GetDisplayMode(kind));
         });
+        Test("Official native CLI stays hidden and passes arguments literally", () => WithCliFixture(".exe", (name, path) =>
+        {
+            string[] arguments = ["login", "name with spaces", "apostrophe's", "$(unexpected) & ;"];
+            var start = CreateCliStartInfo(name, arguments)!;
+            Equal(path, start.FileName); True(start.ArgumentList.SequenceEqual(arguments));
+            AssertHiddenCli(start);
+        }));
+        Test("Official npm CLI quotes special characters in encoded hidden invocation", () => WithCliFixture(".cmd", (name, path) =>
+        {
+            string[] arguments = ["auth", "login", "--claudeai", "apostrophe's & $(unexpected); with spaces"];
+            var start = CreateCliStartInfo(name, arguments)!;
+            Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe"), start.FileName);
+            True(start.ArgumentList.Take(4).SequenceEqual(new[] { "-NoLogo", "-NoProfile", "-NonInteractive", "-EncodedCommand" }));
+            Equal(5, start.ArgumentList.Count);
+            var decoded = Encoding.Unicode.GetString(Convert.FromBase64String(start.ArgumentList[4]));
+            static string Quote(string value) => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
+            Equal("& " + Quote(path) + " " + string.Join(" ", arguments.Select(Quote)) + "; if ($null -ne $LASTEXITCODE) { exit $LASTEXITCODE } else { exit 1 }", decoded);
+            True(!start.ArgumentList.Contains("-NoExit")); AssertHiddenCli(start);
+        }));
+        Test("Missing official CLI returns no start info", () => Equal<ProcessStartInfo?>(null, CreateCliStartInfo("vibemeters-missing-" + Guid.NewGuid().ToString("N"), "login")));
+        foreach (var kind in Enum.GetValues<UsageProviderKind>())
+            await TestAsync($"{kind} already-cancelled login returns without launch", async () =>
+            {
+                using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
+                var result = await LoginService.LoginAsync(kind, cancelled.Token);
+                True(!result.Success); True(result.Message.Contains("취소", StringComparison.Ordinal));
+            });
         Console.WriteLine($"\n{_passed} passed; {_failed} failed.");
         return _failed == 0 ? 0 : 1;
     }
@@ -293,6 +340,44 @@ sealed class RegressionSuite
         using var doc = JsonDocument.Parse(json);
         var bridge = typeof(GeminiUsageProvider).Assembly.GetType("VibeMeters.Services.GeminiCliBridge", throwOnError: true)!;
         return (UsageSnapshot)bridge.GetMethod("Parse", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [doc.RootElement])!;
+    }
+    private static ProcessStartInfo? CreateCliStartInfo(string name, params string[] arguments)
+    {
+        var helper = typeof(LoginService).Assembly.GetType("VibeMeters.Services.OfficialCliProcess", throwOnError: true)!;
+        return (ProcessStartInfo?)helper.GetMethod("CreateStartInfo", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [name, arguments]);
+    }
+    private static void WithCliFixture(string extension, Action<string, string> test)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "VibeMeters CLI ' & $(literal) " + Guid.NewGuid().ToString("N"));
+        var name = "vibemeters-test-cli-" + Guid.NewGuid().ToString("N");
+        var path = Path.Combine(directory, name + extension);
+        var originalPath = Environment.GetEnvironmentVariable("PATH");
+        var originalOptions = Environment.GetEnvironmentVariable("NODE_OPTIONS");
+        var originalNodePath = Environment.GetEnvironmentVariable("NODE_PATH");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            File.WriteAllText(path, "Fixture only. Never execute.");
+            Environment.SetEnvironmentVariable("PATH", directory);
+            Environment.SetEnvironmentVariable("NODE_OPTIONS", "--fixture-option");
+            Environment.SetEnvironmentVariable("NODE_PATH", "fixture-node-path");
+            test(name, path);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("PATH", originalPath);
+            Environment.SetEnvironmentVariable("NODE_OPTIONS", originalOptions);
+            Environment.SetEnvironmentVariable("NODE_PATH", originalNodePath);
+            File.Delete(path); Directory.Delete(directory);
+        }
+    }
+    private static void AssertHiddenCli(ProcessStartInfo start)
+    {
+        True(!start.UseShellExecute); True(start.CreateNoWindow); Equal(ProcessWindowStyle.Hidden, start.WindowStyle);
+        True(start.RedirectStandardInput); True(start.RedirectStandardOutput); True(start.RedirectStandardError);
+        Equal(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), start.WorkingDirectory);
+        Equal("1", start.Environment["NO_COLOR"]);
+        True(!start.Environment.ContainsKey("NODE_OPTIONS")); True(!start.Environment.ContainsKey("NODE_PATH"));
     }
     private static UsageCredential Credential() => new() { AccessToken = "test-secret", AccountId = "test-account" };
     private static UsageProvider Provider(StubHandler handler, UsageCredential? credential, UsageProviderKind kind = UsageProviderKind.Codex) => new(kind, new StubCredentials(credential), new HttpClient(handler));

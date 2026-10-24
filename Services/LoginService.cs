@@ -1,86 +1,83 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
-using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using VibeMeters.Models;
 
 namespace VibeMeters.Services;
 
 public sealed record LoginResult(bool Success, string Message);
 
-/// <summary>Opens the installed provider's official interactive login, only on explicit user action.</summary>
+/// <summary>Runs official browser login without opening a console or retaining CLI output.</summary>
 public static class LoginService
 {
+    private static readonly ConcurrentDictionary<UsageProviderKind, SemaphoreSlim> LoginGates = new();
+
+    // Compatibility entry point. Use LoginAsync to observe completion and support cancellation.
     public static LoginResult StartLogin(UsageProviderKind provider)
     {
-        if (provider == UsageProviderKind.Gemini) return GeminiCliBridge.StartLogin();
-        var name = provider switch { UsageProviderKind.Codex => "codex", UsageProviderKind.Claude => "claude", _ => "gemini" };
-        var executable = FindExecutable(name);
-        if (executable is null)
-            return new(false, provider switch
-            {
-                UsageProviderKind.Codex => "Codex CLI를 설치한 뒤 다시 로그인해 주세요.",
-                UsageProviderKind.Claude => "Claude Code를 설치한 뒤 다시 로그인해 주세요.",
-                _ => "Gemini CLI를 설치한 뒤 다시 열어 주세요."
-            });
-        try
-        {
-            // Absolute trusted shell path and encoded PowerShell command avoid cmd.exe's
-            // metacharacter expansion in npm shim paths. No token is passed to the process.
-            var shell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
-                "WindowsPowerShell", "v1.0", "powershell.exe");
-            var arguments = provider switch
-            {
-                UsageProviderKind.Codex => "login",
-                UsageProviderKind.Claude => "auth login --claudeai",
-                // Official interactive startup dispatches this local slash command after auth.
-                _ => "--prompt-interactive '/stats'"
-            };
-            var script = "& '" + executable.Replace("'", "''", StringComparison.Ordinal) + "' " + arguments;
-            var start = new ProcessStartInfo(shell)
-            {
-                UseShellExecute = true,
-                WindowStyle = ProcessWindowStyle.Normal,
-                WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
-            };
-            start.Arguments = "-NoLogo -NoProfile -NoExit -EncodedCommand " +
-                Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
-            using var process = Process.Start(start);
-            return process is null ? new(false, "로그인 창을 열 수 없습니다.")
-                : new(true, provider == UsageProviderKind.Gemini
-                    ? "공식 Gemini 사용량 창을 열었습니다. 필요하면 /auth로 로그인해 주세요."
-                    : "공식 로그인 창을 열었습니다. 완료하면 사용량이 자동으로 갱신됩니다.");
-        }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException or UnauthorizedAccessException)
-        {
-            return new(false, "로그인 창을 열 수 없습니다. 해당 CLI에서 직접 로그인해 주세요.");
-        }
+        _ = LoginAsync(provider);
+        return new(true, "브라우저 로그인을 백그라운드에서 시작합니다.");
     }
 
-    private static string? FindExecutable(string name)
+    public static async Task<LoginResult> LoginAsync(UsageProviderKind provider,
+        CancellationToken cancellationToken = default, IProgress<string>? progress = null)
     {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var directories = new List<string>
+        var gate = LoginGates.GetOrAdd(provider, _ => new SemaphoreSlim(1, 1));
+        if (cancellationToken.IsCancellationRequested) return new(false, "로그인을 취소했습니다.");
+        if (!gate.Wait(0))
+            return new(false, "이미 로그인 중입니다. 브라우저에서 로그인을 완료해 주세요.");
+        try
         {
-            Path.Combine(home, ".local", "bin"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm")
-        };
-        directories.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator));
-        foreach (var entry in directories)
-        {
-            var directory = entry.Trim().Trim('"');
-            if (!Path.IsPathFullyQualified(directory)) continue;
-            foreach (var extension in new[] { ".exe", ".cmd" })
+            if (provider == UsageProviderKind.Gemini) return GeminiCliBridge.StartLogin();
+            var name = provider == UsageProviderKind.Codex ? "codex" : "claude";
+            var arguments = provider == UsageProviderKind.Codex
+                ? new[] { "login" } : new[] { "auth", "login", "--claudeai" };
+            var start = OfficialCliProcess.CreateStartInfo(name, arguments);
+            if (start is null)
+                return new(false, provider == UsageProviderKind.Codex
+                    ? "Codex CLI를 설치한 뒤 다시 로그인해 주세요."
+                    : "Claude Code를 설치한 뒤 다시 로그인해 주세요.");
+
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromMinutes(5));
+            using var process = new Process { StartInfo = start };
+            try
             {
-                try
-                {
-                    var path = Path.GetFullPath(Path.Combine(directory, name + extension));
-                    if (File.Exists(path)) return path;
-                }
-                catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { }
+                if (!process.Start()) return new(false, "로그인을 시작할 수 없습니다.");
+                process.StandardInput.Close();
+                progress?.Report("브라우저에서 로그인을 완료해 주세요. 터미널 창은 열리지 않습니다.");
+                // Never retain CLI output: it can contain OAuth URLs or other sensitive data.
+                var output = DrainAsync(process.StandardOutput.BaseStream, deadline.Token);
+                var error = DrainAsync(process.StandardError.BaseStream, deadline.Token);
+                await process.WaitForExitAsync(deadline.Token).ConfigureAwait(false);
+                await Task.WhenAll(output, error).ConfigureAwait(false);
+                return process.ExitCode == 0
+                    ? new(true, "로그인했습니다. 사용량을 다시 확인합니다.")
+                    : new(false, "로그인이 완료되지 않았습니다. 브라우저를 확인한 뒤 다시 시도해 주세요.");
             }
+            catch (OperationCanceledException)
+            {
+                return new(false, cancellationToken.IsCancellationRequested
+                    ? "로그인을 취소했습니다." : "로그인 대기 시간이 지났습니다. 다시 로그인해 주세요.");
+            }
+            finally { OfficialCliProcess.Stop(process); }
         }
-        return null;
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException
+            or IOException or UnauthorizedAccessException)
+        {
+            return new(false, "로그인을 시작할 수 없습니다. CLI 설치 상태를 확인해 주세요.");
+        }
+        finally { gate.Release(); }
+    }
+
+    private static async Task DrainAsync(Stream stream, CancellationToken cancellationToken)
+    {
+        try { await stream.CopyToAsync(Stream.Null, cancellationToken).ConfigureAwait(false); }
+        catch (OperationCanceledException) { }
+        catch (IOException) { }
+        catch (ObjectDisposedException) { }
     }
 }

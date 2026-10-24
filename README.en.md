@@ -31,7 +31,7 @@ No installer is required. To build it yourself, expand **Build and verification*
 | **Claude** | Install Claude Code and run `claude auth login --claudeai`, or choose **Claude 로그인** in Settings. | Available subscription windows, such as five-hour and weekly quotas. |
 | **Gemini** | Enable Gemini in Settings and choose **Gemini 로그인** for official browser sign-in. A supported Google account and Code Assist project are required. | Model quota buckets and reset information returned by the official Gemini CLI core. |
 
-Codex and Claude login buttons launch the installed official CLI's login flow; complete any terminal/browser steps it opens. Signing in to a provider's website or desktop app alone may not create the CLI credentials VibeMeters needs. Gemini quotas appear **inside VibeMeters**; normal polling does not open a terminal or browser or send model-generation requests. Gemini is off by default.
+Codex and Claude login buttons run the installed official CLI in the background. Complete sign-in in the browser it opens; no terminal window is shown. The app checks the login result before refreshing usage and stops waiting after five minutes. Signing in to a provider's website or desktop app alone may not create the CLI credentials VibeMeters needs. Credential-file changes also trigger a new check. Gemini quotas appear **inside VibeMeters**; normal polling does not open a terminal or browser or send model-generation requests. Gemini is off by default.
 
 This app shows quota percentages, **not API-key billing, token costs, or a guaranteed number of prompts remaining**. Missing values are shown as unavailable rather than estimated.
 
@@ -51,7 +51,9 @@ Choose any combination of services and set **remaining or used percentage per se
 | Restore the window | Click the tray icon, or launch the app again |
 | Quit | Right-click the tray icon → **종료** |
 
-Settings save immediately; window size and position are remembered. The taskbar option provides a normal app icon and minimize behavior, not a quota widget or progress overlay. The minimize button appears in sufficiently wide windows.
+Settings save immediately. Window moves and resizing are saved automatically, with a final save on close, Windows shutdown, or sleep. Windows startup restores the saved size, position, and visible-window or tray state. Updates do not reset the window to a default size; if a previous monitor is missing, the window moves onto an available screen.
+
+The taskbar option provides a normal app icon and minimize behavior, not a quota widget or progress overlay. The minimize button appears in sufficiently wide windows.
 
 Refresh options are **30 seconds, 1, 2, 5, or 15 minutes, or manual**; the default is two minutes. Polling pauses while Windows is locked or sleeping. Hover over quota rows or status indicators for reset times and connection details. A warning indicator can mean cached data, a login problem, or a temporary server restriction.
 
@@ -141,7 +143,7 @@ dotnet build -c Release
 dotnet .\bin\Release\net8.0-windows\VibeMeters.dll --smoke-test
 ```
 
-Results and PNGs are written to the build folder's `artifacts/` directory. The latest run passed **97 regression checks and 197 window/layout checks** at 125% display scaling; see [scope and limitations](VERIFICATION.md).
+Results and PNGs are written to the build folder's `artifacts/` directory. See the [verification notes](VERIFICATION.md) for results and limitations by version.
 
 `VibeMeters.exe --demo` previews sample data without accessing provider accounts. When [reporting a bug](https://github.com/Nectarine-Peach/VibeMeters/issues), include the version, Windows display scaling, window size, provider, and visible error. **Never attach credential files or access tokens.**
 

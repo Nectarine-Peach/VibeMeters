@@ -1,3 +1,16 @@
+# Final verification / 최종 검증 — v1.4.3 · 2026-10-24
+
+**자동 회귀 107개, 실행 창·배치·복원 검사 207개 통과. 빌드 경고·오류 0개.**
+
+- 창 크기·음수 모니터 좌표·표시 상태의 JSON 저장 및 복원, 이전 설정의 기본값 호환을 검사했습니다.
+- 실행한 274×174 WPF 창을 저장한 뒤 별도의 새 창을 생성해 크기와 위치가 복원되는 것을 확인했습니다. 최소화 중에는 정상 창의 RestoreBounds를 보존합니다.
+- 숨김 CLI 실행 옵션, 표준 입출력 리디렉션, npm 경로·인수 이스케이프, 취소 처리를 격리된 테스트로 검사했습니다. 실제 OAuth 인증을 시작하거나 기존 로그인을 변경하지 않았습니다.
+- 창 이동·크기 변경 후 400ms 저장, 종료·Windows 세션 종료·절전 저장 경로를 구현했습니다. **실제 Windows 재부팅·종료는 수행하지 않았습니다.**
+- [실행 창 검사 원문](docs/verification/v1.4.3-window-checks.txt). 기존 화면 구성 검사와 캡처 방식·제약은 아래 v1.4.2 기록과 같습니다.
+
+**107 regression checks and 207 shown-window/layout/restore checks passed; zero build warnings or errors.** Tests cover geometry and visibility serialization, reconstruction of a shown window, minimized RestoreBounds preservation, hidden CLI process configuration, argument quoting and cancellation. Actual OAuth approval and OS reboot/shutdown were not exercised. App-render capture limitations remain as described below.
+
+---
 # Final verification / 최종 검증 — v1.4.2 · 2026-10-24
 
 **97 regression checks passed; 197 shown-window layout/state checks passed. Zero failures.** Release build completed with zero warnings and zero errors. Captures were visually inspected for standard, mini, minimum, light-theme, settings, and all-service layouts.

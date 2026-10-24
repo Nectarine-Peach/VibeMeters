@@ -1,0 +1,225 @@
+VibeMeters shown-window WPF verification
+ISOLATION: --smoke-test uses its own mutex, in-memory settings, no provider instances and no credential watchers.
+DATA: Synthetic Codex remaining 61%; Claude remaining 100% / 55%; Gemini remaining 83% / 94%. These are not account measurements.
+CAPTURE: RenderTargetBitmap of the shown window's client root at its current monitor DPI; excludes native desktop/compositor and tray pixels.
+PASS: shown HWND and presentation source
+PASS: manual refresh diagnostics isolation
+PASS: standard dark requested logical size
+PASS: standard dark selected provider card count
+PASS: standard dark no scroll viewers
+PASS: standard dark no C/A/G initial badges
+PASS: standard dark all card bounds inside client
+PASS: standard dark header text remains inside client
+PASS: standard dark Codex heading and row count
+PASS: standard dark Codex quota rows are vertical
+PASS: standard dark Codex content bounds inside card
+PASS: standard dark Codex label-meter-value inline
+PASS: standard dark Claude heading and row count
+PASS: standard dark Claude quota rows are vertical
+PASS: standard dark Claude content bounds inside card
+PASS: standard dark Claude label-meter-value inline
+CAPTURE: window-standard-dark.png · logical 360×267.2 · pixels 450×334 · DPI 120×120
+PASS: window-standard-dark.png captures full client at actual DPI
+PASS: controlled demonstration percentages
+PASS: mini dark requested logical size
+PASS: mini dark selected provider card count
+PASS: mini dark no scroll viewers
+PASS: mini dark no C/A/G initial badges
+PASS: mini dark all card bounds inside client
+PASS: mini dark header text remains inside client
+PASS: mini dark Codex heading and row count
+PASS: mini dark Codex quota rows are vertical
+PASS: mini dark Codex content bounds inside card
+PASS: mini dark Codex label-meter-value inline
+PASS: mini dark Claude heading and row count
+PASS: mini dark Claude quota rows are vertical
+PASS: mini dark Claude content bounds inside card
+PASS: mini dark Claude label-meter-value inline
+CAPTURE: window-mini-dark.png · logical 274.4×174.4 · pixels 343×218 · DPI 120×120
+PASS: window-mini-dark.png captures full client at actual DPI
+PASS: minimum dark requested logical size
+PASS: minimum dark selected provider card count
+PASS: minimum dark no scroll viewers
+PASS: minimum dark no C/A/G initial badges
+PASS: minimum dark all card bounds inside client
+PASS: minimum dark header text remains inside client
+PASS: minimum dark Codex heading and row count
+PASS: minimum dark Codex quota rows are vertical
+PASS: minimum dark Codex content bounds inside card
+PASS: minimum dark Codex label-meter-value inline
+PASS: minimum dark Claude heading and row count
+PASS: minimum dark Claude quota rows are vertical
+PASS: minimum dark Claude content bounds inside card
+PASS: minimum dark Claude label-meter-value inline
+CAPTURE: window-minimum-dark.png · logical 220×140 · pixels 275×175 · DPI 120×120
+PASS: window-minimum-dark.png captures full client at actual DPI
+PASS: wide dark requested logical size
+PASS: wide dark selected provider card count
+PASS: wide dark no scroll viewers
+PASS: wide dark no C/A/G initial badges
+PASS: wide dark all card bounds inside client
+PASS: wide dark header text remains inside client
+PASS: wide dark Codex heading and row count
+PASS: wide dark Codex quota rows are vertical
+PASS: wide dark Codex content bounds inside card
+PASS: wide dark Codex label-meter-value inline
+PASS: wide dark Claude heading and row count
+PASS: wide dark Claude quota rows are vertical
+PASS: wide dark Claude content bounds inside card
+PASS: wide dark Claude label-meter-value inline
+CAPTURE: window-wide-dark.png · logical 600×300 · pixels 750×375 · DPI 120×120
+PASS: window-wide-dark.png captures full client at actual DPI
+PASS: pin control enables always on top
+PASS: pin control disables always on top
+PASS: taskbar preference disabled
+PASS: taskbar preference restored
+PASS: taskbar minimize retains shown window
+PASS: header close hides to tray
+PASS: tray hide records hidden startup preference
+PASS: tray restore action restores main window
+PASS: tray restore records visible startup preference
+PASS: settings opens a separate owned window
+PASS: settings preserves main window size
+PASS: settings contains no scroll viewers
+PASS: settings has all service selection and mode controls
+CAPTURE: settings-dark.png · logical 410.4×650.4 · pixels 513×813 · DPI 120×120
+PASS: settings-dark.png captures full client at actual DPI
+PASS: settings labels fit the client
+PASS: settings light selection updates application
+PASS: settings system selection persisted in memory
+PASS: settings dark selection updates application
+PASS: settings Claude mode selection updates preference
+PASS: settings manual interval retained
+PASS: standard light requested logical size
+PASS: standard light selected provider card count
+PASS: standard light no scroll viewers
+PASS: standard light no C/A/G initial badges
+PASS: standard light all card bounds inside client
+PASS: standard light header text remains inside client
+PASS: standard light Codex heading and row count
+PASS: standard light Codex quota rows are vertical
+PASS: standard light Codex content bounds inside card
+PASS: standard light Codex label-meter-value inline
+PASS: standard light Claude heading and row count
+PASS: standard light Claude quota rows are vertical
+PASS: standard light Claude content bounds inside card
+PASS: standard light Claude label-meter-value inline
+CAPTURE: window-standard-light.png · logical 360×267.2 · pixels 450×334 · DPI 120×120
+PASS: window-standard-light.png captures full client at actual DPI
+PASS: light theme active
+PASS: mini light requested logical size
+PASS: mini light selected provider card count
+PASS: mini light no scroll viewers
+PASS: mini light no C/A/G initial badges
+PASS: mini light all card bounds inside client
+PASS: mini light header text remains inside client
+PASS: mini light Codex heading and row count
+PASS: mini light Codex quota rows are vertical
+PASS: mini light Codex content bounds inside card
+PASS: mini light Codex label-meter-value inline
+PASS: mini light Claude heading and row count
+PASS: mini light Claude quota rows are vertical
+PASS: mini light Claude content bounds inside card
+PASS: mini light Claude label-meter-value inline
+CAPTURE: window-mini-light.png · logical 274.4×174.4 · pixels 343×218 · DPI 120×120
+PASS: window-mini-light.png captures full client at actual DPI
+PASS: Codex only selected provider card count
+PASS: Codex only no scroll viewers
+PASS: Codex only no C/A/G initial badges
+PASS: Codex only all card bounds inside client
+PASS: Codex only header text remains inside client
+PASS: Codex only Codex heading and row count
+PASS: Codex only Codex quota rows are vertical
+PASS: Codex only Codex content bounds inside card
+PASS: Codex only Codex label-meter-value inline
+CAPTURE: window-codex-only-dark.png · logical 360×140 · pixels 450×175 · DPI 120×120
+PASS: window-codex-only-dark.png captures full client at actual DPI
+PASS: all services selected provider card count
+PASS: all services no scroll viewers
+PASS: all services no C/A/G initial badges
+PASS: all services all card bounds inside client
+PASS: all services header text remains inside client
+PASS: all services Codex heading and row count
+PASS: all services Codex quota rows are vertical
+PASS: all services Codex content bounds inside card
+PASS: all services Codex label-meter-value inline
+PASS: all services Claude heading and row count
+PASS: all services Claude quota rows are vertical
+PASS: all services Claude content bounds inside card
+PASS: all services Claude label-meter-value inline
+PASS: all services Gemini heading and row count
+PASS: all services Gemini quota rows are vertical
+PASS: all services Gemini content bounds inside card
+PASS: all services Gemini label-meter-value inline
+PASS: all services natural design height
+CAPTURE: window-all-services-dark.png · logical 360×394.4 · pixels 450×493 · DPI 120×120
+PASS: window-all-services-dark.png captures full client at actual DPI
+PASS: all services minimum readable size selected provider card count
+PASS: all services minimum readable size no scroll viewers
+PASS: all services minimum readable size no C/A/G initial badges
+PASS: all services minimum readable size all card bounds inside client
+PASS: all services minimum readable size header text remains inside client
+PASS: all services minimum readable size Codex heading and row count
+PASS: all services minimum readable size Codex quota rows are vertical
+PASS: all services minimum readable size Codex content bounds inside card
+PASS: all services minimum readable size Codex label-meter-value inline
+PASS: all services minimum readable size Claude heading and row count
+PASS: all services minimum readable size Claude quota rows are vertical
+PASS: all services minimum readable size Claude content bounds inside card
+PASS: all services minimum readable size Claude label-meter-value inline
+PASS: all services minimum readable size Gemini heading and row count
+PASS: all services minimum readable size Gemini quota rows are vertical
+PASS: all services minimum readable size Gemini content bounds inside card
+PASS: all services minimum readable size Gemini label-meter-value inline
+PASS: all service rows retained with readable minimum height
+CAPTURE: window-all-services-minimum-dark.png · logical 220×160 · pixels 275×200 · DPI 120×120
+PASS: window-all-services-minimum-dark.png captures full client at actual DPI
+PASS: display basis independently changes Claude percentages
+PASS: used display drives matching meter values
+PASS: per-service basis labels remain visible
+PASS: cached quota rows selected provider card count
+PASS: cached quota rows no scroll viewers
+PASS: cached quota rows no C/A/G initial badges
+PASS: cached quota rows all card bounds inside client
+PASS: cached quota rows header text remains inside client
+PASS: cached quota rows Codex heading and row count
+PASS: cached quota rows Codex quota rows are vertical
+PASS: cached quota rows Codex content bounds inside card
+PASS: cached quota rows Codex label-meter-value inline
+PASS: cached quota rows Claude heading and row count
+PASS: cached quota rows Claude quota rows are vertical
+PASS: cached quota rows Claude content bounds inside card
+PASS: cached quota rows Claude label-meter-value inline
+PASS: cached values stay at full opacity
+CAPTURE: window-cached-dark.png · logical 274.4×174.4 · pixels 343×218 · DPI 120×120
+PASS: window-cached-dark.png captures full client at actual DPI
+PASS: honest missing-data placeholders selected provider card count
+PASS: honest missing-data placeholders no scroll viewers
+PASS: honest missing-data placeholders no C/A/G initial badges
+PASS: honest missing-data placeholders all card bounds inside client
+PASS: honest missing-data placeholders header text remains inside client
+PASS: honest missing-data placeholders Codex heading and row count
+PASS: honest missing-data placeholders Codex quota rows are vertical
+PASS: honest missing-data placeholders Codex content bounds inside card
+PASS: honest missing-data placeholders Codex label-meter-value inline
+PASS: honest missing-data placeholders Claude heading and row count
+PASS: honest missing-data placeholders Claude quota rows are vertical
+PASS: honest missing-data placeholders Claude content bounds inside card
+PASS: honest missing-data placeholders Claude label-meter-value inline
+PASS: missing data has dashes and empty tracks
+PASS: authentication recovery action exposed
+PASS: authentication recovery dispatches login event
+CAPTURE: window-login-required-dark.png · logical 274.4×174.4 · pixels 343×218 · DPI 120×120
+PASS: window-login-required-dark.png captures full client at actual DPI
+PASS: geometry JSON stores last size and position
+PASS: geometry JSON preserves theme, modes and visibility
+PASS: new shown window restores serialized size
+PASS: new shown window restores serialized monitor position
+PASS: restored preferences use an independent in-memory copy
+PASS: minimized capture retains normal RestoreBounds
+PASS: minimized round trip restores usable window geometry
+PASS: hidden startup preference survives JSON round trip
+GEOMETRY: JSON round trip and shown-window reconstruction only; no OS shutdown/reboot was simulated and no user settings file was written.
+PASS: no footer or mini toggle controls
+PASS: same responsive composition at every size
+RESULT: 207 passed; 0 failed

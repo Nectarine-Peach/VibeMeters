@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
@@ -99,6 +100,7 @@ internal sealed class VisualVerification
             await CheckSelectionsAsync();
             await CheckDisplayModesAsync();
             await CheckUnavailableStatesAsync();
+            await CheckGeometryRoundTripAsync();
             Check("no footer or mini toggle controls",_window.FindName("LastUpdatedText")==null&&_window.FindName("StatusText")==null&&_window.FindName("MiniButton")==null);
             Check("same responsive composition at every size",_window.FindName("MicroPanel")==null);
         }
@@ -141,9 +143,66 @@ internal sealed class VisualVerification
         _window.WindowState=WindowState.Normal;
         Click((Button)_window.FindName("HideButton"));
         Check("header close hides to tray",!_window.IsVisible);
+        Check("tray hide records hidden startup preference",!_settings.WindowVisible);
         _restoreWindow();
         await StableAsync(_window);
         Check("tray restore action restores main window",_window.IsVisible&&_window.WindowState==WindowState.Normal);
+        Check("tray restore records visible startup preference",_settings.WindowVisible);
+    }
+
+    private async Task CheckGeometryRoundTripAsync()
+    {
+        // Exercise the same serialized preferences used at startup without accessing the user's file.
+        var oldLeft=_window.Left;var oldTop=_window.Top;
+        var oldModes=(_settings.CodexDisplayMode,_settings.ClaudeDisplayMode,_settings.GeminiDisplayMode);
+        MainWindow? restored=null;
+        try
+        {
+            await ResizeAsync(274,174);
+            var area=System.Windows.Forms.Screen.FromHandle(new WindowInteropHelper(_window).Handle).WorkingArea;
+            var deviceToDip=PresentationSource.FromVisual(_window)?.CompositionTarget?.TransformFromDevice??Matrix.Identity;
+            var work=new MatrixTransform(deviceToDip).TransformBounds(new Rect(area.X,area.Y,area.Width,area.Height));
+            var left=work.Left+Math.Min(32,Math.Max(0,work.Width-274));
+            var top=work.Top+Math.Min(32,Math.Max(0,work.Height-174));
+            _window.Left=left;_window.Top=top;
+            _settings.CodexDisplayMode=UsageDisplayMode.Used;
+            _settings.ClaudeDisplayMode=UsageDisplayMode.Remaining;
+            _settings.GeminiDisplayMode=UsageDisplayMode.Used;
+            _window.ApplyProviderVisibility();
+            await StableAsync(_window);
+            _window.CaptureWindowGeometry();
+            var saved=JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings))!;
+            Check("geometry JSON stores last size and position",Close(saved.WindowWidth,274)&&Close(saved.WindowHeight,174)&&saved.Left is double savedLeft&&Close(savedLeft,left)&&saved.Top is double savedTop&&Close(savedTop,top));
+            Check("geometry JSON preserves theme, modes and visibility",saved.Theme==_settings.Theme&&saved.CodexDisplayMode==UsageDisplayMode.Used&&saved.ClaudeDisplayMode==UsageDisplayMode.Remaining&&saved.GeminiDisplayMode==UsageDisplayMode.Used&&saved.WindowVisible==_settings.WindowVisible);
+            restored=new MainWindow(saved);
+            foreach(var kind in Enum.GetValues<UsageProviderKind>()) restored.RenderSnapshot(Demo(kind));
+            restored.Show();
+            await StableAsync(restored);
+            Check("new shown window restores serialized size",Close(restored.ActualWidth,274)&&Close(restored.ActualHeight,174));
+            Check("new shown window restores serialized monitor position",Close(restored.Left,left)&&Close(restored.Top,top));
+            Check("restored preferences use an independent in-memory copy",!ReferenceEquals(restored.Settings,_settings)&&restored.Settings.Theme==_settings.Theme&&restored.Settings.GetDisplayMode(UsageProviderKind.Codex)==UsageDisplayMode.Used);
+            restored.CaptureWindowGeometry();
+            var expected=new Rect(saved.Left!.Value,saved.Top!.Value,saved.WindowWidth,saved.WindowHeight);
+            restored.WindowState=WindowState.Minimized;
+            await StableAsync(restored);
+            restored.CaptureWindowGeometry();
+            var minimized=JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(saved))!;
+            Check("minimized capture retains normal RestoreBounds",minimized.Left is double minLeft&&minimized.Top is double minTop&&Close(minLeft,expected.Left)&&Close(minTop,expected.Top)&&Close(minimized.WindowWidth,expected.Width)&&Close(minimized.WindowHeight,expected.Height)&&minLeft>-30000&&minTop>-30000);
+            restored.WindowState=WindowState.Normal;
+            await StableAsync(restored);
+            Check("minimized round trip restores usable window geometry",Close(restored.ActualWidth,expected.Width)&&Close(restored.ActualHeight,expected.Height)&&Close(restored.Left,expected.Left)&&Close(restored.Top,expected.Top));
+            saved.WindowVisible=false;
+            var hidden=JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(saved))!;
+            Check("hidden startup preference survives JSON round trip",!hidden.WindowVisible&&Close(hidden.WindowWidth,274)&&Close(hidden.WindowHeight,174));
+            _report.Add("GEOMETRY: JSON round trip and shown-window reconstruction only; no OS shutdown/reboot was simulated and no user settings file was written.");
+        }
+        finally
+        {
+            restored?.Close();
+            _settings.CodexDisplayMode=oldModes.Item1;_settings.ClaudeDisplayMode=oldModes.Item2;_settings.GeminiDisplayMode=oldModes.Item3;
+            _window.Left=oldLeft;_window.Top=oldTop;
+            _window.ApplyProviderVisibility();
+        }
     }
 
     private async Task CheckSettingsInteractionsAsync(SettingsWindow settings)

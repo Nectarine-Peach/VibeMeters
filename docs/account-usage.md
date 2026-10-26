@@ -1,5 +1,17 @@
 # 개인·회사 계정 사용량과 로그인
 
+## Gemini 개인 계정과 Antigravity
+
+Google은 [2026년 6월 18일부터 개인·AI Pro·Ultra 계정의 Gemini CLI Google 로그인을 지원하지 않습니다](https://developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals). Standard/Enterprise 지원은 별개입니다. 개인 계정에 반환된 `free-tier / UNSUPPORTED_CLIENT`를 Cloud 프로젝트 누락으로 잘못 표시하던 처리를 수정했습니다.
+
+해당 개인용 경로가 거부되면 설치된 **Antigravity CLI 1.4.7 이상**의 공식 `agy -p /usage --output-format json` 명령으로 조회합니다. [공식 명령 안내](https://www.antigravity.google/docs/cli/commands/usage/)와 [공식 유지관리자의 JSON 호출 안내](https://github.com/google-antigravity/antigravity-cli/issues/590)를 따릅니다. 앱은 CLI나 계정을 자동 설치·전환하지 않으며 keyring 토큰을 직접 읽지 않습니다. 숨겨진 headless 조회는 새 로그인을 진행하지 않고 인증 필요 상태로 끝납니다.
+
+카드 제목 **Gemini · Antigravity**는 Antigravity에서 사용하는 Gemini의 한도임을 나타냅니다. 서버가 Gemini Pro/Flash 공유 주간·5시간 한도와 별도 Argon 주간 한도를 주면 그대로 표시하며, 공유 한도를 모델별로 나누지 않습니다. Claude/GPT 그룹은 이 카드에서 제외합니다. Gemini 웹·앱 한도와 합산하거나 같은 값으로 간주하지 않습니다. 초기화 시점과 전체 한도 이름은 각 행의 툴팁에서 확인할 수 있습니다.
+
+이 경로의 **Gemini 로그인**은 공식 Antigravity 창을 엽니다. 창에서 로그인/계정 전환을 완료한 뒤 앱을 새로고침하세요. Antigravity 인증은 Gemini CLI의 Google 로그인 캐시와 별개입니다. 기존 회사 계정의 유효한 Code Assist 프로젝트/한도 경로는 유지됩니다.
+
+Antigravity는 keyring 계정 ID를 사용량 응답에 노출하지 않으므로 성공 수치를 다음 새로고침에 재사용하지 않습니다. 실패·로그인 변경 때 이전 수치를 표시하지 않으며 요청 제한 시에는 10분 대기를 유지합니다. CLI가 없거나 오래되었거나 인증이 필요하거나 Gemini 한도를 주지 않으면 해당 이유를 표시합니다.
+
 VibeMeters는 각 PC의 공식 Codex CLI / Claude Code가 현재 로그인한 계정을 사용합니다. 계정을 전환해서 사용하며 여러 계정을 동시에 표시하지 않습니다. 집 PC의 인증이 회사 PC로 자동 이전되지는 않습니다.
 
 사용량 조회 자체는 저장된 인증 파일과 HTTP를 사용하므로 CLI 설치를 요구하지 않습니다. 로그인할 때 CLI가 없으면 공식 사용자 설치를 명시적으로 선택할 수 있습니다. [앱의 CLI 설치 안내](cli-installation.md).

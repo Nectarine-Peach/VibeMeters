@@ -69,6 +69,8 @@ internal static class OfficialCliProcess
         };
         if (name == "codex" && Environment.GetEnvironmentVariable("CODEX_INSTALL_DIR") is { Length: > 0 } customInstall)
             directories.Insert(0, customInstall);
+        if (name == "agy") directories.Insert(0,
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "agy", "bin"));
         directories.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator));
         // An installer updates User PATH after this process started. Re-read it without
         // changing the user's environment or requiring a VibeMeters restart.

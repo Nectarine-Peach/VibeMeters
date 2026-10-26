@@ -11,8 +11,12 @@ namespace VibeMeters.Services;
 
 internal static class GeminiCliBridge
 {
+    private static volatile bool _usesAntigravity;
+    internal static void ResetRoute() => _usesAntigravity = false;
+
     public static LoginResult StartLogin()
     {
+        if (_usesAntigravity) return AntigravityUsageBridge.StartLogin();
         var (runtime, script) = ResolveRuntime();
         var node = FindNode(runtime);
         if (node is null || !File.Exists(script))
@@ -36,6 +40,7 @@ internal static class GeminiCliBridge
 
     public static async Task<UsageSnapshot> ReadAsync(CancellationToken cancellationToken)
     {
+        if (_usesAntigravity) return await AntigravityUsageBridge.ReadAsync(cancellationToken).ConfigureAwait(false);
         var (runtime, script) = ResolveRuntime();
         var node = FindNode(runtime);
         if (node is null || !File.Exists(script))
@@ -55,6 +60,11 @@ internal static class GeminiCliBridge
             await errorTask.ConfigureAwait(false);
             if (process.ExitCode != 0) return Error(UsageStatus.Unavailable, "Gemini 조회가 완료되지 않았습니다. 잠시 후 다시 확인합니다.");
             using var json = JsonDocument.Parse(output);
+            if (Text(json.RootElement, "reason") == "UNSUPPORTED_CLIENT")
+            {
+                _usesAntigravity = true;
+                return await AntigravityUsageBridge.ReadAsync(cancellationToken).ConfigureAwait(false);
+            }
             return Parse(json.RootElement);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -101,6 +111,7 @@ internal static class GeminiCliBridge
                 "AUTH_REQUIRED" => Error(UsageStatus.AuthenticationRequired, "Gemini 로그인이 필요합니다. 로그인 후 자동으로 갱신됩니다."),
                 "RATE_LIMITED" => Error(UsageStatus.RateLimited, "Gemini 요청 제한 · 잠시 후 자동으로 다시 확인합니다."),
                 "PROJECT_REQUIRED" => Error(UsageStatus.Unavailable, "Gemini 계정에 Google Cloud 프로젝트 설정이 필요합니다."),
+                "UNSUPPORTED_CLIENT" => Error(UsageStatus.Unavailable, "Gemini CLI 개인 계정 지원이 종료되었습니다. Antigravity에서 사용량을 확인해 주세요."),
                 "RUNTIME_REQUIRED" => Error(UsageStatus.Unavailable, "Gemini 조회 런타임이 누락되었습니다. 앱을 다시 설치해 주세요."),
                 "NO_QUOTA" => Error(UsageStatus.Unavailable, "Gemini 계정에서 남은 한도 정보를 제공하지 않습니다."),
                 _ => Error(UsageStatus.Unavailable, "Gemini 서버에 연결할 수 없습니다. 잠시 후 다시 확인합니다.")

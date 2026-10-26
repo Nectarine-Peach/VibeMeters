@@ -233,7 +233,8 @@ public partial class MainWindow : Window
     private FrameworkElement ProviderHeading(UsageSnapshot snapshot,CardMetrics metrics)
     {
         var heading=new StackPanel { Height=metrics.HeadingHeight,Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center,ToolTip=WrappedTip(ProviderTooltip(snapshot)) };
-        heading.Children.Add(new TextBlock { Text=snapshot.Provider.ToString(),Foreground=Palette("PrimaryText"),FontWeight=FontWeights.SemiBold,FontSize=metrics.HeadingFont,VerticalAlignment=VerticalAlignment.Center });
+        var providerName=snapshot.Provider==UsageProviderKind.Gemini&&snapshot.Plan=="Antigravity"?"Gemini · Antigravity":snapshot.Provider.ToString();
+        heading.Children.Add(new TextBlock { Text=providerName,Foreground=Palette("PrimaryText"),FontWeight=FontWeights.SemiBold,FontSize=metrics.HeadingFont,VerticalAlignment=VerticalAlignment.Center });
         heading.Children.Add(new TextBlock { Text=DisplayBasis(snapshot.Provider),Foreground=Palette("SecondaryText"),FontSize=metrics.BasisFont,Margin=new Thickness(metrics.Size(5,11),0,0,0),VerticalAlignment=VerticalAlignment.Center });
         if(snapshot.Status!=UsageStatus.Ready)
         {
@@ -291,7 +292,7 @@ public partial class MainWindow : Window
         Typography.SetNumeralAlignment(value,FontNumeralAlignment.Tabular);
         return value;
     }
-    private static string ShortQuotaName(string name)=>name=="개인 한도"?"개인":name=="월 추가 사용"?"월추가":name.Contains("주")?"주간":name.Contains("5시간")?"5시간":name.Contains("세션")||name.Contains("시간")?"세션":name.Replace("모델","").Trim();
+    private static string ShortQuotaName(string name)=>name.Contains("Argon",StringComparison.OrdinalIgnoreCase)?"Argon":name=="개인 한도"?"개인":name=="월 추가 사용"?"월추가":name.Contains("주")?"주간":name.Contains("5시간")?"5시간":name.Contains("세션")||name.Contains("시간")?"세션":name.Replace("모델","").Trim();
     private static ToolTip WrappedTip(string text)=>new ToolTip { MaxWidth=280,Content=new TextBlock { Text=text,TextWrapping=TextWrapping.Wrap,MaxWidth=254,FontSize=11,LineHeight=17 } };
     private static string ProviderStatus(UsageSnapshot snapshot)
     {

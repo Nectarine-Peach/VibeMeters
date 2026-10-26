@@ -1,6 +1,7 @@
 // Short-lived adapter using the official, app-private Gemini CLI core.
 // Official code owns authentication and token renewal; credentials never leave it.
 import { writeSync } from 'node:fs';
+import { accountFailure } from './account-status.mjs';
 const suppressWrite = (chunk, encoding, callback) => {
   const done = typeof encoding === 'function' ? encoding : callback;
   if (typeof done === 'function') queueMicrotask(done);
@@ -61,8 +62,9 @@ try {
     cloudaicompanionProject: configuredProject,
     metadata: { ideType: 'IDE_UNSPECIFIED', platform: 'WINDOWS_AMD64', pluginType: 'GEMINI', duetProject: configuredProject },
   });
+  const reason = accountFailure(account, configuredProject);
+  if (reason) return finish({ status: 'Unavailable', reason });
   const project = account.cloudaicompanionProject || configuredProject;
-  if (typeof project !== 'string' || !project) return finish({ status: 'Unavailable', reason: 'PROJECT_REQUIRED' });
   const quota = await server.retrieveUserQuota({ project });
   const windows = (Array.isArray(quota?.buckets) ? quota.buckets : []).filter(bucket =>
     typeof bucket.modelId === 'string' && bucket.modelId.length <= 100 &&

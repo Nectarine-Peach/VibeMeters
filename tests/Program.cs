@@ -194,6 +194,84 @@ sealed class RegressionSuite
             ("NO_QUOTA", UsageStatus.Unavailable), ("NETWORK", UsageStatus.Unavailable)
         })
             Test($"Gemini bridge maps {reason}", () => Equal(status, ParseGemini("{\"status\":\"Unavailable\",\"reason\":\"" + reason + "\"}").Status));
+        Test("Gemini unsupported client is not reported as a project error", () =>
+        {
+            var s = ParseGemini("""{"status":"Unavailable","reason":"UNSUPPORTED_CLIENT"}""");
+            True(s.Message!.Contains("개인 계정 지원이 종료", StringComparison.Ordinal));
+            True(!s.Message.Contains("프로젝트", StringComparison.Ordinal));
+        });
+        const string agyQuota = """{"status":"SUCCESS","num_turns":0,"usage":{"total_tokens":0},"command":{"name":"usage","data":{"groups":[{"name":"Gemini Models","buckets":[{"id":"gemini-weekly","window":"weekly","remaining_fraction":0.625,"reset_time":"2026-11-02T04:36:49Z"},{"id":"gemini-5h","window":"5h","remaining_fraction":1,"reset_time":"2026-10-26T09:36:49Z"}]},{"name":"Claude and GPT models","buckets":[{"id":"3p-weekly","window":"weekly","remaining_fraction":0.1}]},{"name":"Gemini 4 Argon","buckets":[{"id":"gemini-argon-wtu-weekly","window":"weekly","remaining_fraction":0}]}]}}}""";
+        Test("Antigravity command parses Gemini shared quotas without mixing Claude", () =>
+        {
+            var s = ParseAntigravity(agyQuota);
+            Equal(UsageStatus.Ready, s.Status); Equal("Antigravity", s.Plan); Equal(3, s.Windows.Count);
+            Equal("5시간", s.Windows[0].Name); Equal(100d, s.Windows[0].RemainingPercent);
+            Equal("주간", s.Windows[1].Name); Equal(62.5, s.Windows[1].RemainingPercent);
+            Equal("4 Argon 주간", s.Windows[2].Name); Equal(0d, s.Windows[2].RemainingPercent);
+            Equal(DateTimeOffset.Parse("2026-11-02T04:36:49Z"), s.Windows[1].ResetsAt);
+            Equal(TimeSpan.FromDays(7), s.Windows[1].Duration);
+        });
+        foreach (var input in new[] { "null", "[]", "{}", agyQuota.Replace("\"num_turns\":0", "\"num_turns\":1"),
+            agyQuota.Replace("\"num_turns\":0", "\"num_turns\":\"0\""), agyQuota.Replace("\"total_tokens\":0", "\"total_tokens\":1"),
+            agyQuota.Replace("\"name\":\"usage\"", "\"name\":\"agent\""), agyQuota.Replace("SUCCESS", "ERROR") })
+            Test("Antigravity rejects malformed or model-generated usage envelope", () => Equal(UsageStatus.Unavailable, ParseAntigravity(input).Status));
+        foreach (var value in new[] { "null", "\"0.5\"", "-0.1", "1.1", "1e999", "true" })
+            Test($"Antigravity rejects invalid fraction {value}", () =>
+            {
+                var s = ParseAntigravity(agyQuota.Replace("0.625", value));
+                Equal(2, s.Windows.Count); True(s.Windows.All(w => w.Name != "주간"));
+            });
+        Test("Antigravity minimum version prevents old print-mode model requests", () =>
+        {
+            var bridge = typeof(GeminiUsageProvider).Assembly.GetType("VibeMeters.Services.AntigravityUsageBridge", true)!;
+            bool Supported(string version) => (bool)bridge.GetMethod("IsSupportedVersion", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [version])!;
+            True(Supported("1.4.7\n")); True(Supported("2.0.0")); True(!Supported("1.4.6")); True(!Supported("unknown"));
+        });
+        Test("Antigravity ignores non-Gemini groups and reports missing quota", () =>
+            Equal(UsageStatus.Unavailable, ParseAntigravity(agyQuota.Replace("Gemini ", "Other ")).Status));
+        Test("Antigravity sanitizes authentication and rate limit failures", () =>
+        {
+            var auth = ParseAntigravity("""{"status":"ERROR","error":"authentication required secret-token https://example.invalid/oauth"}""");
+            Equal(UsageStatus.AuthenticationRequired, auth.Status); Equal(0, auth.Windows.Count);
+            True(!auth.Message!.Contains("secret-token", StringComparison.Ordinal)); True(!auth.Message.Contains("https://", StringComparison.Ordinal));
+            Equal(UsageStatus.RateLimited, ParseAntigravity("""{"status":"ERROR","error":"429 rate limit"}""").Status);
+        });
+        await TestAsync("Antigravity refresh reads current keyring account and drops stale quota on failure", async () =>
+        {
+            var calls = 0;
+            var provider = new GeminiUsageProvider(_ => Task.FromResult(++calls == 1 ? ParseAntigravity(agyQuota)
+                : new UsageSnapshot(UsageProviderKind.Gemini, UsageStatus.AuthenticationRequired, [], Now, "Antigravity", "로그인 필요")), () => 0);
+            Equal(3, (await provider.FetchAsync()).Windows.Count);
+            var failure = await provider.FetchAsync();
+            Equal(2, calls); Equal(0, failure.Windows.Count); Equal(UsageStatus.AuthenticationRequired, failure.Status);
+        });
+        await TestAsync("Gemini account change cannot bypass Antigravity rate limit or inherit quota", async () =>
+        {
+            var calls = 0; long stamp = 0;
+            var provider = new GeminiUsageProvider(_ => Task.FromResult(++calls == 1 ? ParseAntigravity(agyQuota)
+                : new UsageSnapshot(UsageProviderKind.Gemini, UsageStatus.RateLimited, [], Now, "Antigravity", "요청 제한")), () => stamp);
+            await provider.FetchAsync();
+            Equal(UsageStatus.RateLimited, (await provider.FetchAsync()).Status);
+            stamp++; provider.NotifyLoginCompleted();
+            var limited = await provider.FetchAsync();
+            Equal(2, calls); Equal(UsageStatus.RateLimited, limited.Status); Equal(0, limited.Windows.Count);
+        });
+        await TestAsync("Antigravity external login recovers on next manual refresh", async () =>
+        {
+            var calls = 0;
+            var provider = new GeminiUsageProvider(_ => Task.FromResult(++calls == 1
+                ? new UsageSnapshot(UsageProviderKind.Gemini, UsageStatus.AuthenticationRequired, [], Now, "Antigravity", "로그인 필요")
+                : ParseAntigravity(agyQuota)), () => 0);
+            Equal(UsageStatus.AuthenticationRequired, (await provider.FetchAsync()).Status);
+            Equal(UsageStatus.Ready, (await provider.FetchAsync()).Status); Equal(2, calls);
+        });
+        await TestAsync("Gemini provider propagates caller cancellation", async () =>
+        {
+            using var cancelled = new CancellationTokenSource(); cancelled.Cancel();
+            var provider = new GeminiUsageProvider(_ => throw new Exception("Must not query"), () => 0);
+            try { await provider.FetchAsync(cancelled.Token); throw new Exception("Cancellation ignored"); }
+            catch (OperationCanceledException) { }
+        });
         Test("Gemini is routed to its dedicated official CLI provider", () =>
         {
             True(UsageProviderFactory.CreateDefault().Single(p => p.Kind == UsageProviderKind.Gemini) is GeminiUsageProvider);
@@ -484,6 +562,12 @@ sealed class RegressionSuite
     {
         using var doc = JsonDocument.Parse(json);
         var bridge = typeof(GeminiUsageProvider).Assembly.GetType("VibeMeters.Services.GeminiCliBridge", throwOnError: true)!;
+        return (UsageSnapshot)bridge.GetMethod("Parse", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [doc.RootElement])!;
+    }
+    private static UsageSnapshot ParseAntigravity(string json)
+    {
+        using var doc = JsonDocument.Parse(json);
+        var bridge = typeof(GeminiUsageProvider).Assembly.GetType("VibeMeters.Services.AntigravityUsageBridge", true)!;
         return (UsageSnapshot)bridge.GetMethod("Parse", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [doc.RootElement])!;
     }
     private static ProcessStartInfo? CreateCliStartInfo(string name, params string[] arguments)

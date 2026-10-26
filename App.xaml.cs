@@ -127,6 +127,8 @@ public partial class App : Application
             if (result.Success)
             {
                 foreach (var usage in _providers.OfType<UsageProvider>().Where(usage => usage.Kind == provider)) usage.NotifyLoginCompleted();
+                if (provider == UsageProviderKind.Gemini)
+                    foreach (var usage in _providers.OfType<GeminiUsageProvider>()) usage.NotifyLoginCompleted();
                 if (_refreshing) _credentialsChanged = true;
                 else await RefreshAsync();
             }

@@ -12,6 +12,20 @@ Keep your **Codex, Claude, and Gemini quotas** visible in a small Windows tray w
 
 *Native app capture with demo data.*
 
+## Supported accounts and quota types
+
+Alongside personal subscription quotas, VibeMeters displays **Codex Business individual limits and Claude Enterprise monthly additional usage**.
+
+| Service / account | Quota information shown |
+| --- | --- |
+| **Codex personal subscription** | Supplied subscription windows, such as five-hour and weekly limits |
+| **Codex Business** | **Individual** remaining/used percentage and the supplied reset time |
+| **Claude personal subscription** | Five-hour and weekly quotas, plus enabled monthly additional usage |
+| **Claude Enterprise** | **Monthly additional usage** percentage, separate from personal subscription windows |
+| **Gemini / Code Assist** | Model quota buckets returned for supported accounts and projects |
+
+Codex Business uses the supplied `spend_control.individual_limit`; Claude Enterprise uses enabled `extra_usage.utilization`. When a recognized connected-account response supplies no percentage, the app reports that state without inventing a value. Service permissions, SSO and corporate network policies can restrict access; support does not guarantee every organization configuration. Actual account reauthentication and SSO approval were not separately exercised for v1.4.4. See [account details](docs/account-usage.md) and [verification scope](VERIFICATION.md).
+
 ## Quick start
 
 1. Extract the **entire package**, keeping its `runtime` folder, and run `VibeMeters.exe`.
@@ -28,7 +42,7 @@ No installer is required. To build it yourself, expand **Build and verification*
 | Service | Setup | What is shown |
 | --- | --- | --- |
 | **Codex** | Choose **Codex 로그인** in Settings. If the CLI is missing, choose official installation before sign-in. | Supplied subscription windows and Business individual limits. |
-| **Claude** | Choose **Claude 로그인** in Settings. If the CLI is missing, choose official installation before sign-in. | Subscription windows and enabled monthly additional usage. |
+| **Claude** | Choose **Claude 로그인** in Settings. If the CLI is missing, choose official installation before sign-in. | Subscription windows and enabled monthly additional usage, including Enterprise. |
 | **Gemini** | Enable Gemini in Settings and choose **Gemini 로그인** for official browser sign-in. A supported Google account and Code Assist project are required. | Model quota buckets and reset information returned by the official Gemini CLI core. |
 
 Codex and Claude usage polling works without the CLI when a valid credential file already exists. If a CLI is missing when you click sign-in, the app offers installation or cancellation. Only your explicit install choice downloads the official user-scoped installer, with progress, retry and cancellation. It detects the installed CLI before continuing to browser sign-in; no administrator elevation is requested. See [CLI installation scope](docs/cli-installation.md).

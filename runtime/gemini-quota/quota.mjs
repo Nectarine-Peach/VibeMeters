@@ -21,13 +21,29 @@ const lifetime = setTimeout(() => process.exit(0), interactiveLogin ? 180000 : 3
 lifetime.unref();
 async function main() {
 try {
-  // Narrow module imports avoid initializing the CLI's model, tool, and UI registries.
-  const root = new URL('.', import.meta.resolve('@google/gemini-cli-core'));
-  const [{ getOauthClient }, { CodeAssistServer }, { AuthType }] = await Promise.all([
-    import(new URL('src/code_assist/oauth2.js', root).href),
-    import(new URL('src/code_assist/server.js', root).href),
-    import(new URL('src/core/contentGenerator.js', root).href),
-  ]);
+  // Literal module paths permit bundling; defer SDK initialization until logs are suppressed.
+  const { getOauthClient, CodeAssistServer, AuthType } = await import('./official-client.mjs');
+  // This diagnostic loads the complete packaged module graph without reading credentials.
+  if (process.argv.includes('--check-runtime')) {
+    const valid = typeof getOauthClient === 'function' &&
+      typeof CodeAssistServer?.prototype?.loadCodeAssist === 'function' &&
+      typeof CodeAssistServer?.prototype?.retrieveUserQuota === 'function' &&
+      AuthType.LOGIN_WITH_GOOGLE === 'oauth-personal';
+    if (!valid) return finish({ status: 'Unavailable' });
+    const calls = [];
+    const server = new CodeAssistServer({ request: async options => {
+      calls.push(options);
+      return { data: options.url.endsWith(':loadCodeAssist')
+        ? { cloudaicompanionProject: 'diagnostic-project' }
+        : { buckets: [{ modelId: 'gemini-diagnostic', remainingFraction: 0.5 }] } };
+    } }, 'diagnostic-project');
+    const account = await server.loadCodeAssist({ metadata: { platform: 'WINDOWS_AMD64' } });
+    const quota = await server.retrieveUserQuota({ project: account.cloudaicompanionProject });
+    return finish({ status: calls.length === 2 && calls[0].url.endsWith(':loadCodeAssist') &&
+      calls[1].url.endsWith(':retrieveUserQuota') &&
+      JSON.parse(calls[1].body).project === 'diagnostic-project' && quota.buckets[0].remainingFraction === 0.5
+      ? 'Ready' : 'Unavailable' });
+  }
   if (typeof CodeAssistServer?.prototype?.retrieveUserQuota !== 'function')
     return finish({ status: 'Unavailable', reason: 'RUNTIME_REQUIRED' });
   const config = {
@@ -62,6 +78,10 @@ try {
   return finish({ status: windows.length ? 'Ready' : 'Unavailable', reason: windows.length ? null : 'NO_QUOTA',
     plan: typeof tier?.name === 'string' ? tier.name : typeof tier?.id === 'string' ? tier.id : null, windows });
 } catch (error) {
+  if (process.argv.includes('--check-runtime'))
+    return finish({ status: 'Unavailable', reason: 'RUNTIME_REQUIRED', diagnostic:
+      error?.name === 'ReferenceError' ? String(error.message).replace(/[^a-zA-Z0-9 _]/g, '').slice(0, 100)
+      : String(error?.code || error?.name || 'RUNTIME_LOAD_FAILED').slice(0, 100) });
   // Never return SDK messages, headers, response bodies, OAuth URLs, or account identifiers.
   const statusCode = Number(error?.response?.status || error?.status || error?.code);
   if (error?.code === 'AUTH_REQUIRED' || statusCode === 401 || statusCode === 403)

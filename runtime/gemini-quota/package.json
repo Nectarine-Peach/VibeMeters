@@ -4,7 +4,12 @@
   "private": true,
   "type": "module",
   "description": "App-private official Gemini CLI quota adapter runtime",
+  "scripts": { "bundle": "node build.mjs" },
+  "bundledNodeVersion": "24.22.0",
   "dependencies": {
     "@google/gemini-cli-core": "0.65.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12"
   }
 }

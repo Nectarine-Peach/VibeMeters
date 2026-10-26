@@ -6,3 +6,5 @@ tests/obj/
 *.user
 runtime/**/node_modules/
 runtime/**/node.exe
+runtime/gemini-quota/bundle/
+runtime/gemini-quota/bundle.meta.json

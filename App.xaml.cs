@@ -105,6 +105,18 @@ public partial class App : Application
         _window!.SetLoginStatus(provider, true, "백그라운드에서 로그인을 준비합니다. 브라우저에서 인증을 완료해 주세요.");
         try
         {
+            if (provider != UsageProviderKind.Gemini && OfficialCliInstaller.Find(provider) is null)
+            {
+                ShowWindow();
+                var installer = new CliInstallWindow(provider, _lifetime.Token) { Owner = _window, Topmost = _window.Topmost };
+                installer.ShowDialog();
+                if (_exiting) return;
+                if (!installer.Installed)
+                {
+                    _window.SetLoginStatus(provider, false, "CLI 설치를 완료하지 않았습니다. 로그인 버튼에서 다시 설치할 수 있습니다.");
+                    return;
+                }
+            }
             var progress = new Progress<string>(message =>
             {
                 if (!_exiting) _window.SetLoginStatus(provider, true, message);

@@ -58,15 +58,22 @@ internal static class OfficialCliProcess
 
     private static string Quote(string value) => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
 
-    private static string? FindExecutable(string name)
+    internal static string? FindExecutable(string name)
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var directories = new List<string>
         {
             Path.Combine(home, ".local", "bin"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "OpenAI", "Codex", "bin"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm")
         };
+        if (name == "codex" && Environment.GetEnvironmentVariable("CODEX_INSTALL_DIR") is { Length: > 0 } customInstall)
+            directories.Insert(0, customInstall);
         directories.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator));
+        // An installer updates User PATH after this process started. Re-read it without
+        // changing the user's environment or requiring a VibeMeters restart.
+        directories.AddRange((Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User) ?? "").Split(Path.PathSeparator));
+        directories.AddRange((Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine) ?? "").Split(Path.PathSeparator));
         foreach (var entry in directories)
         {
             var directory = entry.Trim().Trim('"');

@@ -44,6 +44,7 @@ internal sealed class CliInstallWindow : Window
         _cancel.Click += (_, _) => Close();
         actions.Children.Add(_install); actions.Children.Add(_cancel); panel.Children.Add(actions);
         Content = panel;
+        Localizer.Track(this);
         Closing += OnClosing;
         PreviewKeyDown += (_, args) => { if (args.Key == System.Windows.Input.Key.Escape) { args.Handled = true; Close(); } };
         Closed += (_, _) => _cancellation.Dispose();
@@ -54,7 +55,8 @@ internal sealed class CliInstallWindow : Window
         if (_busy) return;
         _busy = true; _install.IsEnabled = false; _progress.Visibility = Visibility.Visible;
         _status.Text = "설치를 준비합니다…";
-        var progress = new Progress<string>(message => _status.Text = message);
+        Localizer.Apply(this);
+        var progress = new Progress<string>(message => { _status.Text = message; Localizer.Apply(this); });
         var result = await OfficialCliInstaller.InstallAsync(_provider, _cancellation.Token, progress);
         _busy = false;
         if (_closeWhenStopped || _cancellation.IsCancellationRequested) { DialogResult = false; return; }
@@ -62,6 +64,7 @@ internal sealed class CliInstallWindow : Window
         _progress.Visibility = Visibility.Collapsed;
         _status.Text = result.Message;
         _install.Content = "다시 설치"; _install.IsEnabled = true;
+        Localizer.Apply(this);
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)
@@ -70,5 +73,6 @@ internal sealed class CliInstallWindow : Window
         e.Cancel = true; _closeWhenStopped = true;
         _cancellation.Cancel(); _cancel.IsEnabled = false;
         _status.Text = "설치를 중지하고 있습니다…";
+        Localizer.Apply(this);
     }
 }

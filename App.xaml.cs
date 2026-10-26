@@ -50,6 +50,7 @@ public partial class App : Application
         _activateEvent = new EventWaitHandle(false, EventResetMode.AutoReset, _smokeTest ? "Local\\VibeMeters.SmokeTest.Activate" : _demo ? "Local\\VibeMeters.Demo.Activate" : "Local\\VibeMeters.Activate");
         if (!first) { _activateEvent.Set(); Shutdown(); return; }
         _settings = _demo ? new AppSettings() : SettingsStore.Load();
+        Localizer.SetLanguage(_settings.Language);
         if (_smokeTest) _settings.RefreshIntervalSeconds = 0;
         if (_settings.CompactMode) { _settings.WindowWidth = 240; _settings.WindowHeight = 148; _settings.CompactMode = false; }
         _settings.DesignLayoutVersion = Math.Max(2, _settings.DesignLayoutVersion);
@@ -97,6 +98,8 @@ public partial class App : Application
         menu.Items.Add("종료", null, (_, _) => Dispatcher.Invoke(ExitApplication));
         _tray.ContextMenuStrip = menu;
         _tray.MouseClick += (_, e) => { if (e.Button == Forms.MouseButtons.Left) Dispatcher.Invoke(ShowWindow); };
+        foreach (Forms.ToolStripItem item in menu.Items) { item.Tag = item.Text; item.Text = Localizer.T(item.Text); }
+        _tray.Text = Localizer.T("VibeMeters · 사용량 확인");
     }
 
     private async void StartLogin(UsageProviderKind provider)
@@ -201,7 +204,11 @@ public partial class App : Application
 
     private void ApplySettings()
     {
+        Localizer.SetLanguage(_settings.Language);
         ThemeService.Apply(_settings.Theme);
+        if (_tray?.ContextMenuStrip is { } localizedMenu)
+            foreach (Forms.ToolStripItem item in localizedMenu.Items)
+                if (item.Tag is string source) item.Text = Localizer.T(source);
         var visible = Enum.GetValues<UsageProviderKind>().Where(_settings.IsProviderVisible).ToHashSet();
         var enabledNewProvider = visible.Except(_activeProviders).Any();
         _activeProviders = visible;
@@ -294,7 +301,8 @@ public partial class App : Application
         if (_tray != null)
         {
             var tooltip = string.Join(" / ", labels);
-            _tray.Text = string.IsNullOrWhiteSpace(tooltip) ? "VibeMeters · 사용량 확인" : tooltip[..Math.Min(127, tooltip.Length)];
+            tooltip = Localizer.T(string.IsNullOrWhiteSpace(tooltip) ? "VibeMeters · 사용량 확인" : tooltip);
+            _tray.Text = tooltip[..Math.Min(127, tooltip.Length)];
             var oldIcon = _tray.Icon;
             _tray.Icon = TrayIconRenderer.Render(selected, _settings);
             oldIcon?.Dispose();
@@ -311,7 +319,7 @@ public partial class App : Application
             bool known = _alertLevels.TryGetValue(key, out int previous);
             _alertLevels[key] = level;
             if (_settings.NotifyLowQuota && known && level > previous)
-                _tray!.ShowBalloonTip(6000, $"{snapshot.Provider} {quota.Name}", $"남은 사용량 {quota.RemainingPercent:0.#}% · 사용량 창에서 초기화 시간을 확인하세요.", Forms.ToolTipIcon.Warning);
+                _tray!.ShowBalloonTip(6000, Localizer.T($"{snapshot.Provider} {quota.Name}"), Localizer.T($"남은 사용량 {quota.RemainingPercent:0.#}% · 사용량 창에서 초기화 시간을 확인하세요."), Forms.ToolTipIcon.Warning);
         }
     }
 

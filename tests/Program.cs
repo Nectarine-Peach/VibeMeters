@@ -437,6 +437,28 @@ sealed class RegressionSuite
             });
         }
         Test("Settings defaults are resource-friendly", () => { var s = new AppSettings(); Equal(120, s.RefreshIntervalSeconds); True(s.ShowInTaskbar); True(!s.AlwaysOnTop); True(!s.StartWithWindows); });
+        Test("Language defaults and invalid settings retain system selection", () =>
+        {
+            Equal(AppLanguage.System,new AppSettings().Language);
+            Equal(AppLanguage.System,SettingsStore.Normalize(new AppSettings { Language=(AppLanguage)99 }).Language);
+            foreach(var language in Enum.GetValues<AppLanguage>())
+                Equal(language,JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(new AppSettings { Language=language }))!.Language);
+        });
+        Test("English presentation preserves model names and cached cooldown details", () =>
+        {
+            var previous=Localizer.Language;
+            try
+            {
+                Localizer.SetLanguage(AppLanguage.English);
+                Equal("Lookup rate limited · Previous values · Retry after 14:30",Localizer.T("조회 일시 제한 · 이전 값 표시 · 14:30 이후 재시도"));
+                Equal("Build Weekly",Localizer.T("Build 주간"));
+                var snapshot=Parse(UsageProviderKind.Codex,"""{"rate_limit":{"primary_window":{"used_percent":20}}}""");
+                Equal("5시간",snapshot.Windows[0].Name);
+                Localizer.SetLanguage(AppLanguage.Korean);
+                Equal("Build 주간",Localizer.T("Build 주간"));
+            }
+            finally {Localizer.SetLanguage(previous);}
+        });
         foreach (var interval in new[] { 0, 30, 60, 120, 900, 86400 })
             Test($"Settings preserve valid interval {interval}", () => Equal(interval, SettingsStore.Normalize(new AppSettings { RefreshIntervalSeconds = interval }).RefreshIntervalSeconds));
         foreach (var interval in new[] { int.MinValue, -1, 1, 29, 86401, int.MaxValue })

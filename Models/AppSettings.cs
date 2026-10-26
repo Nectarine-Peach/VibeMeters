@@ -2,10 +2,12 @@ namespace VibeMeters.Models;
 
 public enum AppTheme { System, Dark, Light }
 public enum UsageDisplayMode { Remaining, Used }
+public enum AppLanguage { System, Korean, English }
 
 public sealed class AppSettings
 {
     public AppTheme Theme { get; set; } = AppTheme.System;
+    public AppLanguage Language { get; set; } = AppLanguage.System;
     public UsageDisplayMode CodexDisplayMode { get; set; }
     public UsageDisplayMode ClaudeDisplayMode { get; set; }
     public UsageDisplayMode GeminiDisplayMode { get; set; }

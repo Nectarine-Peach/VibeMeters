@@ -9,6 +9,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using VibeMeters.Models;
+using VibeMeters.Services;
 
 namespace VibeMeters;
 
@@ -18,6 +19,7 @@ public partial class MainWindow : Window
     private double _normalWidth = 360, _normalHeight = 360;
     private readonly Dictionary<UsageProviderKind, UsageSnapshot> _snapshots = new();
     private SettingsWindow? _settingsWindow;
+    private string _statusSource = "";
     public bool IsCompactLayout { get; private set; }
     public string CurrentLayout => IsCompactLayout ? "micro" : ActualWidth >= 520 ? "wide" : "normal";
     public AppSettings Settings { get; }
@@ -30,7 +32,11 @@ public partial class MainWindow : Window
     public MainWindow(AppSettings settings)
     {
         Settings = settings;
+        Localizer.SetLanguage(settings.Language);
         InitializeComponent();
+        Localizer.Track(this);
+        Localizer.Changed += RefreshLanguage;
+        Closed += (_,_)=>Localizer.Changed -= RefreshLanguage;
         Width = _normalWidth = Math.Clamp(double.IsFinite(settings.WindowWidth) ? settings.WindowWidth : 360, MinWidth, SystemParameters.VirtualScreenWidth);
         Height = _normalHeight = Math.Clamp(double.IsFinite(settings.WindowHeight) ? settings.WindowHeight : 360, MinHeight, SystemParameters.VirtualScreenHeight);
         Topmost = settings.AlwaysOnTop;
@@ -165,7 +171,7 @@ public partial class MainWindow : Window
         public double DividerBottom=>Size(0,1);
         public double Gap=>Size(3,11);
         public double CardRadius=>Size(5,9);
-        public double LabelWidth=>Size(26,42);
+        public double LabelWidth=>Localizer.IsEnglish?Size(34,52):Size(26,42);
         public double ValueWidth=>Size(32,52);
         public double MeterHeight=>Size(3,6);
         public double MeterGap=>Size(4,9);
@@ -210,7 +216,7 @@ public partial class MainWindow : Window
         if(providers.Length==0)
         {
             var button=new Button { Content="표시할 서비스를 선택해 주세요  ⚙",FontSize=11 };
-            button.Click+=Settings_Click;ProviderGrid.Children.Add(button);return;
+            button.Click+=Settings_Click;ProviderGrid.Children.Add(button);Localizer.Apply(this);return;
         }
         for(var i=0;i<providers.Length;i++)
         {
@@ -222,6 +228,7 @@ public partial class MainWindow : Window
             if(wide) Grid.SetColumn(element,i);else Grid.SetRow(element,i);
             ProviderGrid.Children.Add(element);
         }
+        Localizer.Apply(this);
     }
     private static double RequiredCardHeight(UsageSnapshot snapshot)=>CardHeight(snapshot,new CardMetrics(1));
     private static void ClearGrid(Grid grid) { grid.Children.Clear(); grid.RowDefinitions.Clear(); grid.ColumnDefinitions.Clear(); }
@@ -273,7 +280,7 @@ public partial class MainWindow : Window
         {
             var entry=entries[i];var quota=entry.Quota;
             var row=new Grid { Height=metrics.RowHeight,ToolTip=WrappedTip(quota==null?ProviderTooltip(snapshot)+"\n사용량 정보 없음 · 수치를 확인하면 표시합니다.":WindowTooltip(quota,snapshot)+(quota.Name=="월 추가 사용"?"\n"+snapshot.Message:"")) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(snapshot.Provider==UsageProviderKind.Grok?Math.Max(metrics.Size(44,70),metrics.LabelWidth):metrics.LabelWidth) });row.ColumnDefinitions.Add(new ColumnDefinition());row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(metrics.ValueWidth) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(snapshot.Provider==UsageProviderKind.Grok?Math.Max(Localizer.IsEnglish?metrics.Size(54,82):metrics.Size(44,70),metrics.LabelWidth):metrics.LabelWidth) });row.ColumnDefinitions.Add(new ColumnDefinition());row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(metrics.ValueWidth) });
             row.Children.Add(new TextBlock { Text=ShortQuotaName(entry.Name),Foreground=Palette("SecondaryText"),FontSize=metrics.LabelFont,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis });
             var meter=new ProgressBar { Value=quota==null?0:DisplayPercent(snapshot.Provider,quota),Foreground=quota!=null&&quota.RemainingPercent<=10?Palette("CriticalText"):Accent(snapshot.Provider),Height=metrics.MeterHeight,Margin=new Thickness(0,0,metrics.MeterGap,0),VerticalAlignment=VerticalAlignment.Center };
             Grid.SetColumn(meter,1);row.Children.Add(meter);
@@ -290,7 +297,7 @@ public partial class MainWindow : Window
     }
     private TextBlock QuotaValue(UsageProviderKind provider,UsageWindow quota,double size)
     {
-        var value=new TextBlock { Text=$"{DisplayPercent(provider,quota):0.#}%",FontSize=size,FontWeight=FontWeights.SemiBold,Foreground=quota.RemainingPercent<=10?Palette("CriticalText"):Palette("PrimaryText"),TextAlignment=TextAlignment.Right,VerticalAlignment=VerticalAlignment.Center };
+        var value=new TextBlock { Text=DisplayPercent(provider,quota).ToString("0.#",Localizer.Culture)+"%",FontSize=size,FontWeight=FontWeights.SemiBold,Foreground=quota.RemainingPercent<=10?Palette("CriticalText"):Palette("PrimaryText"),TextAlignment=TextAlignment.Right,VerticalAlignment=VerticalAlignment.Center };
         Typography.SetNumeralAlignment(value,FontNumeralAlignment.Tabular);
         return value;
     }
@@ -317,8 +324,9 @@ public partial class MainWindow : Window
     private static string ShortMessage(string? message)
     {
         if(string.IsNullOrWhiteSpace(message)) return "";
-        var text=string.Join(" ",message.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries));
-        return text.Length>140?text.Substring(0,140)+"…":text;
+        var text=Localizer.T(string.Join(" ",message.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries)));
+        var limit=Localizer.IsEnglish?320:140;
+        return text.Length>limit?text.Substring(0,limit)+"…":text;
     }
     public void RenderSnapshot(UsageSnapshot snapshot)
     {
@@ -337,11 +345,19 @@ public partial class MainWindow : Window
         if(!Dispatcher.CheckAccess()) { Dispatcher.Invoke(()=>SetRefreshing(refreshing)); return; }
         RefreshButton.IsEnabled=!refreshing;
         RefreshButton.ToolTip=refreshing?"사용량 확인 중…":"지금 새로고침 (F5)";
+        Localizer.Apply(this);
     }
     public void UpdateStatus(string text)
     {
         if(!Dispatcher.CheckAccess()) { Dispatcher.Invoke(()=>UpdateStatus(text)); return; }
+        _statusSource=text;
         TitleText.ToolTip=WrappedTip(ShortMessage(text));
+        Localizer.Apply(this);
+    }
+    private void RefreshLanguage()
+    {
+        RenderLayout();
+        if (_statusSource.Length>0) UpdateStatus(_statusSource);
     }
     private static Brush Palette(string key) => (Brush)Application.Current.FindResource(key);
     private static string StatusLabel(UsageStatus status)=>status switch { UsageStatus.Ready=>"연결됨",UsageStatus.NotConnected=>"연결 필요",UsageStatus.AuthenticationRequired=>"로그인 필요",UsageStatus.RateLimited=>"잠시 대기",_=>"확인 불가" };
@@ -354,7 +370,7 @@ public partial class MainWindow : Window
     private static string WindowTooltip(UsageWindow quota,UsageSnapshot snapshot)=>$"{snapshot.Provider} · {quota.Name}\n남음 {quota.RemainingPercent:0.#}% · 사용 {quota.UsedPercent:0.#}%\n{ResetShort(quota.ResetsAt)} · {quota.ResetsAt?.ToLocalTime().ToString("M/d HH:mm",CultureInfo.InvariantCulture)??"초기화 정보 없음"}\n{ProviderStatus(snapshot)}";
     protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
     { base.OnPropertyChanged(e); if(_initialized&&e.Property==TopmostProperty) { Settings.AlwaysOnTop=Topmost; UpdatePin(); } }
-    private void UpdatePin() { PinButton.Foreground=Palette(Topmost?"CodexAccent":"SecondaryText"); PinButton.ToolTip=Topmost?"항상 위: 켜짐":"항상 위: 꺼짐"; }
+    private void UpdatePin() { PinButton.Foreground=Palette(Topmost?"CodexAccent":"SecondaryText"); PinButton.ToolTip=Topmost?"항상 위: 켜짐":"항상 위: 꺼짐"; Localizer.Apply(PinButton); }
     private void Header_MouseLeftButtonDown(object sender,MouseButtonEventArgs e)
     {
         if(e.OriginalSource is DependencyObject source)

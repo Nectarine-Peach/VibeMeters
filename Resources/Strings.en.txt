@@ -1,0 +1,217 @@
+# Korean presentation source | English display. Protocol/model names are not translated.
+로그인을 진행하려면 공식 CLI가 필요합니다. 기존 인증 파일로 사용량을 조회할 때는 설치가 필요하지 않습니다.\n\n선택하면 공식 설치 프로그램을 내려받아 현재 사용자 계정에 설치한 뒤 브라우저 로그인을 시작합니다. 인터넷 연결이 필요하며 관리자 권한을 요청하지 않습니다.|The official CLI is needed to sign in. Existing credentials can be used to check quotas without installing it.\n\nIf you choose to continue, the official installer downloads and installs the CLI for your user account, then starts browser sign-in. Internet access is required. Administrator elevation is not requested.
+공식 설치 서버의 인증서를 확인하지 못했습니다. 회사 CA·프록시 설정을 확인하세요. TLS 검증은 해제하지 않습니다.|The official installation server's certificate could not be verified. Check your organization CA and proxy settings. TLS verification remains enabled.
+현재 사용자 설치가 Windows 또는 회사 정책에 의해 차단됐습니다. 관리자에게 공식 CLI 설치를 요청하세요.|Windows or your organization policy blocked the user installation. Ask your administrator to install the official CLI.
+설치에 실패했습니다. 인터넷 연결·프록시·회사 설치 정책을 확인하고 다시 시도해 주세요. 필요하면 표시된 공식 설치 주소를 사용하세요.|Installation failed. Check your internet connection, proxy and organization policy, then retry. You can also use the official installation URL shown above.
+설치 대기 시간(10분)이 지났습니다. 네트워크와 설치 정책을 확인한 뒤 다시 시도해 주세요.|Installation timed out after 10 minutes. Check your network and installation policy, then retry.
+설치가 종료됐지만 CLI를 찾지 못했습니다. 회사 설치 정책과 사용자 PATH를 확인한 뒤 다시 시도해 주세요.|The installer finished, but the CLI was not found. Check your organization policy and user PATH, then retry.
+설치를 시작하지 못했습니다. Windows PowerShell과 회사 설치 정책을 확인해 주세요.|Could not start installation. Check Windows PowerShell and your organization installation policy.
+공식 설치 파일을 내려받고 현재 사용자 계정에 설치합니다. 잠시 기다려 주세요.|Downloading the official installer and installing for your user account. Please wait.
+공식 CLI를 설치하고 있습니다. 완료 후 브라우저 로그인으로 이어집니다.|Installing the official CLI. Browser sign-in will follow when installation completes.
+설치를 취소했습니다. 일부 설치 파일이 남을 수 있습니다.|Installation was canceled. Some installation files may remain.
+설치를 시작하지 못했습니다. 다시 시도해 주세요.|Could not start installation. Please retry.
+설치하지 않고 취소할 수 있습니다.|You can cancel without installing.
+이 서비스는 CLI 설치 기능을 사용하지 않습니다.|This service does not use CLI installation.
+이미 설치된 CLI를 사용합니다.|Using the CLI that is already installed.
+CLI 설치를 확인했습니다. 브라우저 로그인을 준비합니다.|CLI installation confirmed. Preparing browser sign-in.
+CLI 설치를 완료하지 않았습니다. 로그인 버튼에서 다시 설치할 수 있습니다.|CLI installation was not completed. Use the sign-in button to try again.
+설치를 준비합니다…|Preparing installation…
+설치를 중지하고 있습니다…|Stopping installation…
+설치 출처: |Installer source:\s
+설치 후 로그인|Install and sign in
+다시 설치|Retry installation
+로그인하려면 |To sign in,\s
+가 필요합니다| is required
+ 설치| setup
+개인 계정은 Antigravity CLI 설치 및 로그인이 필요합니다. 설정 안내를 확인해 주세요.|Personal accounts require Antigravity CLI installation and sign-in. See the account setup guidance.
+Antigravity 창에서 로그인 또는 계정 전환을 완료한 뒤 새로고침해 주세요.|Complete sign-in or account switching in Antigravity, then refresh.
+Antigravity를 열 수 없습니다. 공식 CLI에서 로그인한 뒤 새로고침해 주세요.|Could not open Antigravity. Sign in with the official CLI, then refresh.
+Gemini CLI 개인 계정 지원이 종료되었습니다. Antigravity CLI를 설치하고 로그인해 주세요.|This Gemini CLI no longer supports personal accounts. Install Antigravity CLI and sign in.
+Gemini CLI 개인 계정 지원이 종료되었습니다. Antigravity에서 사용량을 확인해 주세요.|This Gemini CLI no longer supports personal accounts. Check your usage in Antigravity.
+Antigravity CLI 1.4.7 이상이 필요합니다. 공식 CLI를 업데이트해 주세요.|Antigravity CLI 1.4.7 or newer is required. Update the official CLI.
+Antigravity 사용량 조회 시간이 초과되었습니다. 잠시 후 새로고침해 주세요.|Antigravity quota lookup timed out. Refresh again shortly.
+Antigravity 사용량을 가져올 수 없습니다. 공식 CLI 상태를 확인해 주세요.|Could not retrieve Antigravity quotas. Check the official CLI.
+Antigravity 사용량을 조회할 수 없습니다. 공식 CLI의 /usage를 확인해 주세요.|Could not check Antigravity quotas. Check /usage in the official CLI.
+Antigravity가 올바른 사용량 명령 응답을 제공하지 않았습니다.|Antigravity did not return a valid usage-command response.
+Antigravity 계정에서 Gemini 한도를 제공하지 않습니다.|This Antigravity account does not provide Gemini quotas.
+Antigravity 조회 요청이 제한되었습니다. 잠시 후 자동으로 재시도합니다.|Antigravity quota lookup is rate limited. The app will retry later.
+Antigravity 로그인이 필요합니다. 공식 CLI에서 로그인한 뒤 새로고침해 주세요.|Sign in to Antigravity using the official CLI, then refresh.
+Antigravity의 Gemini 공유 한도입니다. Gemini 웹·앱 사용량과는 별개입니다.|Shared Gemini quotas from Antigravity, separate from Gemini web and app usage.
+공식 Grok Build CLI를 설치한 뒤 로그인해 주세요.|Install the official Grok Build CLI and sign in.
+공식 Grok Build CLI에서 로그인한 뒤 사용량을 확인해 주세요.|Sign in with the official Grok Build CLI to check your quotas.
+Grok Build 조회를 시작할 수 없습니다.|Could not start the Grok Build quota lookup.
+Grok Build가 지원되는 조회 프로토콜을 제공하지 않습니다.|Grok Build did not provide a supported quota protocol.
+Grok Build 사용량 응답 형식을 확인할 수 없습니다.|The Grok Build quota response format could not be recognized.
+Grok Build 사용량 조회 시간이 초과되었습니다. 잠시 후 새로고침해 주세요.|Grok Build quota lookup timed out. Refresh again shortly.
+Grok Build 사용량을 가져올 수 없습니다. 공식 CLI 상태를 확인해 주세요.|Could not retrieve Grok Build quotas. Check the official CLI.
+Grok Build 사용량을 조회할 수 없습니다. 공식 CLI 상태를 확인해 주세요.|Could not check Grok Build quotas. Check the official CLI.
+Grok Build에서 지원되는 구독 사용 비율을 제공하지 않습니다.|Grok Build did not provide a supported subscription usage percentage.
+Grok Build 조회 요청이 제한되었습니다. 잠시 후 자동으로 다시 확인합니다.|Grok Build quota lookup is rate limited. The app will retry later.
+Grok Build 로그인이 필요합니다. 설정의 Grok 로그인 또는 공식 grok login --oauth를 완료해 주세요.|Sign in to Grok Build using Settings or the official grok login --oauth command.
+Grok Build 계정의 구독 권한과 CLI 사용 권한을 확인해 주세요.|Check the subscription and CLI access permissions for your Grok Build account.
+공식 Grok Build가 제공한 X 구독 공유 한도입니다.|Shared X subscription quotas provided by the official Grok Build CLI.
+공식 Grok Build가 제공한 Build 전용 한도입니다. Grok 웹 전체 한도와 구분합니다.|Build-only quotas from the official Grok Build CLI, separate from overall Grok web quotas.
+ Grok Bot 한도·API 비용·추가 사용 금액은 포함하지 않습니다.| Grok Bot quotas, API costs and additional charges are excluded.
+ 초기화 시각이 제공되지 않았습니다.| No reset time was provided.
+X 구독 공유 · Grok Build|Shared X subscription · Grok Build
+로그인 정보가 변경되었습니다. 기존 요청 제한 대기 후 다시 확인합니다.|Sign-in changed. Quotas will be checked after the existing rate-limit cooldown.
+로그인이 변경되었습니다. 기존 요청 제한 대기 후 다시 확인합니다.|Sign-in changed. Quotas will be checked after the existing rate-limit cooldown.
+조회 중 로그인 정보가 변경되었습니다. 새로고침해 주세요.|Sign-in changed during the lookup. Please refresh.
+이미 로그인 중입니다. 브라우저에서 로그인을 완료해 주세요.|Sign-in is already in progress. Complete it in your browser.
+브라우저 로그인을 백그라운드에서 시작합니다.|Starting browser sign-in in the background.
+브라우저에서 로그인을 완료해 주세요. 터미널 창은 열리지 않습니다.|Complete sign-in in your browser. No terminal window will open.
+로그인했습니다. 사용량을 다시 확인합니다.|Signed in. Refreshing your quotas.
+로그인을 취소했습니다.|Sign-in was canceled.
+로그인이 취소되었습니다.|Sign-in was canceled.
+로그인 대기 시간이 지났습니다. 다시 로그인해 주세요.|Sign-in timed out. Please try again.
+로그인을 시작할 수 없습니다. CLI 설치 상태를 확인해 주세요.|Could not start sign-in. Check the CLI installation.
+로그인을 시작할 수 없습니다.|Could not start sign-in.
+로그인이 완료되지 않았습니다. 브라우저에서 개인 또는 회사 계정·워크스페이스를 선택하고 다시 시도해 주세요.|Sign-in was not completed. Select your personal or work account and workspace in the browser, then retry.
+회사 네트워크의 인증서 신뢰 설정을 확인해 주세요. TLS 검증을 해제하지 말고 회사 CA 설정을 사용하세요.|Check certificate trust on your work network. Use your organization CA settings instead of disabling TLS verification.
+로그인 서버에 연결하지 못했습니다. 회사 프록시·방화벽 및 네트워크 설정을 확인해 주세요.|Could not connect to the sign-in server. Check your organization proxy, firewall and network settings.
+로그인 콜백 포트를 사용할 수 없습니다. 진행 중인 다른 CLI 로그인을 마친 뒤 다시 시도해 주세요. Codex는 CLI의 codex login --device-auth도 사용할 수 있습니다.|The sign-in callback port is unavailable. Finish other CLI sign-ins and retry. Codex also supports codex login --device-auth.
+회사 SSO 또는 조직의 CLI 사용 권한을 확인해 주세요. Claude 회사 계정은 CLI에서 claude auth login --sso를 사용할 수 있습니다.|Check your organization SSO and CLI permissions. Claude work accounts can use claude auth login --sso.
+브라우저를 열 수 없습니다. CLI에서 codex login 또는 codex login --device-auth로 로그인해 주세요.|Could not open the browser. Run codex login or codex login --device-auth in the CLI.
+브라우저를 열 수 없습니다. CLI에서 claude auth login으로 로그인해 주세요. 회사 SSO는 --sso 옵션을 사용할 수 있습니다.|Could not open the browser. Run claude auth login in the CLI; work SSO can use --sso.
+브라우저를 열 수 없습니다. 공식 grok login --oauth 또는 grok login --device-auth를 직접 실행해 주세요.|Could not open the browser. Run grok login --oauth or grok login --device-auth directly.
+Codex CLI를 설치한 뒤 다시 로그인해 주세요.|Install Codex CLI and try signing in again.
+Claude Code를 설치한 뒤 다시 로그인해 주세요.|Install Claude Code and try signing in again.
+백그라운드에서 로그인을 준비합니다. 브라우저에서 인증을 완료해 주세요.|Preparing sign-in in the background. Complete authentication in your browser.
+Gemini 로그인 런타임을 찾을 수 없습니다. 앱을 다시 설치해 주세요.|Gemini sign-in runtime was not found. Reinstall the app.
+Gemini 로그인을 시작할 수 없습니다. 잠시 후 다시 시도해 주세요.|Could not start Gemini sign-in. Try again shortly.
+Gemini 로그인을 시작할 수 없습니다.|Could not start Gemini sign-in.
+브라우저에서 Gemini 로그인을 완료하면 사용량이 자동으로 갱신됩니다.|Complete Gemini sign-in in your browser. Quotas will refresh automatically.
+Gemini 조회 런타임을 찾을 수 없습니다. 앱을 다시 설치해 주세요.|Gemini quota runtime was not found. Reinstall the app.
+Gemini 조회 런타임이 누락되었습니다. 앱을 다시 설치해 주세요.|Gemini quota runtime is missing. Reinstall the app.
+Gemini 조회를 시작할 수 없습니다.|Could not start Gemini quota lookup.
+Gemini 조회가 완료되지 않았습니다. 잠시 후 다시 확인합니다.|Gemini quota lookup did not finish. The app will retry later.
+Gemini 연결 시간이 초과되었습니다. 잠시 후 다시 확인합니다.|Gemini connection timed out. The app will retry later.
+Gemini 사용량을 가져올 수 없습니다. 잠시 후 다시 확인합니다.|Could not retrieve Gemini quotas. The app will retry later.
+Gemini 로그인이 필요합니다. 로그인 후 자동으로 갱신됩니다.|Sign in to Gemini. Quotas will refresh automatically afterward.
+Gemini 요청 제한 · 잠시 후 자동으로 다시 확인합니다.|Gemini lookup is rate limited. The app will retry later.
+Gemini 계정에 Google Cloud 프로젝트 설정이 필요합니다.|This Gemini account requires a Google Cloud project.
+Gemini 계정에서 남은 한도 정보를 제공하지 않습니다.|This Gemini account does not provide remaining quota information.
+Gemini 서버에 연결할 수 없습니다. 잠시 후 다시 확인합니다.|Could not connect to Gemini. The app will retry later.
+계정이 변경되었습니다. 기존 요청 제한 대기 후 사용량을 확인합니다.|Account changed. Quotas will be checked after the existing rate-limit cooldown.
+로그인 정보를 읽을 수 없습니다. 해당 CLI에서 다시 로그인해 주세요.|Could not read sign-in information. Sign in again with the CLI.
+Codex CLI에서 ChatGPT 계정으로 로그인해 주세요.|Sign in with your ChatGPT account in Codex CLI.
+Claude Code에서 구독 계정으로 로그인해 주세요.|Sign in with your subscription account in Claude Code.
+인증 갱신이 필요합니다. 설정에서 다시 로그인해 주세요.|Authentication needs renewal. Sign in again in Settings.
+인증이 만료되었습니다. 설정에서 다시 로그인해 주세요.|Authentication expired. Sign in again in Settings.
+조회 권한이 없습니다. 회사 계정의 서비스 권한·SSO 및 네트워크 정책을 확인해 주세요.|Quota access was denied. Check your work account permissions, SSO and network policy.
+회사 프록시 인증이 필요합니다. Windows 프록시 및 네트워크 로그인을 확인해 주세요.|Your organization proxy requires authentication. Check Windows proxy and network sign-in.
+서버에 연결할 수 없습니다. 잠시 후 다시 확인합니다.|Could not connect to the server. The app will retry later.
+사용량 정보를 확인할 수 없습니다. 잠시 후 다시 확인합니다.|Quota information is unavailable. The app will retry later.
+연결 시간이 초과되었습니다. 잠시 후 다시 확인합니다.|Connection timed out. The app will retry later.
+사용량을 가져올 수 없습니다. 네트워크 또는 응답 형식을 확인해 주세요.|Could not retrieve quotas. Check the network or response format.
+로그인 정보 형식이 올바르지 않습니다. CLI에서 다시 로그인해 주세요.|Sign-in information has an invalid format. Sign in again with the CLI.
+공식 Gemini CLI의 /stats에서 사용량을 확인하세요.|Check usage with /stats in the official Gemini CLI.
+서버가 올바른 사용량 정보를 제공하지 않았습니다.|The server did not return valid quota information.
+계정에 적용된 개인 사용 한도입니다. 초기화 시점은 서버가 제공한 값입니다.|Your individual usage limit. Reset times are supplied by the server.
+연결됨 · 크레딧 사용 가능. 계정에서 사용량 비율을 제공하지 않습니다.|Connected · Credits available. This account does not provide a usage percentage.
+연결됨 · 계정이 무제한 크레딧 사용을 보고했습니다.|Connected · The account reports unlimited credits.
+연결됨 · 계정의 추가 사용 한도에 도달했습니다.|Connected · The account's additional usage limit has been reached.
+연결됨 · 계정에서 사용량 비율을 제공하지 않습니다. 크레딧 설정을 확인해 주세요.|Connected · No usage percentage was provided. Check your credit settings.
+월 추가 사용은 계정에서 제공한 추가 사용 예산 비율이며, 5시간·주간 구독 한도와 다릅니다.|Monthly extra usage is the supplied additional budget percentage, separate from five-hour and weekly subscription quotas.
+연결됨 · 추가 사용이 활성화되어 있으나 계정에서 사용량 비율을 제공하지 않습니다.|Connected · Extra usage is enabled, but no usage percentage was provided.
+계정에서 사용량 창을 제공하지 않습니다. 구독 상태를 확인해 주세요.|This account does not provide quota windows. Check your subscription.
+이전 조회값 표시 중 · |Showing previous values ·\s
+설정을 저장하지 못했습니다. 폴더 권한을 확인해 주세요.|Could not save settings. Check folder permissions.
+창 상태를 저장하지 못했습니다. 폴더 권한을 확인해 주세요.|Could not save the window state. Check folder permissions.
+조회 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.|Quota lookup failed. Please try again shortly.
+데모에서는 로그인을 실행하지 않습니다.|Sign-in is unavailable in demo mode.
+데모 모드 · 실제 계정 데이터가 아닙니다|Demo mode · Not live account data
+계정을 연결하면 사용량이 표시됩니다.|Connect an account to display quotas.
+사용량 정보 없음 · 수치를 확인하면 표시합니다.|No quota data · Values will appear when available.
+표시할 서비스를 선택해 주세요  ⚙|Choose services to display  ⚙
+설정 및 계정|Settings and accounts
+설정 / 계정|Settings / accounts
+VibeMeters 설정|VibeMeters settings
+표시할 서비스와 사용량 기준을 설정하세요.|Choose services and how quotas are displayed.
+표시할 서비스 · 수치 기준|Services · Display basis
+동작 및 새로고침|Behavior and refresh
+자동 저장 · Claude·Grok 정상 조회는 최소 2분 간격|Auto-saved · Claude/Grok poll at least 2 min apart
+로그인하면 자동으로 다시 확인합니다.|Quotas refresh after sign-in.
+로그인 후 자동으로 다시 확인합니다.|Quotas refresh after sign-in.
+메인 창에 이 서비스를 표시합니다.|Show this service in the main window.
+최소 1개의 서비스를 표시해야 합니다.|At least one service must remain visible.
+남은 한도 20%·5% 알림|Notify at 20% / 5% remaining
+Windows 시작 시 실행|Start with Windows
+작업표시줄에 표시|Show in taskbar
+작업표시줄로 최소화|Minimize to taskbar
+항상 위에 표시|Always on top
+항상 위: 켜짐|Always on top: on
+항상 위: 꺼짐|Always on top: off
+트레이로 숨기기|Hide to tray
+사용량 창 열기|Open quota window
+지금 새로고침 (F5)|Refresh now (F5)
+지금 새로고침|Refresh now
+사용량 확인 중…|Checking quotas…
+VibeMeters · 사용량 확인|VibeMeters · Quota monitor
+수동 새로고침 · F5|Manual refresh · F5
+자동 새로고침 · |Auto-refresh · every\s
+초 간격| seconds
+분 뒤 재시도| min until retry
+초 뒤 재시도| sec until retry
+ · 이전 확인값 표시| · Previous values
+ · 이전 값 표시| · Previous values
+ · 자동 재시도 대기| · Awaiting retry
+설정 닫기|Close settings
+화면 테마|Theme
+새로고침 간격|Refresh interval
+자동 새로고침|Auto-refresh
+계정 연결|Accounts
+남은 양|Remaining
+사용한 양|Used
+시스템|System
+다크|Dark
+라이트|Light
+수동|Manual
+설정|Settings
+최소화|Minimize
+취소|Cancel
+종료|Exit
+언어|Language
+한국어|한국어
+Codex 수치 표시 기준|Codex display basis
+Claude 수치 표시 기준|Claude display basis
+Gemini 수치 표시 기준|Gemini display basis
+Grok 수치 표시 기준|Grok display basis
+Codex 표시|Show Codex
+Claude 표시|Show Claude
+Gemini 표시|Show Gemini
+Grok 표시|Show Grok
+Codex 로그인|Sign in to Codex
+Claude 로그인|Sign in to Claude
+Gemini 로그인|Sign in to Gemini
+Grok 로그인|Sign in to Grok
+로그인 진행 중…|sign-in in progress…
+ 로그인| sign-in
+연결됨 · 비율 미제공|Connected · No percentage
+개인 한도|Individual limit
+월 추가 사용|Monthly extra usage
+월추가|Extra
+개인|Limit
+5시간|5h
+주간|Weekly
+월간|Monthly
+일간|Daily
+공유 |Shared\s
+남음|Left
+사용|Used
+사용량|Usage
+구독|Subscription
+세션|Session
+한도|Quota
+연결됨|Connected
+연결 필요|Connect account
+로그인 필요|Sign-in required
+잠시 대기|Please wait
+확인 불가|Unavailable
+확인 필요|Needs attention
+요청 제한|Rate limited
+조회 일시 제한|Lookup rate limited
+초기화 정보 없음|No reset information
+초기화 대기|Reset pending
+데모 데이터|Demo data
+데모|Demo

@@ -22,6 +22,7 @@ public static class SettingsStore
     public static AppSettings Normalize(AppSettings settings)
     {
         if (!Enum.IsDefined(settings.Theme)) settings.Theme = AppTheme.System;
+        if (!Enum.IsDefined(settings.Language)) settings.Language = AppLanguage.System;
         if (!Enum.IsDefined(settings.CodexDisplayMode)) settings.CodexDisplayMode = UsageDisplayMode.Remaining;
         if (!Enum.IsDefined(settings.ClaudeDisplayMode)) settings.ClaudeDisplayMode = UsageDisplayMode.Remaining;
         if (!Enum.IsDefined(settings.GeminiDisplayMode)) settings.GeminiDisplayMode = UsageDisplayMode.Remaining;

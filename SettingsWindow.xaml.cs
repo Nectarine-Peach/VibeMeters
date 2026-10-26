@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using VibeMeters.Models;
+using VibeMeters.Services;
 
 namespace VibeMeters;
 
@@ -18,6 +19,9 @@ public partial class SettingsWindow : Window
     {
         _settings=settings;
         InitializeComponent();
+        Localizer.Track(this);
+        foreach(ComboBoxItem item in LanguageCombo.Items)
+            if(item.Tag?.ToString()==settings.Language.ToString()) { LanguageCombo.SelectedItem=item; break; }
         CodexCheck.IsChecked=settings.ShowCodex;
         ClaudeCheck.IsChecked=settings.ShowClaude;
         GeminiCheck.IsChecked=settings.ShowGemini;
@@ -60,6 +64,7 @@ public partial class SettingsWindow : Window
             check.IsEnabled=count>1||check.IsChecked!=true;
             check.ToolTip=check.IsEnabled?"메인 창에 이 서비스를 표시합니다.":"최소 1개의 서비스를 표시해야 합니다.";
         }
+        Localizer.Apply(this);
     }
     private void Interval_SelectionChanged(object sender,SelectionChangedEventArgs e)
     {
@@ -73,6 +78,16 @@ public partial class SettingsWindow : Window
         if(Enum.TryParse<AppTheme>(item.Tag?.ToString(),out var theme))
         {
             _settings.Theme=theme;
+            SettingsChanged?.Invoke();
+        }
+    }
+    private void Language_SelectionChanged(object sender,SelectionChangedEventArgs e)
+    {
+        if(!_initialized||LanguageCombo.SelectedItem is not ComboBoxItem item) return;
+        if(Enum.TryParse<AppLanguage>(item.Tag?.ToString(),out var language))
+        {
+            _settings.Language=language;
+            Localizer.SetLanguage(language);
             SettingsChanged?.Invoke();
         }
     }
@@ -96,6 +111,7 @@ public partial class SettingsWindow : Window
         var button=kind switch { UsageProviderKind.Codex=>CodexLoginButton,UsageProviderKind.Claude=>ClaudeLoginButton,UsageProviderKind.Grok=>GrokLoginButton,_=>GeminiLoginButton };
         button.IsEnabled=!busy;
         LoginStatusText.Text=message; LoginStatusText.ToolTip=message;
+        Localizer.Apply(this);
     }
     private void CodexLogin_Click(object sender,RoutedEventArgs e)=>LoginRequested?.Invoke(UsageProviderKind.Codex);
     private void ClaudeLogin_Click(object sender,RoutedEventArgs e)=>LoginRequested?.Invoke(UsageProviderKind.Claude);

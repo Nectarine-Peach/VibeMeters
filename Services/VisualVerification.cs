@@ -53,6 +53,8 @@ internal sealed class VisualVerification
         _report.Add("CAPTURE: RenderTargetBitmap of the shown window's client root at its current monitor DPI; excludes native desktop/compositor and tray pixels.");
         try
         {
+            _settings.Language=AppLanguage.Korean;
+            Localizer.SetLanguage(AppLanguage.Korean);
             _settings.RefreshIntervalSeconds=0;
             _settings.ShowCodex=true;_settings.ShowClaude=true;_settings.ShowGemini=false;
             _settings.CodexDisplayMode=UsageDisplayMode.Remaining;

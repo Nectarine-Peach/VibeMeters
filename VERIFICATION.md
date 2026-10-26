@@ -1,4 +1,69 @@
-# Final verification / 최종 검증 — v1.4.4 · 2026-10-26
+# v1.4.5 릴리스 검증 범위 — 2026-10-26
+
+이번 릴리스의 배포 검사는 **최종 커밋의 Release win-x64 self-contained 컴파일·패키징**, **사용자 홈·네트워크·브라우저를 차단한 Gemini 번들 내장 진단**, **ZIP/버전/원격 태그·asset 해시 확인**으로 제한합니다. Grok ACP에 전달하는 클라이언트 버전은 어셈블리 버전을 사용합니다. 배포 Node는 기존 24.22.0을 유지합니다.
+
+사용자 요청에 따라 이번 릴리스 작업에서 **회귀 테스트·UI 스모크·실제 CLI 설치·실계정 조회·로그인·로컬 앱 교체를 실행하지 않습니다.** 아래의 194/284 및 162/5/2 성공과 실계정/UI 관측은 각각의 개발 시점 기록이며, 이번 릴리스에서 다시 검증했다고 주장하지 않습니다. 특히 아래 PID·설정·계정 비율은 현재 상태를 뜻하지 않습니다.
+
+최종 커밋 후 배포 명령:
+
+```powershell
+.\scripts\publish.ps1 -Node .\dist\comparison\original-node\node.exe -OutputDirectory .\dist\releases\v1.4.5\VibeMeters-win-x64
+git diff --check
+```
+
+회귀 스위트와 `account-status.test.mjs`는 실행하지 않으며, 패키징에 포함된 `verify-runtime.mjs`만 계정 없이 실행합니다. 기존 Release/tag를 덮어쓰지 않고 새 v1.4.5 ZIP과 SHA-256을 게시합니다.
+
+---
+# 개발 시점 검증 기록 — 2026-10-26 Grok Build 구독 사용량
+
+공식 Grok Build CLI 연동 구현·검증·로컬 적용을 완료했습니다. 일반 조회는 `grok agent --no-leader stdio`에서 ACP `initialize`와 `_x.ai/billing` 두 요청만 사용합니다. 모델·세션·authenticate·브라우저 로그인을 자동 실행하지 않으며 앱은 인증 파일 내용을 읽지 않습니다. 기존 CLI 1.0.40을 재사용했고 확장·Native Messaging·새 의존성을 설치하지 않았습니다.
+
+- **실계정 성공:** 사용자 공식 CLI 로그인 후 새 auth 파일 생성의 메타데이터를 확인하고 2026-10-26 **14:44:27 KST**에 실제 provider를 한 번 조회했습니다. `Ready`, `isUnifiedBillingUser=true`, **공유 주간 사용 1% / 남음 99%**, 초기화 **2026-10-30 10:16:45 KST**를 확인했습니다. 초기 인증 필요 관측 후 동일 만료 인증으로 진단을 반복하지 않았고, 새 로그인 뒤 재검증했습니다. 원래 공식 웹 화면의 SuperGrok 주간 1%·초기화 시점과 일치합니다. 웹 Grok Bot 7%는 CLI 응답에 없어 표시하지 않습니다.
+- **실제 앱 표시:** Windows Computer Use 접근성 텍스트에서 `Grok / 남음 / 공유 주간 / 진행률 99 / 99%`를 확인했습니다. 같은 창의 `Gemini · Antigravity` 5시간·주간·Argon 각 100%도 유지됩니다. 실제 UI 증거는 `verification/ui-accessibility.txt`, 비밀값 없는 provider 결과는 `verification/real-account-quota.json`입니다. hover 툴팁과 네이티브 픽셀 캡처는 별도 실행하지 않았습니다. 초기화 값은 실제 응답과 파서 회귀로 확인했습니다.
+- **최종 회귀 194/194:** 비율/기간/공유 대 Build 범위, Cent 객체 기간 fallback(금액 비율 계산 없음), 실제 ACP error.data의 429/401 분류, JSON-RPC ID·출력 제한·대화형 요청 거부, 캐시/계정 변경/429 대기, 공식 auth 경로 override 및 메타데이터 감시를 포함합니다. 별도 정적 보안 재검토의 주요 finding도 수정 후 해소 확인했습니다.
+- **배포·UI 검사:** Release win-x64 self-contained publish 성공. 새 stage의 Gemini 번들 오프라인 **2/2**, 기존 WPF smoke **284/284** 통과했습니다. 4개 서비스의 정상/최소 크기, 설정 저장·복원 및 `Build 주간` 한 행을 확인했습니다. `artifacts/window-four-services-grok-dark.png` 등은 **합성 데이터 렌더**이며 실제 계정 수치 증거와 구분합니다. 이전 확장 검토안의 파일·검증은 최종 코드에 포함하지 않습니다.
+- **로컬 적용:** `D:\Applications\VibeMeters\VibeMeters.exe`, 최종 PID **12200** 한 개. stage와 실행 EXE SHA256은 **ac924f7c1820fffad41708e300a69e7d5dc24e3bd2d62bea347f08b7a8cdcd8e**로 일치합니다. 기존 EXE·설정은 `dist/VibeMeters-before-grok-build-20261026/`에 보관했습니다. 사용자 요청에 따라 `ShowGrok=true`만 추가했고 기존 설정은 보존했습니다. 4카드 최소 높이만 174→209로 자동 조정됐습니다. 실제 UI 확인용 임시 `ShowInTaskbar=true`는 원래 **false**로 복원했고 UI 전후 설정 차이가 없음을 확인했습니다.
+- **제약:** 실제 429·회사 권한 오류를 유발하거나 계정 전환을 반복하지 않았습니다. 해당 경계는 fixture 회귀로 검증했습니다. CLI의 공개 소스상 billing extension 계약을 사용하므로 향후 CLI/서버 변경 시 호환성 확인이 필요합니다. [최종 범위·출처](docs/grok-usage.md).
+
+실행한 주요 명령(작업 디렉터리 `D:\Repository\VibeMeters`):
+
+```powershell
+dotnet run --project tests\VibeMeters.Tests.csproj -c Release -r win-x64 --self-contained true
+dotnet run --project tests\VibeMeters.Tests.csproj -c Release -r win-x64 --self-contained true --no-build -- --grok-live-check
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o dist\VibeMeters-grok-build-win-x64
+& D:\Applications\VibeMeters\runtime\gemini-quota\node.exe runtime\gemini-quota\verify-runtime.mjs dist\VibeMeters-grok-build-win-x64\runtime\gemini-quota
+# 기존 격리 smoke 경로: 메모리 설정·합성 데이터 사용
+dist\VibeMeters-grok-build-win-x64\VibeMeters.exe --smoke-test
+git diff --check
+```
+
+---
+
+# 검증 완료 — 2026-10-26 Gemini 개인 계정 조회 복구
+
+- 원인: 실제 계정의 Gemini CLI `loadCodeAssist`가 `free-tier / UNSUPPORTED_CLIENT`를 반환했습니다. Google의 개인 계정 Gemini CLI 지원 종료에 따라 공식 Antigravity CLI 1.4.7의 `agy -p /usage --output-format json`으로 조회하도록 연결했습니다. 회사 currentTier/paidTier/프로젝트가 유효하면 기존 Code Assist 경로를 유지합니다. 별도 설치·새 로그인·계정/Cloud 프로젝트/과금 변경은 하지 않았습니다. 공식 updater는 이미 최신 1.4.7이라고 응답하여 바이너리도 변경하지 않았습니다.
+- 최종 .NET 회귀: `dotnet run --project tests/VibeMeters.Tests.csproj -c Release -r win-x64 --self-contained true` — **162 passed, 0 failed**. 일반 `dotnet run`은 이 PC에 .NET 8 실행 호스트가 없어 실행되지 않았으며, 기존 캐시의 self-contained 런타임으로 검증했습니다. 파서·공유 한도·타 제품 제외·비율 경계·명령 응답 검증·계정 전환/429·외부 로그인 후 복구를 포함합니다.
+- 공식 Node 24.22.0으로 `node --test runtime/gemini-quota/account-status.test.mjs` — **5 passed**. `build.mjs` 후 `verify-runtime.mjs` — **2 isolated checks passed**, 번들 해시 확인, 사용자 홈·네트워크·브라우저 차단 상태 확인. .NET Release win-x64 self-contained publish 성공. 최종 EXE SHA256: `5a24cf963ddbb9fd08ec3fcc355727faef641e52881da1b5b90a87684552025b`.
+- 실계정: 2026-10-26 13:47 KST 공식 `/usage`는 `SUCCESS`, `num_turns=0`, `total_tokens=0`으로 응답했습니다. Gemini 공유 5시간·주간 및 별도 Gemini 4 Argon 주간이 각각 **잔여 100%**였습니다. 이 조회의 초기화 시점은 각각 10/26 18:47 KST, 11/2 13:47 KST, 11/2 13:47 KST였습니다. 미사용 한도의 reset은 관측 요청마다 이동할 수 있어 고정 시각으로 추정하지 않습니다.
+- 실제 실행 창의 Windows Computer Use 접근성 텍스트에서 **Gemini · Antigravity**, **5시간 100% / 주간 100% / Argon 100%** 및 진행률 값을 확인했습니다. 최종 추가 수정은 인증 오류 후 새로고침 캐시 정책뿐이며, 위 UI 렌더 구현은 동일합니다. 마지막 수정 이후 162개 회귀와 publish를 다시 통과했습니다.
+- 캡처는 `FrameArrived timed out`, 재선택 후 `window capture timed out`으로 실패했습니다. 픽셀·hover 툴팁은 미검증입니다. 초기화 값은 실제 JSON과 파서 회귀로 확인했으며 화면 툴팁을 직접 확인했다고 주장하지 않습니다. 트레이 전용 창을 접근성 도구에 노출하기 위해 `ShowInTaskbar`를 잠시 켜고 검증 후 원래 `false`로 복원했습니다. 다른 설정은 보존했고 3개 한도를 표시하기 위한 최소 높이만 170→174로 자동 조정되었습니다.
+- 로컬 적용: `D:\Applications\VibeMeters\VibeMeters.exe`와 번들을 교체하고 당시 PID **10532** 한 개를 확인했습니다. 기존 EXE·bundle·설정은 `dist/VibeMeters-before-gemini-antigravity-20261026/`에 보관했습니다. 비밀값 없는 실제 응답/접근성 증거는 `dist/VibeMeters-gemini-antigravity-win-x64/verification/real-account-quota.json`, `ui-accessibility.txt`에 있습니다. 실제 로그인·계정 전환·서버 429 유발은 실행하지 않았고 해당 경계는 회귀 테스트로 검증했습니다.
+
+실행한 빌드·검사 명령(작업 디렉터리 `D:\Repository\VibeMeters`):
+
+```powershell
+dotnet run --project tests\VibeMeters.Tests.csproj -c Release -r win-x64 --self-contained true
+& D:\Applications\VibeMeters\runtime\gemini-quota\node.exe --test runtime\gemini-quota\account-status.test.mjs
+& D:\Applications\VibeMeters\runtime\gemini-quota\node.exe runtime\gemini-quota\build.mjs dist\VibeMeters-gemini-antigravity-win-x64\runtime\gemini-quota dist\VibeMeters-gemini-antigravity-win-x64.gemini-bundle-meta.json
+& D:\Applications\VibeMeters\runtime\gemini-quota\node.exe runtime\gemini-quota\verify-runtime.mjs dist\VibeMeters-gemini-antigravity-win-x64\runtime\gemini-quota
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o dist\VibeMeters-gemini-antigravity-win-x64
+git diff --check
+```
+
+---
+아래는 각 변경 시점의 역사 기록입니다. 최신 Gemini 검증 결과는 위 절을 따릅니다.
+
+# 이전 검증 — v1.4.4 · 2026-10-26
 
 CLI 설치 기능을 추가하기 전의 변경 상태에서 회귀 **139개**, 실행 창·배치·복원 검사 **239개**를 통과했습니다. 새 창 검사는 합성 Codex Business 개인 한도·Claude 월 추가 사용·비율 미제공 상태의 실제 WPF 렌더링을 포함합니다. [당시 실행 창 검사 원문](docs/verification/v1.4.4-window-checks.txt).
 
@@ -166,8 +231,3 @@ Windows x64, .NET SDK 8.0.426, 자체 포함 Release 배포본을 검증했습�
 - EXE SHA-256: `DD402DEBD0CB24A15BE69D802B523C9C7386EA4750F4325D993518139EEAA4C0`
 
 사용자 계정의 토큰을 기록·복사·수정하지 않았습니다. 실제 Windows 재부팅 자동시작, 절전·잠금 전환, 모든 다중 모니터 및 DPI 조합은 이번 세션에서 직접 재현하지 않았습니다. 관련 설정·이벤트 처리 코드는 포함되어 있습니다.
-
-
-
-
-

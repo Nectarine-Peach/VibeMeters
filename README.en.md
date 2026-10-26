@@ -6,11 +6,13 @@ Keep your **Codex, Claude, Gemini, and Grok quotas** visible in a small Windows 
 
 **Windows 10/11 x64 · Always on top · Dark / light / system theme**
 
+**English and Korean UI:** Settings → Language switches between System, 한국어 and English immediately and saves your choice.
+
 **Personal Gemini via Antigravity and Grok Build subscription quotas are displayed inside the app.**
 
 [Download ZIP for Windows](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [Release notes](https://github.com/Nectarine-Peach/VibeMeters/releases/latest)
 
-<img src="docs/screenshots/window-mini-dark.png" alt="Mini window showing Codex, Claude, Gemini Antigravity and Grok Build" width="274">
+<img src="docs/screenshots/window-mini-en.png" alt="English mini window with Codex, Claude, Gemini Antigravity and Grok Build" width="274">
 
 *Actual WPF rendering with synthetic data for all four services. Gemini shows a personal Antigravity example; Grok shows Build-only quota. These are not live account values.*
 
@@ -80,7 +82,7 @@ The taskbar option provides a normal app icon and minimize behavior, not a quota
 
 Refresh options are **30 seconds, 1, 2, 5, or 15 minutes, or manual**; the default is two minutes. Polling pauses while Windows is locked or sleeping. Hover over quota rows or status indicators for reset times and connection details. A warning indicator can mean cached data, a login problem, or a temporary server restriction.
 
-> **Language:** Documentation is available in English and Korean. Current application labels are Korean; an in-app English language switch is not included.
+> **Language:** The app and documentation support English and Korean. **System** uses Korean for a Korean Windows UI language and English otherwise. Settings → **Language** applies and saves the selection immediately across cards, settings, tray, tooltips, accessibility names, sign-in/install guidance and errors. Switching language does not sign in again or requery quotas. Product names, API values and internal quota identifiers are preserved.
 
 </details>
 
@@ -91,19 +93,19 @@ Refresh options are **30 seconds, 1, 2, 5, or 15 minutes, or manual**; the defau
 
 | Dark | Light |
 | :---: | :---: |
-| <img src="docs/screenshots/window-standard-dark.png" alt="Standard dark window" width="360"> | <img src="docs/screenshots/window-standard-light.png" alt="Standard light window" width="360"> |
+| <img src="docs/screenshots/window-standard-en-dark.png" alt="English standard dark window" width="360"> | <img src="docs/screenshots/window-standard-en-light.png" alt="English standard light window" width="360"> |
 
 ### All services and minimum size
 
-| All four services | Four-service minimum width |
+| All four services | Compact English window |
 | :---: | :---: |
-| <img src="docs/screenshots/window-all-services-dark.png" alt="Codex, Claude, Gemini Antigravity and Grok Build" width="360"> | <img src="docs/screenshots/window-minimum-dark.png" alt="220 by 223 logical pixels with every quota row visible" width="220"> |
+| <img src="docs/screenshots/window-standard-en-dark.png" alt="English four-service display" width="360"> | <img src="docs/screenshots/window-mini-en.png" alt="274 by 300 logical pixels with every quota row visible" width="274"> |
 
 ### Settings
 
-<img src="docs/screenshots/settings-dark.png" alt="Four-service visibility, display basis, theme, refresh and account settings" width="400">
+<img src="docs/screenshots/settings-en.png" alt="English settings including the Language selector" width="400">
 
-These images render v1.4.5 WPF controls with synthetic data on 2026-10-26. Standard size is 360×551, mini is 274×300, and minimum width is 220×223 logical pixels with every row visible. No real account, credentials or user preferences were accessed. These are not desktop/compositor/tray screenshots or regression-test results. See the [capture method and scope](docs/screenshots/README.md).
+These English images render v1.4.7 WPF controls with synthetic data. Standard size is 360×551 and mini is 274×300 logical pixels with every row visible. No real account, credentials or user preferences were accessed. These are not desktop/compositor/tray screenshots or full regression-test results. See the [capture method and scope](docs/screenshots/README.md).
 
 </details>
 

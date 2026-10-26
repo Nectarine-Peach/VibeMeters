@@ -6,6 +6,8 @@ Codex·Claude·Gemini·Grok의 남은 한도와 사용량을 작은 Windows 창�
 
 **Windows 10/11 x64 · 트레이 상주 · 항상 위 · 다크/라이트 테마**
 
+**앱 UI 한국어·영어 지원:** 설정 → 언어에서 시스템/한국어/English를 선택하면 즉시 바뀌고 저장됩니다.
+
 **Gemini 개인 계정(Antigravity)과 Grok Build 구독 한도도 앱 안에서 표시합니다.**
 
 [Windows용 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [릴리스 노트](https://github.com/Nectarine-Peach/VibeMeters/releases/latest)
@@ -84,7 +86,9 @@ Grok도 기본적으로 꺼져 있습니다. 공식 Grok Build CLI의 기존 인
 
 작업표시줄은 일반 앱 아이콘과 최소화 기능을 제공합니다. 충분히 넓은 창에서는 최소화 버튼이 나타납니다. 한도 위젯이나 진행률 막대는 표시하지 않습니다.
 
-문서는 한국어·영어로 제공합니다. 현재 앱 화면 문구는 한국어이며 앱 내부 영어 전환 기능은 포함되어 있지 않습니다.
+앱과 문서는 한국어·영어를 지원합니다. 기본값 **시스템**은 Windows UI 언어가 한국어이면 한국어, 그 외에는 English를 선택합니다. 설정의 **언어**에서 시스템/한국어/English를 바꾸면 메인 카드·설정·트레이·툴팁·접근성 이름·설치/로그인/오류 안내가 즉시 바뀌고 기존 설정 파일에 저장됩니다. 언어 전환을 위해 계정에 다시 로그인하거나 사용량을 재조회하지 않습니다. 제품명·공식 API 값·내부 한도 식별자는 유지합니다.
+
+<img src="docs/screenshots/settings-en.png" alt="Language에서English를선택한영문설정화면" width="400">
 
 </details>
 
@@ -101,7 +105,7 @@ Grok도 기본적으로 꺼져 있습니다. 공식 Grok Build CLI의 기존 인
 
 <img src="docs/screenshots/settings-dark.png" alt="네 서비스 표시·수치 기준·테마·새로고침·계정 연결 설정" width="400">
 
-2026-10-26의 v1.4.5 WPF 컨트롤을 합성 데이터로 렌더링한 이미지입니다. 표준은 360×551, 미니는 274×300, 최소 폭은 220×223 논리 픽셀로 모든 행을 유지합니다. 실제 계정·인증·사용자 설정에 접근하지 않았습니다. OS 창 테두리·트레이 픽셀을 포함한 데스크톱 캡처나 회귀 검증 결과는 아닙니다. [캡처 방식과 범위](docs/screenshots/README.md).
+한국어 네 서비스 이미지는 v1.4.5, 위 영문 언어 설정 예시는 v1.4.7 WPF 컨트롤의 합성 렌더입니다. 실제 계정·인증·사용자 설정에 접근하지 않았습니다. OS 창 테두리·트레이 픽셀을 포함한 데스크톱 캡처나 전체 회귀 검증 결과는 아닙니다. [캡처 방식과 범위](docs/screenshots/README.md).
 
 </details>
 

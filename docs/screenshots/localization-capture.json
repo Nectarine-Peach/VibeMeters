@@ -1,0 +1,32 @@
+{
+  "version": "1.4.7",
+  "method": "capture-only WPF rendering; synthetic cached snapshots and install status; no provider/install execution",
+  "transitions": [
+    {
+      "language": "Korean",
+      "width": 42,
+      "installStatus": "\uACF5\uC2DD CLI\uB97C \uC124\uCE58\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4. \uC644\uB8CC \uD6C4 \uBE0C\uB77C\uC6B0\uC800 \uB85C\uADF8\uC778\uC73C\uB85C \uC774\uC5B4\uC9D1\uB2C8\uB2E4.",
+      "cachedTooltip": "Claude \u00B7 DEMO\n\uC694\uCCAD \uC81C\uD55C \u00B7 2\uBD84 \uB4A4 \uC7AC\uC2DC\uB3C4 \u00B7 \uC774\uC804 \uD655\uC778\uAC12 \uD45C\uC2DC\n\uC870\uD68C \uC77C\uC2DC \uC81C\uD55C \u00B7 \uC774\uC804 \uAC12 \uD45C\uC2DC \u00B7 14:30 \uC774\uD6C4 \uC7AC\uC2DC\uB3C4"
+    },
+    {
+      "language": "English",
+      "width": 52,
+      "installStatus": "Installing the official CLI. Browser sign-in will follow when installation completes.",
+      "cachedTooltip": "Claude \u00B7 DEMO\nRate limited \u00B7 2 min until retry \u00B7 Previous values\nLookup rate limited \u00B7 Previous values \u00B7 Retry after 14:30"
+    },
+    {
+      "language": "Korean",
+      "width": 42,
+      "installStatus": "\uACF5\uC2DD CLI\uB97C \uC124\uCE58\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4. \uC644\uB8CC \uD6C4 \uBE0C\uB77C\uC6B0\uC800 \uB85C\uADF8\uC778\uC73C\uB85C \uC774\uC5B4\uC9D1\uB2C8\uB2E4.",
+      "cachedTooltip": "Claude \u00B7 DEMO\n\uC694\uCCAD \uC81C\uD55C \u00B7 2\uBD84 \uB4A4 \uC7AC\uC2DC\uB3C4 \u00B7 \uC774\uC804 \uD655\uC778\uAC12 \uD45C\uC2DC\n\uC870\uD68C \uC77C\uC2DC \uC81C\uD55C \u00B7 \uC774\uC804 \uAC12 \uD45C\uC2DC \u00B7 14:30 \uC774\uD6C4 \uC7AC\uC2DC\uB3C4"
+    },
+    {
+      "language": "English",
+      "width": 52,
+      "installStatus": "Installing the official CLI. Browser sign-in will follow when installation completes.",
+      "cachedTooltip": "Claude \u00B7 DEMO\nRate limited \u00B7 2 min until retry \u00B7 Previous values\nLookup rate limited \u00B7 Previous values \u00B7 Retry after 14:30"
+    }
+  ],
+  "networkQueries": 0,
+  "settingsWrites": 0
+}

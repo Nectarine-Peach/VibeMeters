@@ -56,6 +56,120 @@ sealed class RegressionSuite
         Test("Codex invalid reset stays unknown", () => Equal<DateTimeOffset?>(null, Parse(UsageProviderKind.Codex, """{"rate_limit":{"primary_window":{"used_percent":1,"reset_at":9223372036854775807,"reset_after_seconds":-2}}}""").Windows[0].ResetsAt));
         Test("Claude invalid reset stays unknown", () => Equal<DateTimeOffset?>(null, Parse(UsageProviderKind.Claude, """{"five_hour":{"utilization":2,"resets_at":"invalid"}}""").Windows[0].ResetsAt));
         Test("Fallback plan retained", () => Equal("pro", Parse(UsageProviderKind.Claude, "{}", "pro").Plan));
+        Test("Codex Business nested individual limit matches official remaining percentage", () =>
+        {
+            var s = Parse(UsageProviderKind.Codex, """{"plan_type":"business","rate_limit":null,"credits":{"has_credits":true},"spend_control":{"reached":false,"individual_limit":{"source":"group_based_spend_controls","unit":"credit","limit":"10000","used":"5200","remaining":"4800","used_percent":52,"remaining_percent":48,"reset_after_seconds":3600,"reset_at":1793491200}}}""");
+            Equal(UsageStatus.Ready, s.Status); Equal("business", s.Plan); Equal(1, s.Windows.Count);
+            Equal("개인 한도", s.Windows[0].Name); Equal(48d, s.Windows[0].RemainingPercent); Equal(52d, s.Windows[0].UsedPercent);
+            Equal(DateTimeOffset.FromUnixTimeSeconds(1793491200), s.Windows[0].ResetsAt); Equal<TimeSpan?>(null, s.Windows[0].Duration);
+            var window = typeof(LoginService).Assembly.GetType("VibeMeters.MainWindow", true)!;
+            Equal("개인", (string)window.GetMethod("ShortQuotaName", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [s.Windows[0].Name])!);
+        });
+        Test("Codex individual remaining percentage wins over used percentage", () =>
+        {
+            var s = Parse(UsageProviderKind.Codex, """{"spend_control":{"individual_limit":{"remaining_percent":48,"used_percent":20}}}""");
+            Equal(48d, s.Windows[0].RemainingPercent); Equal(52d, s.Windows[0].UsedPercent);
+        });
+        Test("Codex individual used percentage and relative reset are supported", () =>
+        {
+            var s = Parse(UsageProviderKind.Codex, """{"spend_control":{"individual_limit":{"used_percent":25,"reset_at":9223372036854775807,"reset_after_seconds":3600}}}""");
+            Equal(75d, s.Windows[0].RemainingPercent); Equal(Now.AddHours(1), s.Windows[0].ResetsAt);
+        });
+        Test("Codex personal subscription and individual limit remain separate", () =>
+        {
+            var s = Parse(UsageProviderKind.Codex, """{"rate_limit":{"primary_window":{"used_percent":10},"secondary_window":{"used_percent":20}},"spend_control":{"individual_limit":{"remaining_percent":48}}}""");
+            Equal(3, s.Windows.Count); Equal("5시간", s.Windows[0].Name); Equal("주간", s.Windows[1].Name); Equal("개인 한도", s.Windows[2].Name);
+        });
+        foreach (var value in new[] { "null", "\"48\"", "1e999", "true" })
+            Test("Codex individual limit rejects invalid remaining percent " + value, () =>
+            {
+                var s = Parse(UsageProviderKind.Codex, "{\"spend_control\":{\"individual_limit\":{\"remaining_percent\":" + value + ",\"limit\":\"100\",\"used\":\"20\"}}}");
+                Equal(0, s.Windows.Count); Equal(UsageStatus.Unavailable, s.Status);
+            });
+        Test("Codex malformed individual limit retains valid credit state", () =>
+        {
+            var s = Parse(UsageProviderKind.Codex, """{"spend_control":{"individual_limit":null},"credits":{"has_credits":true}}""");
+            Equal(UsageStatus.Ready, s.Status); Equal(0, s.Windows.Count);
+        });
+        Test("Codex individual percentages clamp and unknown reset stays unknown", () =>
+        {
+            var full = Parse(UsageProviderKind.Codex, """{"spend_control":{"individual_limit":{"remaining_percent":120,"reset_after_seconds":-1}}}""");
+            Equal(100d, full.Windows[0].RemainingPercent); Equal<DateTimeOffset?>(null, full.Windows[0].ResetsAt);
+            var empty = Parse(UsageProviderKind.Codex, """{"spend_control":{"individual_limit":{"remaining_percent":-1}}}""");
+            Equal(0d, empty.Windows[0].RemainingPercent);
+        });
+        Test("Business Codex credits authenticate without inventing quota", () =>
+        {
+            var s = Parse(UsageProviderKind.Codex, """{"plan_type":"business","rate_limit":null,"credits":{"has_credits":true,"unlimited":false,"balance":null}}""");
+            Equal(UsageStatus.Ready, s.Status); Equal("business", s.Plan); Equal(0, s.Windows.Count);
+            True(s.Message!.Contains("비율", StringComparison.Ordinal));
+            var window = typeof(LoginService).Assembly.GetType("VibeMeters.MainWindow", true)!;
+            Equal(1, (int)window.GetMethod("QuotaRowCount", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [s])!);
+        });
+        Test("Business credit state preserves exhausted and unlimited distinctions", () =>
+        {
+            var exhausted = Parse(UsageProviderKind.Codex, """{"credits":{"has_credits":false,"unlimited":false,"overage_limit_reached":true}}""");
+            Equal(UsageStatus.Ready, exhausted.Status); True(exhausted.Message!.Contains("도달", StringComparison.Ordinal)); Equal(0, exhausted.Windows.Count);
+            var unlimited = Parse(UsageProviderKind.Codex, """{"credits":{"unlimited":true}}""");
+            Equal(UsageStatus.Ready, unlimited.Status); True(unlimited.Message!.Contains("무제한", StringComparison.Ordinal)); Equal(0, unlimited.Windows.Count);
+        });
+        Test("Personal Codex keeps subscription quota when credits are also present", () =>
+        {
+            var s = Parse(UsageProviderKind.Codex, """{"plan_type":"plus","rate_limit":{"primary_window":{"used_percent":20}},"credits":{"has_credits":true}}""");
+            Equal(UsageStatus.Ready, s.Status); Equal(1, s.Windows.Count); Equal(80d, s.Windows[0].RemainingPercent); Equal<string?>(null, s.Message);
+        });
+        foreach (var credits in new[] { "null", "{}", "[]", "{\"has_credits\":\"true\"}" })
+            Test("Malformed credit state is not mistaken for connected " + credits, () =>
+                Equal(UsageStatus.Unavailable, Parse(UsageProviderKind.Codex, "{\"credits\":" + credits + "}").Status));
+        Test("Enterprise Claude displays supplied monthly additional usage", () =>
+        {
+            var s = Parse(UsageProviderKind.Claude, """{"five_hour":null,"seven_day":null,"extra_usage":{"is_enabled":true,"monthly_limit":10000,"used_credits":6000,"utilization":60}}""", "enterprise");
+            Equal(UsageStatus.Ready, s.Status); Equal("enterprise", s.Plan); Equal(1, s.Windows.Count);
+            Equal("월 추가 사용", s.Windows[0].Name); Equal(60d, s.Windows[0].UsedPercent);
+            Equal<TimeSpan?>(null, s.Windows[0].Duration); Equal<DateTimeOffset?>(null, s.Windows[0].ResetsAt);
+            True(s.Message!.Contains("구독 한도와 다릅니다", StringComparison.Ordinal));
+        });
+        Test("Personal Claude retains subscription and additional usage separately", () =>
+        {
+            var s = Parse(UsageProviderKind.Claude, """{"five_hour":{"utilization":20},"seven_day":{"utilization":30},"extra_usage":{"is_enabled":true,"utilization":40}}""", "pro");
+            Equal(3, s.Windows.Count); Equal("5시간", s.Windows[0].Name); Equal("주간", s.Windows[1].Name); Equal("월 추가 사용", s.Windows[2].Name);
+        });
+        Test("Disabled extra usage is omitted", () =>
+            Equal(0, Parse(UsageProviderKind.Claude, """{"extra_usage":{"is_enabled":false,"utilization":40}}""").Windows.Count));
+        foreach (var value in new[] { "null", "\"25\"", "1e999", "true" })
+            Test("Enabled extra usage never fabricates invalid percentage " + value, () =>
+            {
+                var s = Parse(UsageProviderKind.Claude, "{\"extra_usage\":{\"is_enabled\":true,\"utilization\":" + value + "}}");
+                Equal(UsageStatus.Ready, s.Status); Equal(0, s.Windows.Count);
+            });
+        Test("Browser fallback accepts only matching official HTTPS hosts", () =>
+        {
+            static Uri? Link(UsageProviderKind kind, string text) => (Uri?)typeof(LoginService)
+                .GetMethod("BrowserLoginUri", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [kind, text]);
+            True(Link(UsageProviderKind.Codex, "Open https://auth.openai.com/oauth/authorize?state=fixture") is not null);
+            True(Link(UsageProviderKind.Claude, "https://claude.ai/oauth/authorize?state=fixture") is not null);
+            foreach (var url in new[] { "http://auth.openai.com/", "https://auth.openai.com.evil.invalid/", "https://evil.invalid/auth.openai.com", "https://user@auth.openai.com/", "https://auth.openai.com:444/", "file:///C:/fixture", "https://claude.ai/" })
+                Equal<Uri?>(null, Link(UsageProviderKind.Codex, url));
+            Equal<Uri?>(null, Link(UsageProviderKind.Gemini, "https://auth.openai.com/"));
+        });
+        Test("Login diagnostics redact raw network errors", () =>
+        {
+            var type = typeof(LoginService).GetNestedType("LoginDiagnostics", BindingFlags.NonPublic)!;
+            var diagnostics = Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, [UsageProviderKind.Claude], null)!;
+            type.GetMethod("Observe", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(diagnostics, ["proxy failed secret-token https://evil.invalid/?state=secret-state"]);
+            var message = (string)type.GetProperty("FailureMessage", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(diagnostics)!;
+            True(message.Contains("프록시", StringComparison.Ordinal)); True(!message.Contains("secret", StringComparison.Ordinal)); True(!message.Contains("https", StringComparison.Ordinal));
+        });
+        await TestAsync("Proxy authentication failure has actionable network message", async () =>
+        {
+            var s = await Provider(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.ProxyAuthenticationRequired))).FetchAsync();
+            Equal(UsageStatus.Unavailable, s.Status); True(s.Message!.Contains("프록시", StringComparison.Ordinal));
+        });
+        await TestAsync("Forbidden response differs from expired login", async () =>
+        {
+            var s = await Provider(new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden))).FetchAsync();
+            Equal(UsageStatus.AuthenticationRequired, s.Status); True(s.Message!.Contains("권한", StringComparison.Ordinal)); True(!s.Message.Contains("만료", StringComparison.Ordinal));
+        });
         Test("Credential string redacts token", () => True(!Credential().ToString().Contains("test-secret", StringComparison.Ordinal)));
         Test("Gemini official bridge parses model quotas, plan and reset", () =>
         {
@@ -206,6 +320,37 @@ sealed class RegressionSuite
             credentials.Current = new UsageCredential { AccessToken = "test-secret", AccountId = "different-account" };
             var switched = await provider.FetchAsync(); Equal(UsageStatus.AuthenticationRequired, switched.Status); Equal(0, switched.Windows.Count); Equal(2, handler.Calls);
         });
+        foreach (var kind in OAuthProviders)
+        {
+            await TestAsync($"{kind} explicit login clears prior account values and polling floor", async () =>
+            {
+                var credentials = new MutableCredentials(Credential());
+                var handler = new StubHandler(r => JsonResponse(kind == UsageProviderKind.Codex
+                    ? (r.Headers.Authorization!.Parameter == "test-secret" ? """{"rate_limit":{"primary_window":{"used_percent":20}}}""" : """{"plan_type":"business","rate_limit":null,"credits":{"has_credits":true}}""")
+                    : (r.Headers.Authorization!.Parameter == "test-secret" ? """{"five_hour":{"utilization":20}}""" : """{"extra_usage":{"is_enabled":true,"utilization":80}}""")));
+                var provider = new UsageProvider(kind, credentials, new HttpClient(handler));
+                Equal(1, (await provider.FetchAsync()).Windows.Count);
+                credentials.Current = new UsageCredential { AccessToken = "different-account" };
+                provider.NotifyLoginCompleted();
+                var switched = await provider.FetchAsync(); Equal(UsageStatus.Ready, switched.Status); Equal(2, handler.Calls);
+                if (kind == UsageProviderKind.Codex) Equal(0, switched.Windows.Count);
+                else { Equal("월 추가 사용", switched.Windows[0].Name); Equal(80d, switched.Windows[0].UsedPercent); }
+            });
+            await TestAsync($"{kind} explicit account switch preserves 429 deadline without old values", async () =>
+            {
+                var calls = 0;
+                var handler = new StubHandler(_ => ++calls == 1
+                    ? JsonResponse(kind == UsageProviderKind.Codex ? """{"rate_limit":{"primary_window":{"used_percent":20}}}""" : """{"five_hour":{"utilization":20}}""")
+                    : new HttpResponseMessage(HttpStatusCode.TooManyRequests));
+                var provider = Provider(handler, kind: kind);
+                Equal(1, (await provider.FetchAsync()).Windows.Count);
+                typeof(UsageProvider).GetField("_nextAttempt", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(provider, DateTimeOffset.MinValue);
+                var limited = await provider.FetchAsync(); Equal(1, limited.Windows.Count);
+                provider.NotifyLoginCompleted();
+                var switched = await provider.FetchAsync();
+                Equal(UsageStatus.RateLimited, switched.Status); Equal(limited.RetryAfter, switched.RetryAfter); Equal(0, switched.Windows.Count); Equal(2, handler.Calls);
+            });
+        }
         Test("Settings defaults are resource-friendly", () => { var s = new AppSettings(); Equal(120, s.RefreshIntervalSeconds); True(s.ShowInTaskbar); True(!s.AlwaysOnTop); True(!s.StartWithWindows); });
         foreach (var interval in new[] { 0, 30, 60, 120, 900, 86400 })
             Test($"Settings preserve valid interval {interval}", () => Equal(interval, SettingsStore.Normalize(new AppSettings { RefreshIntervalSeconds = interval }).RefreshIntervalSeconds));

@@ -114,6 +114,7 @@ public partial class App : Application
             _window.SetLoginStatus(provider, false, result.Message);
             if (result.Success)
             {
+                foreach (var usage in _providers.OfType<UsageProvider>().Where(usage => usage.Kind == provider)) usage.NotifyLoginCompleted();
                 if (_refreshing) _credentialsChanged = true;
                 else await RefreshAsync();
             }

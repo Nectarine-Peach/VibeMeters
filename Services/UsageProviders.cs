@@ -44,6 +44,7 @@ public sealed class UsageProvider : IUsageProvider
     private int _rateLimitFailures;
     private string? _credentialFingerprint;
     private string? _accountId;
+    private int _loginCompleted;
 
     public UsageProviderKind Kind { get; }
 
@@ -56,12 +57,26 @@ public sealed class UsageProvider : IUsageProvider
         _http = httpClient ?? SharedClient;
     }
 
+    // Explicit login can change Claude identity without a stable account ID.
+    public void NotifyLoginCompleted() => Interlocked.Exchange(ref _loginCompleted, 1);
+
     public async Task<UsageSnapshot> FetchAsync(CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var now = DateTimeOffset.UtcNow;
+            if (Interlocked.Exchange(ref _loginCompleted, 0) != 0)
+            {
+                var rateLimited = _last?.Status == UsageStatus.RateLimited && now < _nextAttempt;
+                // Drop old account values immediately, including during a server cooldown.
+                _last = rateLimited ? new(Kind, UsageStatus.RateLimited, [], now,
+                    Message: "계정이 변경되었습니다. 기존 요청 제한 대기 후 사용량을 확인합니다.", RetryAfter: _nextAttempt) : null;
+                _credentialFingerprint = null;
+                _accountId = null;
+                _failures = 0;
+                if (!rateLimited) { _nextAttempt = default; _rateLimitFailures = 0; }
+            }
             // Server cooldown applies to all refresh triggers, including automatic CLI
             // token renewal and explicit refresh. Claude does not supply a stable account ID.
             if (_last?.Status == UsageStatus.RateLimited && now < _nextAttempt) return _last;
@@ -111,8 +126,12 @@ public sealed class UsageProvider : IUsageProvider
                 if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
                 {
                     _nextAttempt = DateTimeOffset.UtcNow.AddMinutes(5);
-                    return Save(UsageStatus.AuthenticationRequired, "인증이 만료되었거나 조회 권한이 없습니다. 설정에서 다시 로그인해 주세요.");
+                    return Save(UsageStatus.AuthenticationRequired, response.StatusCode == HttpStatusCode.Unauthorized
+                        ? "인증이 만료되었습니다. 설정에서 다시 로그인해 주세요."
+                        : "조회 권한이 없습니다. 회사 계정의 서비스 권한·SSO 및 네트워크 정책을 확인해 주세요.");
                 }
+                if (response.StatusCode == HttpStatusCode.ProxyAuthenticationRequired)
+                    return Failure("회사 프록시 인증이 필요합니다. Windows 프록시 및 네트워크 로그인을 확인해 주세요.");
                 if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
                     _rateLimitFailures = Math.Min(_rateLimitFailures + 1, 6);
@@ -173,6 +192,8 @@ public static class UsageParser
     public static UsageSnapshot Parse(UsageProviderKind kind, JsonElement root, DateTimeOffset now, string? plan = null)
     {
         var windows = new List<UsageWindow>();
+        string? message = null;
+        var connectedWithoutQuota = false;
         if (kind == UsageProviderKind.Gemini)
             return new(kind, UsageStatus.Unavailable, windows, now, plan, "공식 Gemini CLI의 /stats에서 사용량을 확인하세요.");
         if (root.ValueKind != JsonValueKind.Object)
@@ -185,6 +206,19 @@ public static class UsageParser
                 AddCodex(limits, "primary_window", "5시간", windows, now);
                 AddCodex(limits, "secondary_window", "주간", windows, now);
             }
+            if (AddCodexIndividualLimit(root, windows, now))
+                message = "계정에 적용된 개인 사용 한도입니다. 초기화 시점은 서버가 제공한 값입니다.";
+            // Metered accounts can return null quota windows and no numeric balance.
+            // Treat the reported credit state as connected without inventing a percentage.
+            if (windows.Count == 0 && Object(root, "credits", out var credits)
+                && (Boolean(credits, "has_credits") is not null || Boolean(credits, "unlimited") is not null))
+            {
+                connectedWithoutQuota = true;
+                message = Boolean(credits, "unlimited") == true ? "연결됨 · 계정이 무제한 크레딧 사용을 보고했습니다."
+                    : Boolean(credits, "overage_limit_reached") == true ? "연결됨 · 계정의 추가 사용 한도에 도달했습니다."
+                    : Boolean(credits, "has_credits") == true ? "연결됨 · 크레딧 사용 가능. 계정에서 사용량 비율을 제공하지 않습니다."
+                    : "연결됨 · 계정에서 사용량 비율을 제공하지 않습니다. 크레딧 설정을 확인해 주세요.";
+            }
         }
         else
         {
@@ -193,9 +227,22 @@ public static class UsageParser
             foreach (var property in root.EnumerateObject())
                 if (property.Name.StartsWith("seven_day_", StringComparison.Ordinal) && property.Value.ValueKind == JsonValueKind.Object)
                     AddClaude(root, property.Name, property.Name[10..].Replace('_', ' ') + " 주간", TimeSpan.FromDays(7), windows);
+            if (Object(root, "extra_usage", out var extra) && Boolean(extra, "is_enabled") == true)
+            {
+                if (Number(extra, "utilization", out var used))
+                {
+                    windows.Add(new("월 추가 사용", Math.Clamp(used, 0, 100), Reset(extra, "resets_at")));
+                    message = "월 추가 사용은 계정에서 제공한 추가 사용 예산 비율이며, 5시간·주간 구독 한도와 다릅니다.";
+                }
+                else if (windows.Count == 0)
+                {
+                    connectedWithoutQuota = true;
+                    message = "연결됨 · 추가 사용이 활성화되어 있으나 계정에서 사용량 비율을 제공하지 않습니다.";
+                }
+            }
         }
-        return new(kind, windows.Count > 0 ? UsageStatus.Ready : UsageStatus.Unavailable, windows, now, plan,
-            windows.Count == 0 ? "계정에서 사용량 창을 제공하지 않습니다. 구독 상태를 확인해 주세요." : null);
+        return new(kind, windows.Count > 0 || connectedWithoutQuota ? UsageStatus.Ready : UsageStatus.Unavailable, windows, now, plan,
+            message ?? (windows.Count == 0 ? "계정에서 사용량 창을 제공하지 않습니다. 구독 상태를 확인해 주세요." : null));
     }
 
     private static void AddCodex(JsonElement root, string key, string fallback, List<UsageWindow> windows, DateTimeOffset now)
@@ -208,6 +255,20 @@ public static class UsageParser
         windows.Add(new(label, Math.Clamp(used, 0, 100), reset, duration));
     }
 
+    private static bool AddCodexIndividualLimit(JsonElement root, List<UsageWindow> windows, DateTimeOffset now)
+    {
+        if (!Object(root, "spend_control", out var spend) || !Object(spend, "individual_limit", out var limit)) return false;
+        double used;
+        // Match the official client: remaining_percent is authoritative. Do not
+        // derive percentages from string-valued credit amounts or assume a period.
+        if (Number(limit, "remaining_percent", out var remaining)) used = 100 - Math.Clamp(remaining, 0, 100);
+        else if (!Number(limit, "used_percent", out used)) return false;
+        var reset = Reset(limit, "reset_at");
+        if (reset is null && Number(limit, "reset_after_seconds", out var after) && after >= 0 && after < 31536000)
+            reset = now.AddSeconds(after);
+        windows.Add(new("개인 한도", Math.Clamp(used, 0, 100), reset));
+        return true;
+    }
     private static void AddClaude(JsonElement root, string key, string label, TimeSpan duration, List<UsageWindow> windows)
     {
         if (!Object(root, key, out var window) || !Number(window, "utilization", out var used)) return;
@@ -222,6 +283,7 @@ public static class UsageParser
         { try { return DateTimeOffset.FromUnixTimeSeconds(epoch); } catch (ArgumentOutOfRangeException) { } }
         return null;
     }
+    private static bool? Boolean(JsonElement root, string key) => root.TryGetProperty(key, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False ? value.GetBoolean() : null;
     private static bool Object(JsonElement root, string key, out JsonElement value) { value = default; return root.ValueKind == JsonValueKind.Object && root.TryGetProperty(key, out value) && value.ValueKind == JsonValueKind.Object; }
     private static string? Text(JsonElement root, string key) => root.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
     private static bool Number(JsonElement root, string key, out double number) { number = 0; return root.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetDouble(out number) && double.IsFinite(number); }

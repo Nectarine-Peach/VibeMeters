@@ -100,6 +100,7 @@ internal sealed class VisualVerification
             await CheckSelectionsAsync();
             await CheckDisplayModesAsync();
             await CheckUnavailableStatesAsync();
+            await CheckBusinessStatesAsync();
             await CheckGeometryRoundTripAsync();
             Check("no footer or mini toggle controls",_window.FindName("LastUpdatedText")==null&&_window.FindName("StatusText")==null&&_window.FindName("MiniButton")==null);
             Check("same responsive composition at every size",_window.FindName("MicroPanel")==null);
@@ -276,6 +277,28 @@ internal sealed class VisualVerification
         finally { _window.LoginRequested-=Login; }
         Capture(_window,"window-login-required-dark.png");
         _render(Demo(UsageProviderKind.Claude));await StableAsync(_window);
+    }
+    private async Task CheckBusinessStatesAsync()
+    {
+        using var codex=JsonDocument.Parse("""{"plan_type":"business","rate_limit":null,"spend_control":{"individual_limit":{"remaining_percent":48,"reset_at":1793491200}}}""");
+        using var claude=JsonDocument.Parse("""{"extra_usage":{"is_enabled":true,"utilization":60}}""");
+        _render(UsageParser.Parse(UsageProviderKind.Codex,codex.RootElement,DemoTime));
+        _render(UsageParser.Parse(UsageProviderKind.Claude,claude.RootElement,DemoTime,"enterprise"));
+        await ResizeAsync(274,174);
+        AssertMainLayout("business personal and monthly quota rows",new[]{("Codex",1),("Claude",1)});
+        var cards=Cards();
+        Check("business personal label and supplied percentage",Descendants<TextBlock>(cards[0]).Any(t=>t.Text=="개인")&&Rows(cards[0]).Select(ValueText).SequenceEqual(new[]{"48%"}));
+        Check("enterprise monthly label and supplied percentage",Descendants<TextBlock>(cards[1]).Any(t=>t.Text=="월추가")&&Rows(cards[1]).Select(ValueText).SequenceEqual(new[]{"40%"}));
+        Check("business and enterprise meters match remaining display",Close(Meter(Rows(cards[0])[0]).Value,48)&&Close(Meter(Rows(cards[1])[0]).Value,40));
+        Capture(_window,"window-business-dark.png");
+        using var credits=JsonDocument.Parse("""{"plan_type":"business","credits":{"has_credits":true}}""");
+        _render(UsageParser.Parse(UsageProviderKind.Codex,credits.RootElement,DemoTime));
+        await StableAsync(_window);
+        AssertMainLayout("connected without supplied ratio",new[]{("Codex",0),("Claude",1)});
+        Check("connected without ratio never invents a meter",!Descendants<ProgressBar>(Cards()[0]).Any()&&Descendants<TextBlock>(Cards()[0]).Any(t=>t.Text=="연결됨 · 비율 미제공"));
+        Capture(_window,"window-connected-no-ratio-dark.png");
+        _render(Demo(UsageProviderKind.Codex));_render(Demo(UsageProviderKind.Claude));
+        await ResizeAsync(360,267);
     }
     private void AssertMainLayout(string scenario,(string Provider,int Rows)[] expected)
     {

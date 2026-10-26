@@ -170,7 +170,7 @@ public partial class MainWindow : Window
         public double MeterHeight=>Size(3,6);
         public double MeterGap=>Size(4,9);
     }
-    private static int QuotaRowCount(UsageSnapshot snapshot)=>snapshot.Windows.Count==0?PlaceholderNames(snapshot.Provider).Length:snapshot.Windows.Count;
+    private static int QuotaRowCount(UsageSnapshot snapshot)=>snapshot.Windows.Count==0?(snapshot.Status==UsageStatus.Ready?1:PlaceholderNames(snapshot.Provider).Length):snapshot.Windows.Count;
     private static double CardHeight(UsageSnapshot snapshot,CardMetrics metrics)=>2+metrics.PadTop+metrics.PadBottom+metrics.HeadingHeight+metrics.DividerTop+1+metrics.DividerBottom+QuotaRowCount(snapshot)*metrics.RowHeight;
     private double LayoutHeight(UsageProviderKind[] providers,bool wide,CardMetrics metrics)
     {
@@ -258,13 +258,18 @@ public partial class MainWindow : Window
         var stack=new StackPanel();
         stack.Children.Add(ProviderHeading(snapshot,metrics));
         stack.Children.Add(new Border { Background=Palette("WindowBorder"),Height=1,Margin=new Thickness(0,metrics.DividerTop,0,metrics.DividerBottom),Opacity=0.7 });
+        if(snapshot.Status==UsageStatus.Ready&&snapshot.Windows.Count==0)
+        {
+            stack.Children.Add(new TextBlock { Text="연결됨 · 비율 미제공",Foreground=Palette("SecondaryText"),FontSize=metrics.LabelFont,Height=metrics.RowHeight,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis,ToolTip=WrappedTip(ProviderTooltip(snapshot)) });
+            return new Border { Height=CardHeight(snapshot,metrics),Background=Palette("SurfaceBackground"),BorderBrush=Palette("WindowBorder"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(metrics.CardRadius),Padding=new Thickness(metrics.PadHorizontal,metrics.PadTop,metrics.PadHorizontal,metrics.PadBottom),Child=stack };
+        }
         var entries=snapshot.Windows.Count==0
             ?PlaceholderNames(snapshot.Provider).Select(name=>(Name:name,Quota:(UsageWindow?)null)).ToArray()
             :snapshot.Windows.Select(quota=>(Name:quota.Name,Quota:(UsageWindow?)quota)).ToArray();
         for(var i=0;i<entries.Length;i++)
         {
             var entry=entries[i];var quota=entry.Quota;
-            var row=new Grid { Height=metrics.RowHeight,ToolTip=WrappedTip(quota==null?ProviderTooltip(snapshot)+"\n사용량 정보 없음 · 수치를 확인하면 표시합니다.":WindowTooltip(quota,snapshot)) };
+            var row=new Grid { Height=metrics.RowHeight,ToolTip=WrappedTip(quota==null?ProviderTooltip(snapshot)+"\n사용량 정보 없음 · 수치를 확인하면 표시합니다.":WindowTooltip(quota,snapshot)+(quota.Name=="월 추가 사용"?"\n"+snapshot.Message:"")) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(metrics.LabelWidth) });row.ColumnDefinitions.Add(new ColumnDefinition());row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(metrics.ValueWidth) });
             row.Children.Add(new TextBlock { Text=ShortQuotaName(entry.Name),Foreground=Palette("SecondaryText"),FontSize=metrics.LabelFont,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis });
             var meter=new ProgressBar { Value=quota==null?0:DisplayPercent(snapshot.Provider,quota),Foreground=quota!=null&&quota.RemainingPercent<=10?Palette("CriticalText"):Accent(snapshot.Provider),Height=metrics.MeterHeight,Margin=new Thickness(0,0,metrics.MeterGap,0),VerticalAlignment=VerticalAlignment.Center };
@@ -286,7 +291,7 @@ public partial class MainWindow : Window
         Typography.SetNumeralAlignment(value,FontNumeralAlignment.Tabular);
         return value;
     }
-    private static string ShortQuotaName(string name)=>name.Contains("주")?"주간":name.Contains("5시간")?"5시간":name.Contains("세션")||name.Contains("시간")?"세션":name.Replace("모델","").Trim();
+    private static string ShortQuotaName(string name)=>name=="개인 한도"?"개인":name=="월 추가 사용"?"월추가":name.Contains("주")?"주간":name.Contains("5시간")?"5시간":name.Contains("세션")||name.Contains("시간")?"세션":name.Replace("모델","").Trim();
     private static ToolTip WrappedTip(string text)=>new ToolTip { MaxWidth=280,Content=new TextBlock { Text=text,TextWrapping=TextWrapping.Wrap,MaxWidth=254,FontSize=11,LineHeight=17 } };
     private static string ProviderStatus(UsageSnapshot snapshot)
     {

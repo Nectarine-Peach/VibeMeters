@@ -226,7 +226,7 @@ public partial class MainWindow : Window
     private static double RequiredCardHeight(UsageSnapshot snapshot)=>CardHeight(snapshot,new CardMetrics(1));
     private static void ClearGrid(Grid grid) { grid.Children.Clear(); grid.RowDefinitions.Clear(); grid.ColumnDefinitions.Clear(); }
     private UsageSnapshot Snapshot(UsageProviderKind kind) => _snapshots.TryGetValue(kind, out var snapshot) ? snapshot : new(kind, UsageStatus.NotConnected, Array.Empty<UsageWindow>(), DateTimeOffset.Now, Message:"계정을 연결하면 사용량이 표시됩니다.");
-    private static Brush Accent(UsageProviderKind kind) => Palette(kind switch { UsageProviderKind.Codex => "CodexAccent", UsageProviderKind.Claude => "ClaudeAccent", _ => "GeminiAccent" });
+    private static Brush Accent(UsageProviderKind kind) => Palette(kind switch { UsageProviderKind.Codex => "CodexAccent", UsageProviderKind.Claude => "ClaudeAccent", UsageProviderKind.Grok => "GrokAccent", _ => "GeminiAccent" });
     private string DisplayBasis(UsageProviderKind kind) => Settings.GetDisplayMode(kind)==UsageDisplayMode.Used ? "사용" : "남음";
     private double DisplayPercent(UsageProviderKind kind,UsageWindow quota) => Settings.GetDisplayMode(kind)==UsageDisplayMode.Used ? Math.Clamp(quota.UsedPercent,0,100) : quota.RemainingPercent;
 
@@ -241,8 +241,9 @@ public partial class MainWindow : Window
             var dot=new System.Windows.Shapes.Ellipse { Width=metrics.Size(4,6),Height=metrics.Size(4,6),Fill=Palette("WarningText"),VerticalAlignment=VerticalAlignment.Center };
             if(snapshot.Status is UsageStatus.NotConnected or UsageStatus.AuthenticationRequired)
             {
-                var connect=new Button { Content=dot,Style=(Style)FindResource("StatusButton"),Width=metrics.Size(10,14),Height=Math.Min(metrics.HeadingHeight,18),Margin=new Thickness(4,0,0,0),ToolTip=WrappedTip($"{snapshot.Provider} 로그인\n{ProviderStatus(snapshot)}") };
-                connect.Click+=(_,_)=>LoginRequested?.Invoke(snapshot.Provider);System.Windows.Automation.AutomationProperties.SetName(connect,$"{snapshot.Provider} 로그인");heading.Children.Add(connect);
+                var loginLabel=$"{snapshot.Provider} 로그인";
+                var connect=new Button { Content=dot,Style=(Style)FindResource("StatusButton"),Width=metrics.Size(10,14),Height=Math.Min(metrics.HeadingHeight,18),Margin=new Thickness(4,0,0,0),ToolTip=WrappedTip($"{loginLabel}\n{ProviderStatus(snapshot)}") };
+                connect.Click+=(_,_)=>LoginRequested?.Invoke(snapshot.Provider);System.Windows.Automation.AutomationProperties.SetName(connect,loginLabel);heading.Children.Add(connect);
             }
             else heading.Children.Add(new Border { Child=dot,Margin=new Thickness(metrics.Size(5,9),0,0,0),VerticalAlignment=VerticalAlignment.Center });
         }
@@ -252,6 +253,7 @@ public partial class MainWindow : Window
     {
         UsageProviderKind.Codex=>new[]{"주간"},
         UsageProviderKind.Claude=>new[]{"5시간","주간"},
+        UsageProviderKind.Grok=>new[]{"구독"},
         _=>new[]{"Pro","Flash"}
     };
     private FrameworkElement RenderCard(UsageSnapshot snapshot,CardMetrics metrics)
@@ -271,7 +273,7 @@ public partial class MainWindow : Window
         {
             var entry=entries[i];var quota=entry.Quota;
             var row=new Grid { Height=metrics.RowHeight,ToolTip=WrappedTip(quota==null?ProviderTooltip(snapshot)+"\n사용량 정보 없음 · 수치를 확인하면 표시합니다.":WindowTooltip(quota,snapshot)+(quota.Name=="월 추가 사용"?"\n"+snapshot.Message:"")) };
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(metrics.LabelWidth) });row.ColumnDefinitions.Add(new ColumnDefinition());row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(metrics.ValueWidth) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(snapshot.Provider==UsageProviderKind.Grok?Math.Max(metrics.Size(44,70),metrics.LabelWidth):metrics.LabelWidth) });row.ColumnDefinitions.Add(new ColumnDefinition());row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(metrics.ValueWidth) });
             row.Children.Add(new TextBlock { Text=ShortQuotaName(entry.Name),Foreground=Palette("SecondaryText"),FontSize=metrics.LabelFont,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis });
             var meter=new ProgressBar { Value=quota==null?0:DisplayPercent(snapshot.Provider,quota),Foreground=quota!=null&&quota.RemainingPercent<=10?Palette("CriticalText"):Accent(snapshot.Provider),Height=metrics.MeterHeight,Margin=new Thickness(0,0,metrics.MeterGap,0),VerticalAlignment=VerticalAlignment.Center };
             Grid.SetColumn(meter,1);row.Children.Add(meter);
@@ -292,7 +294,7 @@ public partial class MainWindow : Window
         Typography.SetNumeralAlignment(value,FontNumeralAlignment.Tabular);
         return value;
     }
-    private static string ShortQuotaName(string name)=>name.Contains("Argon",StringComparison.OrdinalIgnoreCase)?"Argon":name=="개인 한도"?"개인":name=="월 추가 사용"?"월추가":name.Contains("주")?"주간":name.Contains("5시간")?"5시간":name.Contains("세션")||name.Contains("시간")?"세션":name.Replace("모델","").Trim();
+    private static string ShortQuotaName(string name)=>name.StartsWith("Build ",StringComparison.Ordinal)||name.StartsWith("공유 ",StringComparison.Ordinal)?name:name.Contains("Argon",StringComparison.OrdinalIgnoreCase)?"Argon":name=="개인 한도"?"개인":name=="월 추가 사용"?"월추가":name.Contains("주")?"주간":name.Contains("5시간")?"5시간":name.Contains("세션")||name.Contains("시간")?"세션":name.Replace("모델","").Trim();
     private static ToolTip WrappedTip(string text)=>new ToolTip { MaxWidth=280,Content=new TextBlock { Text=text,TextWrapping=TextWrapping.Wrap,MaxWidth=254,FontSize=11,LineHeight=17 } };
     private static string ProviderStatus(UsageSnapshot snapshot)
     {

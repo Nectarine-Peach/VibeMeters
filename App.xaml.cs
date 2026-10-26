@@ -92,6 +92,7 @@ public partial class App : Application
         menu.Items.Add("Claude 로그인", null, (_, _) => Dispatcher.Invoke(() => StartLogin(UsageProviderKind.Claude)));
         menu.Items.Add("Codex 로그인", null, (_, _) => Dispatcher.Invoke(() => StartLogin(UsageProviderKind.Codex)));
         menu.Items.Add("Gemini 로그인", null, (_, _) => Dispatcher.Invoke(() => StartLogin(UsageProviderKind.Gemini)));
+        menu.Items.Add("Grok 로그인", null, (_, _) => Dispatcher.Invoke(() => StartLogin(UsageProviderKind.Grok)));
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("종료", null, (_, _) => Dispatcher.Invoke(ExitApplication));
         _tray.ContextMenuStrip = menu;
@@ -105,7 +106,7 @@ public partial class App : Application
         _window!.SetLoginStatus(provider, true, "백그라운드에서 로그인을 준비합니다. 브라우저에서 인증을 완료해 주세요.");
         try
         {
-            if (provider != UsageProviderKind.Gemini && OfficialCliInstaller.Find(provider) is null)
+            if ((provider is UsageProviderKind.Codex or UsageProviderKind.Claude) && OfficialCliInstaller.Find(provider) is null)
             {
                 ShowWindow();
                 var installer = new CliInstallWindow(provider, _lifetime.Token) { Owner = _window, Topmost = _window.Topmost };
@@ -129,6 +130,8 @@ public partial class App : Application
                 foreach (var usage in _providers.OfType<UsageProvider>().Where(usage => usage.Kind == provider)) usage.NotifyLoginCompleted();
                 if (provider == UsageProviderKind.Gemini)
                     foreach (var usage in _providers.OfType<GeminiUsageProvider>()) usage.NotifyLoginCompleted();
+                if (provider == UsageProviderKind.Grok)
+                    foreach (var usage in _providers.OfType<GrokUsageProvider>()) usage.NotifyLoginCompleted();
                 if (_refreshing) _credentialsChanged = true;
                 else await RefreshAsync();
             }
@@ -147,7 +150,9 @@ public partial class App : Application
         };
         foreach (var kind in Enum.GetValues<UsageProviderKind>())
         {
-            var path = new CredentialReader().GetCredentialPath(kind);
+            string path;
+            try { path = new CredentialReader().GetCredentialPath(kind); }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or IOException) { continue; }
             var folder = Path.GetDirectoryName(path)!;
             // Watch only an existing auth folder; a new folder is still detected on scheduled refresh.
             if (!Directory.Exists(folder)) continue;
@@ -235,6 +240,11 @@ public partial class App : Application
                     if (kind == UsageProviderKind.Gemini)
                     {
                         Render(new UsageSnapshot(kind, UsageStatus.Ready, new[] { new UsageWindow("Gemini Pro", 35, DateTimeOffset.Now.AddHours(5)), new UsageWindow("Gemini Flash", 12, DateTimeOffset.Now.AddHours(5)) }, DateTimeOffset.Now, "데모", "데모 데이터"));
+                        continue;
+                    }
+                    if (kind == UsageProviderKind.Grok)
+                    {
+                        Render(new UsageSnapshot(kind, UsageStatus.Ready, new[] { new UsageWindow("Build 주간", 32, DateTimeOffset.Now.AddDays(4)) }, DateTimeOffset.Now, "데모", "데모 데이터"));
                         continue;
                     }
                     Render(new UsageSnapshot(kind, UsageStatus.Ready, new[] { new UsageWindow("5시간", kind == UsageProviderKind.Codex ? 27 : 46, DateTimeOffset.Now.AddHours(2.4)), new UsageWindow("주간", kind == UsageProviderKind.Codex ? 39 : 18, DateTimeOffset.Now.AddDays(3)) }, DateTimeOffset.Now, kind == UsageProviderKind.Codex ? "Pro" : "Max", "데모 데이터"));

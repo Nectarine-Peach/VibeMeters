@@ -9,6 +9,7 @@ public sealed class AppSettings
     public UsageDisplayMode CodexDisplayMode { get; set; }
     public UsageDisplayMode ClaudeDisplayMode { get; set; }
     public UsageDisplayMode GeminiDisplayMode { get; set; }
+    public UsageDisplayMode GrokDisplayMode { get; set; }
     public int RefreshIntervalSeconds { get; set; } = 120;
     public bool AlwaysOnTop { get; set; }
     public bool ShowInTaskbar { get; set; } = true;
@@ -24,12 +25,14 @@ public sealed class AppSettings
     public bool ShowCodex { get; set; } = true;
     public bool ShowClaude { get; set; } = true;
     public bool ShowGemini { get; set; }
+    public bool ShowGrok { get; set; }
 
     public bool IsProviderVisible(UsageProviderKind provider) => provider switch
     {
         UsageProviderKind.Codex => ShowCodex,
         UsageProviderKind.Claude => ShowClaude,
         UsageProviderKind.Gemini => ShowGemini,
+        UsageProviderKind.Grok => ShowGrok,
         _ => false
     };
 
@@ -38,6 +41,7 @@ public sealed class AppSettings
         UsageProviderKind.Codex => CodexDisplayMode,
         UsageProviderKind.Claude => ClaudeDisplayMode,
         UsageProviderKind.Gemini => GeminiDisplayMode,
+        UsageProviderKind.Grok => GrokDisplayMode,
         _ => UsageDisplayMode.Remaining
     };
 }

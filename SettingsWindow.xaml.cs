@@ -21,6 +21,7 @@ public partial class SettingsWindow : Window
         CodexCheck.IsChecked=settings.ShowCodex;
         ClaudeCheck.IsChecked=settings.ShowClaude;
         GeminiCheck.IsChecked=settings.ShowGemini;
+        GrokCheck.IsChecked=settings.ShowGrok;
         TopCheck.IsChecked=settings.AlwaysOnTop;
         TaskbarCheck.IsChecked=settings.ShowInTaskbar;
         StartupCheck.IsChecked=settings.StartWithWindows;
@@ -33,6 +34,7 @@ public partial class SettingsWindow : Window
         SetDisplayMode(CodexModeCombo,settings.GetDisplayMode(UsageProviderKind.Codex));
         SetDisplayMode(ClaudeModeCombo,settings.GetDisplayMode(UsageProviderKind.Claude));
         SetDisplayMode(GeminiModeCombo,settings.GetDisplayMode(UsageProviderKind.Gemini));
+        SetDisplayMode(GrokModeCombo,settings.GetDisplayMode(UsageProviderKind.Grok));
         _initialized=true;
         PreviewKeyDown+=(_,e)=> { if(e.Key==Key.Escape) { Close(); e.Handled=true; } };
     }
@@ -42,6 +44,7 @@ public partial class SettingsWindow : Window
         _settings.ShowCodex=CodexCheck.IsChecked==true;
         _settings.ShowClaude=ClaudeCheck.IsChecked==true;
         _settings.ShowGemini=GeminiCheck.IsChecked==true;
+        _settings.ShowGrok=GrokCheck.IsChecked==true;
         _settings.AlwaysOnTop=TopCheck.IsChecked==true;
         _settings.ShowInTaskbar=TaskbarCheck.IsChecked==true;
         _settings.StartWithWindows=StartupCheck.IsChecked==true;
@@ -51,8 +54,8 @@ public partial class SettingsWindow : Window
     }
     private void UpdateServiceToggles()
     {
-        var count=(CodexCheck.IsChecked==true?1:0)+(ClaudeCheck.IsChecked==true?1:0)+(GeminiCheck.IsChecked==true?1:0);
-        foreach(var check in new[]{CodexCheck,ClaudeCheck,GeminiCheck})
+        var count=(CodexCheck.IsChecked==true?1:0)+(ClaudeCheck.IsChecked==true?1:0)+(GeminiCheck.IsChecked==true?1:0)+(GrokCheck.IsChecked==true?1:0);
+        foreach(var check in new[]{CodexCheck,ClaudeCheck,GeminiCheck,GrokCheck})
         {
             check.IsEnabled=count>1||check.IsChecked!=true;
             check.ToolTip=check.IsEnabled?"메인 창에 이 서비스를 표시합니다.":"최소 1개의 서비스를 표시해야 합니다.";
@@ -85,17 +88,19 @@ public partial class SettingsWindow : Window
         if(combo==CodexModeCombo) _settings.CodexDisplayMode=mode;
         else if(combo==ClaudeModeCombo) _settings.ClaudeDisplayMode=mode;
         else if(combo==GeminiModeCombo) _settings.GeminiDisplayMode=mode;
+        else if(combo==GrokModeCombo) _settings.GrokDisplayMode=mode;
         SettingsChanged?.Invoke();
     }
     public void SetLoginStatus(UsageProviderKind kind,bool busy,string message)
     {
-        var button=kind switch { UsageProviderKind.Codex=>CodexLoginButton,UsageProviderKind.Claude=>ClaudeLoginButton,_=>GeminiLoginButton };
+        var button=kind switch { UsageProviderKind.Codex=>CodexLoginButton,UsageProviderKind.Claude=>ClaudeLoginButton,UsageProviderKind.Grok=>GrokLoginButton,_=>GeminiLoginButton };
         button.IsEnabled=!busy;
         LoginStatusText.Text=message; LoginStatusText.ToolTip=message;
     }
     private void CodexLogin_Click(object sender,RoutedEventArgs e)=>LoginRequested?.Invoke(UsageProviderKind.Codex);
     private void ClaudeLogin_Click(object sender,RoutedEventArgs e)=>LoginRequested?.Invoke(UsageProviderKind.Claude);
     private void GeminiLogin_Click(object sender,RoutedEventArgs e)=>LoginRequested?.Invoke(UsageProviderKind.Gemini);
+    private void GrokLogin_Click(object sender,RoutedEventArgs e)=>LoginRequested?.Invoke(UsageProviderKind.Grok);
     private void Close_Click(object sender,RoutedEventArgs e)=>Close();
     private void Header_MouseLeftButtonDown(object sender,MouseButtonEventArgs e)
     {

@@ -24,10 +24,12 @@ public static class ThemeService
         if (!_initialized) SystemEvents.UserPreferenceChanged += OnSystemPreferenceChanged;
         _initialized = true; IsDark = dark; _highContrast = highContrast;
         var palette = dark ? DarkPalette() : LightPalette();
+        palette["GrokAccent"] = (Color)ColorConverter.ConvertFromString(dark ? "#D8E0EA" : "#506176");
         if (highContrast)
         {
             foreach (var key in new[] { "WindowBackground", "SurfaceBackground", "CodexSurface", "ClaudeSurface", "GeminiSurface" }) palette[key] = SystemColors.WindowColor;
             foreach (var key in new[] { "PrimaryText", "SecondaryText", "MutedText", "CodexAccent", "ClaudeAccent", "GeminiAccent", "WarningText", "CriticalText" }) palette[key] = SystemColors.WindowTextColor;
+            palette["GrokAccent"] = SystemColors.WindowTextColor;
             foreach (var key in new[] { "WindowBorder", "PopupBorder", "TrackBrush", "ToggleOff" }) palette[key] = SystemColors.GrayTextColor;
             foreach (var key in new[] { "SurfaceHover", "SurfacePressed", "ToggleOn" }) palette[key] = SystemColors.HighlightColor;
             palette["ToggleThumb"] = SystemColors.HighlightTextColor;

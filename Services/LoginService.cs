@@ -34,12 +34,12 @@ public static class LoginService
         try
         {
             if (provider == UsageProviderKind.Gemini) return GeminiCliBridge.StartLogin();
-            var name = provider == UsageProviderKind.Codex ? "codex" : "claude";
-            var arguments = provider == UsageProviderKind.Codex
-                ? new[] { "login" } : new[] { "auth", "login", "--claudeai" };
+            var name = provider switch { UsageProviderKind.Codex => "codex", UsageProviderKind.Grok => "grok", _ => "claude" };
+            var arguments = provider == UsageProviderKind.Grok ? new[] { "login", "--oauth" }
+                : provider == UsageProviderKind.Codex ? new[] { "login" } : new[] { "auth", "login", "--claudeai" };
             var start = OfficialCliProcess.CreateStartInfo(name, arguments);
             if (start is null)
-                return new(false, provider == UsageProviderKind.Codex
+                return new(false, provider == UsageProviderKind.Grok ? "공식 Grok Build CLI를 설치한 뒤 로그인해 주세요." : provider == UsageProviderKind.Codex
                     ? "Codex CLI를 설치한 뒤 다시 로그인해 주세요."
                     : "Claude Code를 설치한 뒤 다시 로그인해 주세요.");
 
@@ -111,6 +111,7 @@ public static class LoginService
                 || uri.Scheme != Uri.UriSchemeHttps || !uri.IsDefaultPort || uri.UserInfo.Length != 0) continue;
             var allowed = provider == UsageProviderKind.Codex
                 ? uri.Host.Equals("auth.openai.com", StringComparison.OrdinalIgnoreCase)
+                : provider == UsageProviderKind.Grok ? uri.Host.Equals("auth.x.ai", StringComparison.OrdinalIgnoreCase)
                 : provider == UsageProviderKind.Claude && (uri.Host.Equals("claude.ai", StringComparison.OrdinalIgnoreCase)
                     || uri.Host.Equals("console.anthropic.com", StringComparison.OrdinalIgnoreCase)
                     || uri.Host.Equals("platform.claude.com", StringComparison.OrdinalIgnoreCase));
@@ -157,6 +158,7 @@ public static class LoginService
                 {
                     _failure = provider == UsageProviderKind.Codex
                         ? "브라우저를 열 수 없습니다. CLI에서 codex login 또는 codex login --device-auth로 로그인해 주세요."
+                        : provider == UsageProviderKind.Grok ? "브라우저를 열 수 없습니다. 공식 grok login --oauth 또는 grok login --device-auth를 직접 실행해 주세요."
                         : "브라우저를 열 수 없습니다. CLI에서 claude auth login으로 로그인해 주세요. 회사 SSO는 --sso 옵션을 사용할 수 있습니다.";
                 }
                 finally { _browserUri = null; }

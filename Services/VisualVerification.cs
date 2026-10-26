@@ -40,6 +40,7 @@ internal sealed class VisualVerification
     {
         UsageProviderKind.Codex=>new[]{new UsageWindow("주간",39,DemoTime.AddDays(3))},
         UsageProviderKind.Claude=>new[]{new UsageWindow("5시간",0,DemoTime.AddHours(2)),new UsageWindow("주간",45,DemoTime.AddDays(3))},
+        UsageProviderKind.Grok=>new[]{new UsageWindow("Build 주간",32,DemoTime.AddDays(4))},
         _=>new[]{new UsageWindow("Pro",17,DemoTime.AddHours(5)),new UsageWindow("Flash",6,DemoTime.AddHours(5))}
     },DemoTime,"DEMO","검증용 데모 데이터 · 실제 계정 사용량이 아닙니다.");
 
@@ -48,7 +49,7 @@ internal sealed class VisualVerification
         Directory.CreateDirectory(_output);
         _report.Add("VibeMeters shown-window WPF verification");
         _report.Add("ISOLATION: --smoke-test uses its own mutex, in-memory settings, no provider instances and no credential watchers.");
-        _report.Add("DATA: Synthetic Codex remaining 61%; Claude remaining 100% / 55%; Gemini remaining 83% / 94%. These are not account measurements.");
+        _report.Add("DATA: Synthetic Codex remaining 61%; Claude remaining 100% / 55%; Gemini remaining 83% / 94%; Grok Build remaining 68%. These are not account measurements.");
         _report.Add("CAPTURE: RenderTargetBitmap of the shown window's client root at its current monitor DPI; excludes native desktop/compositor and tray pixels.");
         try
         {
@@ -83,7 +84,7 @@ internal sealed class VisualVerification
             {
                 await StableAsync(settings);
                 Check("settings contains no scroll viewers",!Descendants<ScrollViewer>(settings).Any());
-                Check("settings has all service selection and mode controls",new[]{"CodexCheck","ClaudeCheck","GeminiCheck","CodexModeCombo","ClaudeModeCombo","GeminiModeCombo","ThemeCombo","IntervalCombo"}.All(name=>settings.FindName(name)!=null));
+                Check("settings has all service selection and mode controls",new[]{"CodexCheck","ClaudeCheck","GeminiCheck","GrokCheck","CodexModeCombo","ClaudeModeCombo","GeminiModeCombo","GrokModeCombo","ThemeCombo","IntervalCombo"}.All(name=>settings.FindName(name)!=null));
                 Capture(settings,"settings-dark.png");
                 Check("settings labels fit the client",TextFits(Root(settings),Root(settings)));
                 await CheckSettingsInteractionsAsync(settings);
@@ -239,6 +240,14 @@ internal sealed class VisualVerification
         AssertMainLayout("all services minimum readable size",new[]{("Codex",1),("Claude",2),("Gemini",2)});
         Check("all service rows retained with readable minimum height",_window.ActualHeight>=160);
         Capture(_window,"window-all-services-minimum-dark.png");
+        _settings.ShowGrok=true;_window.ApplyProviderVisibility();await ResizeAsync(360,510);
+        AssertMainLayout("four services including Grok",new[]{("Codex",1),("Claude",2),("Gemini",2),("Grok",1)});
+        Check("Grok Build scope stays explicit without fabricated Bot row",Rows(Cards()[3]).Select(ValueText).SequenceEqual(new[]{"68%"})&&Descendants<TextBlock>(Cards()[3]).Any(t=>t.Text=="Build 주간"));
+        Capture(_window,"window-four-services-grok-dark.png");
+        _window.Width=220;_window.Height=140;await StableAsync(_window);
+        AssertMainLayout("four services minimum readable size",new[]{("Codex",1),("Claude",2),("Gemini",2),("Grok",1)});
+        Capture(_window,"window-four-services-grok-minimum-dark.png");
+        _settings.ShowGrok=false;
         _settings.ShowGemini=false;_window.ApplyProviderVisibility();await ResizeAsync(360,267);
     }
 

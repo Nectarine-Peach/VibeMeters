@@ -62,7 +62,7 @@ internal static class OfficialCliInstaller
 
     internal static async Task<CliInstallResult> InstallAsync(UsageProviderKind kind, CancellationToken cancellationToken, IProgress<string> progress)
     {
-        if (kind == UsageProviderKind.Gemini) return new(false, "Gemini는 동봉된 런타임을 사용합니다.");
+        if (kind is not (UsageProviderKind.Codex or UsageProviderKind.Claude)) return new(false, "이 서비스는 CLI 설치 기능을 사용하지 않습니다.");
         if (Find(kind) is not null) return new(true, "이미 설치된 CLI를 사용합니다.");
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromMinutes(10));

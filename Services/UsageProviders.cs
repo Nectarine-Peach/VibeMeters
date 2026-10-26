@@ -22,7 +22,7 @@ public static class UsageProviderFactory
     public static IReadOnlyList<IUsageProvider> CreateDefault()
     {
         var credentials = new CredentialReader();
-        return [new UsageProvider(UsageProviderKind.Codex, credentials), new UsageProvider(UsageProviderKind.Claude, credentials), new GeminiUsageProvider()];
+        return [new UsageProvider(UsageProviderKind.Codex, credentials), new UsageProvider(UsageProviderKind.Claude, credentials), new GeminiUsageProvider(), new GrokUsageProvider()];
     }
 }
 
@@ -50,8 +50,8 @@ public sealed class UsageProvider : IUsageProvider
 
     public UsageProvider(UsageProviderKind kind, ICredentialReader credentials, HttpClient? httpClient = null)
     {
-        if (kind == UsageProviderKind.Gemini)
-            throw new ArgumentException("Gemini uses its official CLI through GeminiUsageProvider.", nameof(kind));
+        if (kind is not (UsageProviderKind.Codex or UsageProviderKind.Claude))
+            throw new ArgumentException("This HTTP provider supports Codex and Claude only.", nameof(kind));
         Kind = kind;
         _credentials = credentials;
         _http = httpClient ?? SharedClient;
@@ -196,6 +196,8 @@ public static class UsageParser
         var connectedWithoutQuota = false;
         if (kind == UsageProviderKind.Gemini)
             return new(kind, UsageStatus.Unavailable, windows, now, plan, "공식 Gemini CLI의 /stats에서 사용량을 확인하세요.");
+        if (kind == UsageProviderKind.Grok)
+            return new(kind, UsageStatus.Unavailable, windows, now, plan, "공식 Grok Build CLI에서 로그인한 뒤 사용량을 확인해 주세요.");
         if (root.ValueKind != JsonValueKind.Object)
             return new(kind, UsageStatus.Unavailable, windows, now, plan, "서버가 올바른 사용량 정보를 제공하지 않았습니다.");
         if (kind == UsageProviderKind.Codex)

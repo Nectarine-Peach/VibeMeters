@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace VibeMeters.Models;
 
-public enum UsageProviderKind { Codex, Claude, Gemini }
+public enum UsageProviderKind { Codex, Claude, Gemini, Grok }
 public enum UsageStatus { Ready, NotConnected, AuthenticationRequired, RateLimited, Unavailable }
 
 public sealed record UsageWindow(string Name, double UsedPercent, DateTimeOffset? ResetsAt, TimeSpan? Duration = null)

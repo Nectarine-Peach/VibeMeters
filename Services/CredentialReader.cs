@@ -27,19 +27,21 @@ public sealed class CredentialReader : ICredentialReader
     private readonly string _codexHome;
     private readonly string _claudeHome;
     private readonly string _geminiHome;
+    private readonly string? _grokHome;
 
-    public CredentialReader(string? codexHome = null, string? claudeHome = null)
+    public CredentialReader(string? codexHome = null, string? claudeHome = null, string? grokHome = null)
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         _codexHome = codexHome ?? Environment.GetEnvironmentVariable("CODEX_HOME") ?? Path.Combine(home, ".codex");
         _claudeHome = claudeHome ?? Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR") ?? Path.Combine(home, ".claude");
         _geminiHome = Path.Combine(home, ".gemini");
+        _grokHome = grokHome;
     }
 
     public async Task<UsageCredential?> ReadAsync(UsageProviderKind provider, CancellationToken cancellationToken = default)
     {
         // Gemini is opened in its official CLI; VibeMeters does not harvest its OAuth token.
-        if (provider == UsageProviderKind.Gemini) return null;
+        if (provider is UsageProviderKind.Gemini or UsageProviderKind.Grok) return null;
         var path = GetCredentialPath(provider);
         if (!File.Exists(path)) return null;
         // Shared reading avoids interfering with the CLI's atomic token updates.
@@ -69,6 +71,7 @@ public sealed class CredentialReader : ICredentialReader
         UsageProviderKind.Codex => Path.Combine(_codexHome, "auth.json"),
         UsageProviderKind.Claude => Path.Combine(_claudeHome, ".credentials.json"),
             UsageProviderKind.Gemini => Path.Combine(_geminiHome, "oauth_creds.json"),
+        UsageProviderKind.Grok => _grokHome is null ? GrokAuthPath.Resolve() : Path.Combine(_grokHome, "auth.json"),
         _ => throw new ArgumentOutOfRangeException(nameof(provider))
     };
 

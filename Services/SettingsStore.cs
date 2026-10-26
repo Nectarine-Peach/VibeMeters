@@ -25,12 +25,13 @@ public static class SettingsStore
         if (!Enum.IsDefined(settings.CodexDisplayMode)) settings.CodexDisplayMode = UsageDisplayMode.Remaining;
         if (!Enum.IsDefined(settings.ClaudeDisplayMode)) settings.ClaudeDisplayMode = UsageDisplayMode.Remaining;
         if (!Enum.IsDefined(settings.GeminiDisplayMode)) settings.GeminiDisplayMode = UsageDisplayMode.Remaining;
+        if (!Enum.IsDefined(settings.GrokDisplayMode)) settings.GrokDisplayMode = UsageDisplayMode.Remaining;
         if (settings.RefreshIntervalSeconds != 0 && settings.RefreshIntervalSeconds is < 30 or > 86400) settings.RefreshIntervalSeconds = 120;
         if (settings.Left.HasValue && !double.IsFinite(settings.Left.Value)) settings.Left = null;
         if (settings.Top.HasValue && !double.IsFinite(settings.Top.Value)) settings.Top = null;
         settings.WindowWidth = double.IsFinite(settings.WindowWidth) ? Math.Clamp(settings.WindowWidth, 220, 16384) : 360;
         settings.WindowHeight = double.IsFinite(settings.WindowHeight) ? Math.Clamp(settings.WindowHeight, 140, 16384) : 360;
-        if (!settings.ShowCodex && !settings.ShowClaude && !settings.ShowGemini) settings.ShowCodex = true;
+        if (!settings.ShowCodex && !settings.ShowClaude && !settings.ShowGemini && !settings.ShowGrok) settings.ShowCodex = true;
         return settings;
     }
     public static void Save(AppSettings settings)

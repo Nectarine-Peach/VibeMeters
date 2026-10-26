@@ -7,6 +7,13 @@ using System.Text.Json;
 using VibeMeters.Models;
 using VibeMeters.Services;
 
+if (args.Contains("--grok-live-check"))
+{
+    var actual = await new GrokUsageProvider().FetchAsync();
+    Console.WriteLine(JsonSerializer.Serialize(new { Status = actual.Status.ToString(), actual.Plan, actual.CheckedAt,
+        actual.Message, Windows = actual.Windows.Select(window => new { window.Name, window.UsedPercent, window.RemainingPercent, window.ResetsAt }) }));
+    return actual.Status == UsageStatus.Ready ? 0 : 2;
+}
 var suite = new RegressionSuite();
 return await suite.RunAsync();
 
@@ -521,6 +528,7 @@ sealed class RegressionSuite
                 var result = await LoginService.LoginAsync(kind, cancelled.Token);
                 True(!result.Success); True(result.Message.Contains("취소", StringComparison.Ordinal));
             });
+        var grok = await GrokRegressionSuite.RunAsync(); _passed += grok.Passed; _failed += grok.Failed;
         Console.WriteLine($"\n{_passed} passed; {_failed} failed.");
         return _failed == 0 ? 0 : 1;
     }

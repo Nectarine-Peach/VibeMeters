@@ -71,6 +71,7 @@ internal static class OfficialCliProcess
             directories.Insert(0, customInstall);
         if (name == "agy") directories.Insert(0,
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "agy", "bin"));
+        if (name == "grok") directories.Insert(0, Path.Combine(home, ".grok", "bin"));
         directories.AddRange((Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator));
         // An installer updates User PATH after this process started. Re-read it without
         // changing the user's environment or requiring a VibeMeters restart.

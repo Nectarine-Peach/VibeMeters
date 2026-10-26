@@ -6,11 +6,13 @@ Codex·Claude·Gemini·Grok의 남은 한도와 사용량을 작은 Windows 창�
 
 **Windows 10/11 x64 · 트레이 상주 · 항상 위 · 다크/라이트 테마**
 
+**Gemini 개인 계정(Antigravity)과 Grok Build 구독 한도도 앱 안에서 표시합니다.**
+
 [Windows용 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [릴리스 노트](https://github.com/Nectarine-Peach/VibeMeters/releases/latest)
 
-<img src="docs/screenshots/window-mini-dark.png" alt="한도별 행을 세로로 표시하는 VibeMeters 미니 창" width="274">
+<img src="docs/screenshots/window-mini-dark.png" alt="Codex·Claude·Gemini Antigravity·Grok Build를 함께 표시하는 미니 창" width="274">
 
-데모 데이터로 실행한 실제 앱의 렌더링 화면입니다.
+네 서비스의 합성 데모를 실제 WPF 화면으로 렌더링했습니다. Gemini는 개인 Antigravity 한도, Grok은 Build 전용 한도 예시이며 실계정 수치가 아닙니다.
 
 ## 지원 계정과 표시 항목
 
@@ -22,7 +24,8 @@ Codex·Claude·Gemini·Grok의 남은 한도와 사용량을 작은 Windows 창�
 | **Codex Business** | **개인** 한도의 남은/사용 비율과 제공된 초기화 시각 |
 | **Claude 개인 구독** | 5시간·주간 구독 한도와 활성화된 월 추가 사용 |
 | **Claude Enterprise** | **월추가** 사용 비율. 개인 구독의 5시간·주간 한도와 구분 |
-| **Gemini / Code Assist** | 회사 Code Assist 할당량 또는 개인 Antigravity의 Gemini 공유 한도 |
+| **Gemini 개인 계정 / Antigravity** | Gemini 공유 5시간·주간 및 제공되는 Argon 한도. Gemini 웹·앱 한도와 구분 |
+| **Gemini 회사 계정 / Code Assist** | 지원되는 계정·프로젝트가 반환한 모델별 할당량 |
 | **Grok Build / X 구독** | 공식 Build CLI가 제공한 Build 전용 또는 공유 구독 사용 비율·초기화 정보 |
 
 Codex Business는 `spend_control.individual_limit`, Claude Enterprise는 활성화된 `extra_usage.utilization` 응답을 사용합니다. 비율이 없는 지원 응답에는 **연결됨 · 비율 미제공**을 표시하며 수치를 추정하지 않습니다. 회사의 서비스 권한·SSO·네트워크 정책에 따라 조회나 로그인이 제한될 수 있으며, 모든 회사 계정 구성을 보장하지 않습니다. v1.4.4에서 실제 계정 재로그인·SSO 승인은 별도 검증하지 않았습니다. [개인·회사 계정 상세 안내](docs/account-usage.md) · [검증 범위](VERIFICATION.md).
@@ -92,13 +95,13 @@ Grok도 기본적으로 꺼져 있습니다. 공식 Grok Build CLI의 기존 인
 | :---: | :---: |
 | <img src="docs/screenshots/window-standard-dark.png" alt="표준 다크 창" width="360"> | <img src="docs/screenshots/window-standard-light.png" alt="표준 라이트 창" width="360"> |
 
-| 세 서비스 함께 표시 | 최소 크기 |
+| 네 서비스 함께 표시 | 네 서비스 최소 폭 |
 | :---: | :---: |
-| <img src="docs/screenshots/window-all-services-dark.png" alt="Codex·Claude·Gemini 통합 표시" width="360"> | <img src="docs/screenshots/window-minimum-dark.png" alt="220×140 논리 픽셀 최소 창" width="220"> |
+| <img src="docs/screenshots/window-all-services-dark.png" alt="Codex·Claude·Gemini Antigravity·Grok Build 네 서비스" width="360"> | <img src="docs/screenshots/window-minimum-dark.png" alt="모든 한도 행을 유지한 220×223 논리 픽셀 창" width="220"> |
 
-<img src="docs/screenshots/settings-dark.png" alt="서비스·테마·새로고침·계정 연결 설정" width="400">
+<img src="docs/screenshots/settings-dark.png" alt="네 서비스 표시·수치 기준·테마·새로고침·계정 연결 설정" width="400">
 
-이미지는 데모 데이터로 실행한 네이티브 Windows 앱의 렌더링 결과입니다. AI 디자인 시안이나 실시간 계정 사용량이 아닙니다. 캡처 방식과 제약은 [검증 기록](VERIFICATION.md)에 설명합니다.
+2026-10-26의 v1.4.5 WPF 컨트롤을 합성 데이터로 렌더링한 이미지입니다. 표준은 360×551, 미니는 274×300, 최소 폭은 220×223 논리 픽셀로 모든 행을 유지합니다. 실제 계정·인증·사용자 설정에 접근하지 않았습니다. OS 창 테두리·트레이 픽셀을 포함한 데스크톱 캡처나 회귀 검증 결과는 아닙니다. [캡처 방식과 범위](docs/screenshots/README.md).
 
 </details>
 

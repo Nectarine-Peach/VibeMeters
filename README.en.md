@@ -6,11 +6,13 @@ Keep your **Codex, Claude, Gemini, and Grok quotas** visible in a small Windows 
 
 **Windows 10/11 x64 · Always on top · Dark / light / system theme**
 
+**Personal Gemini via Antigravity and Grok Build subscription quotas are displayed inside the app.**
+
 [Download ZIP for Windows](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [Release notes](https://github.com/Nectarine-Peach/VibeMeters/releases/latest)
 
-<img src="docs/screenshots/window-mini-dark.png" alt="VibeMeters mini window" width="274">
+<img src="docs/screenshots/window-mini-dark.png" alt="Mini window showing Codex, Claude, Gemini Antigravity and Grok Build" width="274">
 
-*Native app capture with demo data.*
+*Actual WPF rendering with synthetic data for all four services. Gemini shows a personal Antigravity example; Grok shows Build-only quota. These are not live account values.*
 
 ## Supported accounts and quota types
 
@@ -22,7 +24,8 @@ Alongside personal subscription quotas, VibeMeters displays **Codex Business ind
 | **Codex Business** | **Individual** remaining/used percentage and the supplied reset time |
 | **Claude personal subscription** | Five-hour and weekly quotas, plus enabled monthly additional usage |
 | **Claude Enterprise** | **Monthly additional usage** percentage, separate from personal subscription windows |
-| **Gemini / Code Assist** | Business Code Assist quota buckets or personal Antigravity shared Gemini quotas |
+| **Personal Gemini / Antigravity** | Shared Gemini five-hour, weekly and supplied Argon quotas, separate from Gemini web/app limits |
+| **Business Gemini / Code Assist** | Model quota buckets returned for supported accounts and projects |
 | **Grok Build / X subscription** | Build-only or shared subscription percentages and reset information supplied by the official CLI |
 
 Codex Business uses the supplied `spend_control.individual_limit`; Claude Enterprise uses enabled `extra_usage.utilization`. When a recognized connected-account response supplies no percentage, the app reports that state without inventing a value. Service permissions, SSO and corporate network policies can restrict access; support does not guarantee every organization configuration. Actual account reauthentication and SSO approval were not separately exercised for v1.4.4. See [account details](docs/account-usage.md) and [verification scope](VERIFICATION.md).
@@ -92,15 +95,15 @@ Refresh options are **30 seconds, 1, 2, 5, or 15 minutes, or manual**; the defau
 
 ### All services and minimum size
 
-| Codex, Claude, and Gemini | Minimum window |
+| All four services | Four-service minimum width |
 | :---: | :---: |
-| <img src="docs/screenshots/window-all-services-dark.png" alt="All three services" width="360"> | <img src="docs/screenshots/window-minimum-dark.png" alt="Minimum 220 by 140 logical pixel window" width="220"> |
+| <img src="docs/screenshots/window-all-services-dark.png" alt="Codex, Claude, Gemini Antigravity and Grok Build" width="360"> | <img src="docs/screenshots/window-minimum-dark.png" alt="220 by 223 logical pixels with every quota row visible" width="220"> |
 
 ### Settings
 
-<img src="docs/screenshots/settings-dark.png" alt="Service, theme, refresh and account settings" width="400">
+<img src="docs/screenshots/settings-dark.png" alt="Four-service visibility, display basis, theme, refresh and account settings" width="400">
 
-These are app-rendered captures using demo data. See the [verification notes](VERIFICATION.md) for capture details.
+These images render v1.4.5 WPF controls with synthetic data on 2026-10-26. Standard size is 360×551, mini is 274×300, and minimum width is 220×223 logical pixels with every row visible. No real account, credentials or user preferences were accessed. These are not desktop/compositor/tray screenshots or regression-test results. See the [capture method and scope](docs/screenshots/README.md).
 
 </details>
 

@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-26",
+  "sourceCommit": "a52ee12e580a795a8cf623326634276a4c5b6192",
+  "assemblyVersion": "1.4.5.0",
+  "method": "Existing VisualVerification.Capture / RenderTargetBitmap; capture-only harness, not smoke suite",
+  "isolation": "Base WPF Application; no VibeMeters.App startup, providers, credential watchers, timers or settings writes",
+  "data": "Synthetic remaining: Codex 73/61, Claude 80/55, Gemini Antigravity 83/68/42, Grok Build 68",
+  "excludes": "OS compositor borders, taskbar/tray pixels, real account values, login and behavioral regression verification",
+  "captures": [
+    {
+      "file": "settings-dark.png",
+      "logicalWidth": 410,
+      "logicalHeight": 710,
+      "dpiX": 96,
+      "dpiY": 96,
+      "sha256": "a916e025a2315d5e6917e2f5facb1fe020488f82d156124d5cdc656fdadda575"
+    },
+    {
+      "file": "window-all-services-dark.png",
+      "logicalWidth": 360,
+      "logicalHeight": 551,
+      "dpiX": 96,
+      "dpiY": 96,
+      "sha256": "10e56be02ebb3ae8549f4228384c6ed34dbd7bffd8450695cbc38e2904191010"
+    },
+    {
+      "file": "window-all-services-minimum-dark.png",
+      "logicalWidth": 220,
+      "logicalHeight": 223,
+      "dpiX": 96,
+      "dpiY": 96,
+      "sha256": "3c2dcab4e53a389b16818dc753b976f6f5d0915b663dec2862e08d5938de2784"
+    },
+    {
+      "file": "window-mini-dark.png",
+      "logicalWidth": 274,
+      "logicalHeight": 300,
+      "dpiX": 96,
+      "dpiY": 96,
+      "sha256": "20d4a9e0d26fac8a83665d153fb577d7c948eaa6ffdd5e35167524bf29a4b98e"
+    },
+    {
+      "file": "window-mini-light.png",
+      "logicalWidth": 274,
+      "logicalHeight": 300,
+      "dpiX": 96,
+      "dpiY": 96,
+      "sha256": "5fccddbd0720ff36a91975371378adbe4ffc2ad4e327ba61d9937dad0ef027c7"
+    },
+    {
+      "file": "window-minimum-dark.png",
+      "logicalWidth": 220,
+      "logicalHeight": 223,
+      "dpiX": 96,
+      "dpiY": 96,
+      "sha256": "3c2dcab4e53a389b16818dc753b976f6f5d0915b663dec2862e08d5938de2784"
+    },
+    {
+      "file": "window-standard-dark.png",
+      "logicalWidth": 360,
+      "logicalHeight": 551,
+      "dpiX": 96,
+      "dpiY": 96,
+      "sha256": "10e56be02ebb3ae8549f4228384c6ed34dbd7bffd8450695cbc38e2904191010"
+    },
+    {
+      "file": "window-standard-light.png",
+      "logicalWidth": 360,
+      "logicalHeight": 551,
+      "dpiX": 96,
+      "dpiY": 96,
+      "sha256": "0531cd3297e1607cecebd04c1b0ba2a8ef8feaba403cacc7e4fb789885550916"
+    },
+    {
+      "file": "window-wide-dark.png",
+      "logicalWidth": 1040,
+      "logicalHeight": 280,
+      "dpiX": 96,
+      "dpiY": 96,
+      "sha256": "b8c90df110fcdf395c49e9eb8e763080a8bfecec7c1732fe72378f6b98837b5b"
+    }
+  ]
+}

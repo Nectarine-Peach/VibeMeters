@@ -1,3 +1,17 @@
+# v1.4.6 문서 포함 배포 — 2026-10-26
+
+최신 한/영 README와 네 서비스 이미지 9종, 캡처 방법·파일별 해시 기록을 배포 ZIP에 포함하는 버전입니다. v1.4.5의 애플리케이션 동작 코드는 유지하고 버전 메타데이터와 릴리스 문서만 갱신합니다. 기존 `scripts/publish.ps1`의 루트 README 복사와 `docs` 전체 복사를 사용합니다.
+
+배포 검증 범위는 최종 커밋의 Release win-x64 self-contained 컴파일·패키징, 계정 없는 Gemini 번들 내장 진단, EXE 버전/커밋 일치, ZIP 전체 파일 및 원본 README/docs의 SHA-256 일치, 이미지 9종 포함과 README 상대 링크 해석, 원격 tag·published/latest·asset 크기/digest 확인입니다. 최종 배포 Node는 24.22.0을 유지합니다.
+
+사용자 요청에 따라 회귀 테스트·UI 스모크·새 화면 캡처·실제 CLI 설치·실계정 조회/로그인·로컬 앱 교체를 실행하지 않습니다. 아래 문서 캡처와 개발 시점 테스트는 각 당시 기록입니다.
+
+```powershell
+.\scripts\publish.ps1 -Node .\dist\comparison\original-node\node.exe -OutputDirectory .\dist\releases\v1.4.6\VibeMeters-win-x64
+git diff --check
+```
+
+---
 # README 문서 캡처 — 2026-10-26
 
 사용자가 승인한 스크린샷 갱신 범위에서 현재 v1.4.5 DLL의 실제 WPF 컨트롤을 합성 데이터로 렌더링했습니다. 개인 Gemini Antigravity(5시간·주간·Argon)와 Grok Build 주간을 포함한 네 서비스의 표준/라이트/미니/최소 폭/설정 이미지 9종을 생성하고 직접 열어 시각적으로 확인했습니다. [캡처 방법·크기·한계](docs/screenshots/README.md).

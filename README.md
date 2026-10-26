@@ -27,15 +27,17 @@ Codex·Claude·Gemini의 남은 한도와 사용량을 작은 Windows 창에서 
 
 | 서비스 | 연결 방법 | 표시 정보 |
 | --- | --- | --- |
-| **Codex** | 공식 Codex CLI 설치 후 `codex login` 또는 설정의 **Codex 로그인** | ChatGPT 계정에서 반환한 구독 사용량 한도 |
-| **Claude** | Claude Code 설치 후 `claude auth login --claudeai` 또는 설정의 **Claude 로그인** | 5시간·주간 등 계정에 제공되는 구독 한도 |
+| **Codex** | 설정의 **Codex 로그인**. CLI가 없으면 공식 설치를 선택한 뒤 로그인 | 계정에서 제공한 구독 한도·Business 개인 한도 |
+| **Claude** | 설정의 **Claude 로그인**. CLI가 없으면 공식 설치를 선택한 뒤 로그인 | 5시간·주간 구독 한도·활성화된 월 추가 사용 |
 | **Gemini** | 설정에서 Gemini를 켠 뒤 **Gemini 로그인**으로 공식 브라우저 인증 | 공식 Gemini CLI 코어가 반환한 모델별 할당량과 초기화 정보 |
 
-Codex·Claude 로그인 버튼은 설치된 공식 CLI를 백그라운드에서 실행합니다. 터미널 창 없이 열린 브라우저에서 인증을 완료하세요. 앱은 로그인 결과를 확인한 뒤 사용량을 다시 조회하며, 5분 안에 완료되지 않으면 대기를 종료합니다. 웹사이트나 데스크톱 앱 로그인만으로는 필요한 CLI 인증 파일이 없을 수 있습니다. 인증 파일 변경도 자동으로 감지합니다.
+Codex·Claude는 기존 인증 파일이 있으면 CLI 없이 사용량을 조회합니다. 로그인 버튼을 눌렀을 때 CLI가 없으면 **설치 후 로그인** 또는 취소를 선택할 수 있습니다. 선택한 경우에만 공식 설치 프로그램을 내려받아 현재 사용자 계정에 설치하며 진행·오류·재시도를 안내합니다. 설치 뒤 CLI를 다시 찾고 기존 로그인 흐름으로 연결합니다. 설치에는 인터넷이 필요하며 관리자 권한을 요청하지 않습니다. [CLI 설치 범위](docs/cli-installation.md).
+
+설치된 공식 CLI는 백그라운드에서 실행합니다. 터미널 창 없이 열린 브라우저에서 인증을 완료하세요. 앱은 로그인 결과를 확인한 뒤 사용량을 다시 조회하며, 5분 안에 완료되지 않으면 대기를 종료합니다. 웹사이트나 데스크톱 앱 로그인만으로는 필요한 CLI 인증 파일이 없을 수 있습니다. 인증 파일 변경도 자동으로 감지합니다.
 
 Gemini는 지원되는 Google 계정과 Code Assist 프로젝트가 필요하며 기본적으로 꺼져 있습니다. 사용량은 **VibeMeters 안에서** 표시합니다. 일반 조회는 터미널·브라우저를 열거나 모델 생성 요청을 보내지 않습니다.
 
-표시값은 계정 한도의 비율입니다. API 키 결제액·토큰 비용·정확한 남은 질문 횟수를 의미하지 않습니다. 서버가 제공하지 않는 값은 추정하지 않습니다. VibeMeters 자체 계정은 필요하지 않습니다.
+표시값은 계정 한도의 비율입니다. API 키 결제액·토큰 비용·정확한 남은 질문 횟수를 의미하지 않습니다. 서버가 제공하지 않는 값은 추정하지 않습니다. 회사 계정의 개인 한도·월 추가 사용은 구독의 5시간·주간 한도와 구분하며, 비율을 제공하지 않는 정상 응답은 **연결됨 · 비율 미제공**으로 표시합니다. [개인·회사 계정 안내](docs/account-usage.md)를 참고하세요. VibeMeters 자체 계정은 필요하지 않습니다.
 
 </details>
 
@@ -117,17 +119,17 @@ Claude의 성공 조회는 **최소 2분** 간격으로 캐시합니다. 429 응
 <details>
 <summary>소스에서 빌드·검증</summary>
 
-Windows, **.NET 8 SDK**, 고정된 Gemini CLI 코어가 지원하는 **Node.js/npm**이 필요합니다. 배포 스크립트는 필요한 경우 잠금 파일의 npm 의존성을 설치하고 사용 가능한 `node.exe`를 함께 포함합니다.
+Windows x64, **.NET 8 SDK**, **Node.js 24.22.0/npm**이 필요합니다. 배포 스크립트는 잠금 파일로 빌드 의존성을 복원하고 Gemini 공식 코어의 인증·할당량 브리지를 번들링합니다. 배포본에는 `node.exe`와 번들·라이선스만 포함하며 `node_modules`는 포함하지 않습니다. 빌드용 Node 버전은 `runtime/gemini-quota/package.json`에 고정합니다.
 
 ```powershell
 git clone https://github.com/Nectarine-Peach/VibeMeters.git
 cd VibeMeters
 dotnet build -c Release
 .\scripts\publish.ps1
-.\dist\VibeMeters-win-x64\VibeMeters.exe
+.\dist\VibeMeters-portable-win-x64\VibeMeters.exe
 ```
 
-산출물은 `dist/VibeMeters-win-x64/`와 `dist/VibeMeters-win-x64.zip`입니다. runtime 폴더를 함께 배포해야 합니다. 배포본과 변경 사항은 [릴리스 페이지](https://github.com/Nectarine-Peach/VibeMeters/releases)에서 확인하세요.
+산출물은 `dist/VibeMeters-portable-win-x64/`와 같은 이름의 ZIP입니다. 기존 산출물은 덮어쓰지 않으며 다시 빌드할 때는 `-OutputDirectory`로 새 경로를 지정하세요. `-Node`로 고정 버전 Node의 경로를 선택할 수 있습니다. runtime 폴더를 함께 배포해야 하며 사용 PC에 .NET·Node·npm 설치는 필요하지 않습니다. 설정과 CLI 인증 저장 위치는 기존과 같습니다. 패키징 경계와 오프라인 검사 방법은 [패키징 안내](docs/packaging.md)를 참고하세요. 배포본과 변경 사항은 [릴리스 페이지](https://github.com/Nectarine-Peach/VibeMeters/releases)에서 확인하세요.
 
 격리된 제공자·파서·설정 회귀 테스트:
 

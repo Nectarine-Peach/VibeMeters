@@ -1,3 +1,29 @@
+# Final verification / 최종 검증 — v1.4.4 · 2026-10-26
+
+CLI 설치 기능을 추가하기 전의 변경 상태에서 회귀 **139개**, 실행 창·배치·복원 검사 **239개**를 통과했습니다. 새 창 검사는 합성 Codex Business 개인 한도·Claude 월 추가 사용·비율 미제공 상태의 실제 WPF 렌더링을 포함합니다. [당시 실행 창 검사 원문](docs/verification/v1.4.4-window-checks.txt).
+
+이후 로그인용 공식 CLI 설치 안내·동의·진행·취소·재탐색 기능을 추가했습니다. **사용자 요청에 따라 추가 이후의 회귀 및 UI 스모크는 실행하지 않았습니다.** 아래 139/239 성공은 이 기능의 검증 증거가 아닙니다. 최종본은 Release 컴파일/패키징과 기존 Gemini 계정 없는 내장 runtime 진단만 수행하며, 이 PC에 CLI를 설치하거나 계정 로그인을 실행하지 않았습니다. [설치 범위와 미검증 항목](docs/cli-installation.md).
+
+- `dotnet run --project tests/VibeMeters.Tests.csproj -c Release -r win-x64 -p:SelfContained=true`: 139 passed, 0 failed. 기본 dotnet 환경은 SDK 10.0.400 / runtime 10.0.11이므로 .NET 8을 자체 포함해 검사했습니다.
+- `bin/Release/net8.0-windows/win-x64/VibeMeters.exe --smoke-test`: 239 passed, 0 failed. 별도 mutex·메모리 설정·합성 데이터로 실행하며 실제 제공자/인증 파일 감시와 사용자 설정 쓰기를 사용하지 않았습니다. Business 및 비율 미제공 캡처를 시각적으로 확인했습니다.
+- 배포는 Release win-x64 .NET self-contained를 유지하고, Gemini core 0.65.0 / esbuild 0.25.12 / 기존 배포와 동일한 Node 24.22.0을 사용합니다. `scripts/publish.ps1`은 node_modules 없이 저장소 밖·빈 홈·네트워크/브라우저 차단 상태에서 SDK 로드·mock project/quota·미로그인 상태와 번들 해시를 검사한 뒤 ZIP을 만듭니다.
+- 패키징용 npm은 PATH의 설치 도구이며 고정하지 않았습니다. npm lifecycle scripts는 차단하고 의존성은 lock으로 복원합니다. 배포 Node는 버전·해시를 고정합니다. [패키징 범위](docs/packaging.md).
+
+실제 계정 재로그인·SSO 승인·브라우저 실패 복구·Gemini 실계정 조회·OS 재부팅은 이번 릴리스 검사에 포함하지 않았습니다. 캡처는 WPF RenderTargetBitmap이며 데스크톱 전체·OS 트레이 픽셀 검증은 아닙니다. 아래 회사 PC 관측과 이전 버전 검증은 각각의 당시 기록입니다.
+
+---
+# 회사·개인 계정 수정 — 2026-10-26
+
+원인: 두 서비스의 로그인은 유효했지만 기존 파서가 회사 계정의 개인 한도·추가 사용 응답을 지원하지 않았습니다. Codex는 `spend_control.individual_limit.remaining_percent`와 초기화 시점을, Claude는 `extra_usage.utilization`을 표시하도록 수정했습니다. 기존 개인 구독 창과 계정 전환 후 캐시 제거·429 대기 보존도 유지합니다.
+
+정정: 초기 조사에서 Codex의 `spend_control` 하위 개인 한도를 확인하지 않고 ‘비율 미제공’으로 판단한 결론은 철회했습니다. 추가 읽기 전용 확인에서 API 계정이 저장된 CLI 계정과 일치했고, 개인 한도 잔여 **48%** 및 `reset_at`을 확인했습니다. 비율이 실제로 없는 크레딧형 응답에 대한 연결 상태 표시는 유지합니다. 개인 한도를 5시간·주간 한도로 오인하거나 금액 문자열로 비율을 만들어내지 않습니다.
+
+진단: Codex CLI 0.163.0 / Claude Code 2.1.306 설치, 기존 회사 OAuth 인증의 두 API HTTP 200 확인. 인증 파일·토큰 변경과 자체 갱신은 수행하지 않았습니다. 로그인 원시 출력은 저장하지 않고 네트워크·인증서·SSO 오류 및 401/403/407을 구분합니다.
+
+최종 회귀 검증: .NET SDK 8.0.427로 `dotnet run --project tests/VibeMeters.Tests.csproj -c Release` 실행, **139개 통과·0개 실패**. 개인 한도 실제 응답 구조·remaining 우선·used fallback·절대/상대 초기화·구독창 공존·잘못된 값 처리와 기존 개인/회사 계정 회귀를 포함합니다. 컴파일 오류·경고 메시지는 없었습니다. 이전 단계의 207개 실행 창 검사는 통과했으나 개인 한도 수정 이후 전체 창 검사를 반복하지 않았습니다. `dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o dist/VibeMeters-account-fix-v2-win-x64`가 성공했습니다. 최신 배포 EXE로 앱을 교체 실행한 뒤 Windows UI Automation으로 Codex 개인 한도 잔여 48%와 Claude 월추가 비율 표시를 확인했습니다. 실행 파일은 `dist/VibeMeters-account-fix-v2-win-x64/VibeMeters.exe`입니다.
+
+실제 개인/회사 계정 재로그인·SSO 승인 및 브라우저 실패 복구 실동작은 자동 실행하지 않았습니다. [사용 범위와 제약](docs/account-usage.md).
+---
 # Final verification / 최종 검증 — v1.4.3 · 2026-10-24
 
 **자동 회귀 107개, 실행 창·배치·복원 검사 207개 통과. 빌드 경고·오류 0개.**

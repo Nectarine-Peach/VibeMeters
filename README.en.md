@@ -27,11 +27,13 @@ No installer is required. To build it yourself, expand **Build and verification*
 
 | Service | Setup | What is shown |
 | --- | --- | --- |
-| **Codex** | Install the official Codex CLI and run `codex login`, or choose **Codex 로그인** in Settings. | Subscription quota windows returned for your ChatGPT account. |
-| **Claude** | Install Claude Code and run `claude auth login --claudeai`, or choose **Claude 로그인** in Settings. | Available subscription windows, such as five-hour and weekly quotas. |
+| **Codex** | Choose **Codex 로그인** in Settings. If the CLI is missing, choose official installation before sign-in. | Supplied subscription windows and Business individual limits. |
+| **Claude** | Choose **Claude 로그인** in Settings. If the CLI is missing, choose official installation before sign-in. | Subscription windows and enabled monthly additional usage. |
 | **Gemini** | Enable Gemini in Settings and choose **Gemini 로그인** for official browser sign-in. A supported Google account and Code Assist project are required. | Model quota buckets and reset information returned by the official Gemini CLI core. |
 
-Codex and Claude login buttons run the installed official CLI in the background. Complete sign-in in the browser it opens; no terminal window is shown. The app checks the login result before refreshing usage and stops waiting after five minutes. Signing in to a provider's website or desktop app alone may not create the CLI credentials VibeMeters needs. Credential-file changes also trigger a new check. Gemini quotas appear **inside VibeMeters**; normal polling does not open a terminal or browser or send model-generation requests. Gemini is off by default.
+Codex and Claude usage polling works without the CLI when a valid credential file already exists. If a CLI is missing when you click sign-in, the app offers installation or cancellation. Only your explicit install choice downloads the official user-scoped installer, with progress, retry and cancellation. It detects the installed CLI before continuing to browser sign-in; no administrator elevation is requested. See [CLI installation scope](docs/cli-installation.md).
+
+Login buttons run the installed official CLI in the background. Complete sign-in in the browser it opens; no terminal window is shown. The app checks the login result before refreshing usage and stops waiting after five minutes. Signing in to a provider's website or desktop app alone may not create the CLI credentials VibeMeters needs. Credential-file changes also trigger a new check. Gemini quotas appear **inside VibeMeters**; normal polling does not open a terminal or browser or send model-generation requests. Gemini is off by default.
 
 This app shows quota percentages, **not API-key billing, token costs, or a guaranteed number of prompts remaining**. Missing values are shown as unavailable rather than estimated.
 
@@ -118,17 +120,17 @@ See [implementation research](RESEARCH.md) and [verification notes](VERIFICATION
 <details>
 <summary>Build and verification</summary>
 
-Requirements: Windows, the **.NET 8 SDK**, and **Node.js/npm** compatible with the pinned Gemini CLI core. The publish script installs locked npm dependencies if needed and bundles the available `node.exe` runtime.
+Requirements: Windows x64, the **.NET 8 SDK**, and **Node.js 24.22.0/npm**. The publish script restores locked build dependencies and bundles the official Gemini authentication/quota adapter with esbuild. Only the bundle, Node executable and notices ship; `node_modules` stays on the build machine. The Node version is pinned in `runtime/gemini-quota/package.json`.
 
 ```powershell
 git clone https://github.com/Nectarine-Peach/VibeMeters.git
 cd VibeMeters
 dotnet build -c Release
 .\scripts\publish.ps1
-.\dist\VibeMeters-win-x64\VibeMeters.exe
+.\dist\VibeMeters-portable-win-x64\VibeMeters.exe
 ```
 
-Output: `dist/VibeMeters-win-x64/` and `dist/VibeMeters-win-x64.zip`. This is a self-contained Windows x64 package; include its runtime folder when distributing it.
+Output: `dist/VibeMeters-portable-win-x64/` and its ZIP. Existing outputs are never overwritten; choose a new `-OutputDirectory` for another build. Use `-Node` to select the pinned Node executable. Include the runtime folder when distributing this self-contained Windows x64 package; end users do not need .NET, Node or npm installed. Settings and CLI authentication locations are unchanged. See [packaging notes](docs/packaging.md) for boundaries and offline checks.
 
 Run the isolated provider/parser/settings regression suite with:
 

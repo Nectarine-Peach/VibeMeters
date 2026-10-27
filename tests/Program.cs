@@ -7,6 +7,13 @@ using System.Text.Json;
 using VibeMeters.Models;
 using VibeMeters.Services;
 
+if (args.Contains("--claude-live-check"))
+{
+    var actual = await new UsageProvider(UsageProviderKind.Claude, new CredentialReader()).FetchAsync();
+    Console.WriteLine(JsonSerializer.Serialize(new { Status = actual.Status.ToString(), actual.Plan, actual.CheckedAt,
+        actual.Message, Windows = actual.Windows.Select(window => new { window.Name, window.UsedPercent, window.RemainingPercent, window.ResetsAt }) }));
+    return actual.Status == UsageStatus.Ready ? 0 : 2;
+}
 if (args.Contains("--grok-live-check"))
 {
     var actual = await new GrokUsageProvider().FetchAsync();
@@ -350,6 +357,124 @@ sealed class RegressionSuite
             catch (OperationCanceledException) { }
         });
         await TestAsync("Credential files parsed from isolated fixture directory", CredentialFilesAsync);
+        Test("Claude silent renewal only supports CLI versions with safe short-command shutdown", () =>
+        {
+            True(ClaudeCredentialRefresher.IsSupportedVersion("2.1.301 (Claude Code)"));
+            True(ClaudeCredentialRefresher.IsSupportedVersion("2.1.310 (Claude Code)\n"));
+            foreach (var version in new[] { "2.1.300 (Claude Code)", "unknown", "error 2.1.310", "2.1.301-beta" })
+                True(!ClaudeCredentialRefresher.IsSupportedVersion(version));
+        });
+        Test("Claude silent renewal pins file-backed config and excludes alternate auth environments", () =>
+        {
+            var start = new ProcessStartInfo("fixture-only-never-execute");
+            var keys = new[] { "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_BASE_URL", "ANTHROPIC_CUSTOM_HEADERS", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY" };
+            foreach (var key in keys) start.Environment[key] = "fixture";
+            start.Environment["HTTPS_PROXY"] = "fixture-proxy";
+            start.Environment["NODE_EXTRA_CA_CERTS"] = "fixture-ca";
+            typeof(ClaudeCredentialRefresher).GetMethod("ConfigureEnvironment", BindingFlags.NonPublic | BindingFlags.Static)!.Invoke(null, [start, "fixture-config"]);
+            Equal("fixture-config", start.Environment["CLAUDE_CONFIG_DIR"]);
+            True(keys.All(key => !start.Environment.ContainsKey(key)));
+            Equal("fixture-proxy", start.Environment["HTTPS_PROXY"]); Equal("fixture-ca", start.Environment["NODE_EXTRA_CA_CERTS"]);
+        });
+        await TestAsync("Claude expired token is renewed once for concurrent refreshes", async () =>
+        {
+            var credentials = new MutableCredentials(ExpiredClaude());
+            var refresher = new StubClaudeRefresher(_ =>
+            {
+                credentials.Current = RenewedClaude();
+                return Task.FromResult(ClaudeRefreshOutcome.Completed);
+            });
+            var handler = new StubHandler(request =>
+            {
+                Equal("renewed", request.Headers.Authorization?.Parameter);
+                return JsonResponse("""{"five_hour":{"utilization":23}}""");
+            });
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher);
+            var snapshots = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => provider.FetchAsync()));
+            True(snapshots.All(snapshot => snapshot.Status == UsageStatus.Ready && snapshot.Windows[0].UsedPercent == 23));
+            Equal(1, refresher.Calls); Equal(1, handler.Calls);
+        });
+        foreach (var outcome in Enum.GetValues<ClaudeRefreshOutcome>())
+            await TestAsync($"Claude {outcome} without replaced valid token drops previous quota and backs off", async () =>
+            {
+                var credentials = new MutableCredentials(new UsageCredential { AccessToken = "expired", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) });
+                var refresher = new StubClaudeRefresher(_ => Task.FromResult(outcome));
+                var handler = new StubHandler(_ => JsonResponse("""{"five_hour":{"utilization":100}}"""));
+                var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher);
+                Equal(1, (await provider.FetchAsync()).Windows.Count);
+                credentials.Current = ExpiredClaude();
+                ExpireCache(provider);
+                var failed = await provider.FetchAsync();
+                Equal(UsageStatus.AuthenticationRequired, failed.Status); Equal(0, failed.Windows.Count);
+                True(!failed.Message!.Contains("이전"));
+                Equal(failed, await provider.FetchAsync()); Equal(1, refresher.Calls); Equal(1, handler.Calls);
+            });
+        await TestAsync("Claude renewal rejects replacement lacking future expiry", async () =>
+        {
+            var credentials = new MutableCredentials(ExpiredClaude());
+            var refresher = new StubClaudeRefresher(_ =>
+            {
+                credentials.Current = new UsageCredential { AccessToken = "changed-but-no-expiry" };
+                return Task.FromResult(ClaudeRefreshOutcome.Completed);
+            });
+            var handler = new StubHandler(_ => throw new Exception("Usage must not be called"));
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher);
+            Equal(UsageStatus.AuthenticationRequired, (await provider.FetchAsync()).Status); Equal(0, handler.Calls);
+        });
+        await TestAsync("Claude early 401 renews and retries usage exactly once", async () =>
+        {
+            var credentials = new MutableCredentials(new UsageCredential { AccessToken = "expired", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) });
+            var refresher = new StubClaudeRefresher(_ =>
+            {
+                credentials.Current = RenewedClaude();
+                return Task.FromResult(ClaudeRefreshOutcome.Completed);
+            });
+            var handler = new StubHandler(request => request.Headers.Authorization?.Parameter == "renewed"
+                ? JsonResponse("""{"five_hour":{"utilization":12}}""") : new HttpResponseMessage(HttpStatusCode.Unauthorized));
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher);
+            Equal(UsageStatus.Ready, (await provider.FetchAsync()).Status);
+            Equal(2, handler.Calls); Equal(1, refresher.Calls);
+        });
+        foreach (var status in new[] { HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden })
+            await TestAsync($"Claude repeated {(int)status} hides last quota without retry loops", async () =>
+            {
+                var credentials = new MutableCredentials(new UsageCredential { AccessToken = "expired", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) });
+                var refresher = new StubClaudeRefresher(_ => { credentials.Current = RenewedClaude(); return Task.FromResult(ClaudeRefreshOutcome.Completed); });
+                var calls = 0;
+                var handler = new StubHandler(_ => ++calls == 1 ? JsonResponse("""{"five_hour":{"utilization":100}}""") : new HttpResponseMessage(status));
+                var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher);
+                Equal(1, (await provider.FetchAsync()).Windows.Count); ExpireCache(provider);
+                var failed = await provider.FetchAsync();
+                Equal(UsageStatus.AuthenticationRequired, failed.Status); Equal(0, failed.Windows.Count);
+                Equal(status == HttpStatusCode.Unauthorized ? 3 : 2, handler.Calls);
+                Equal(status == HttpStatusCode.Unauthorized ? 1 : 0, refresher.Calls);
+                Equal(failed, await provider.FetchAsync());
+            });
+        await TestAsync("Claude externally replaced account is reread without overwriting or refreshing", async () =>
+        {
+            var credentials = new SequencedClaudeCredentials(ExpiredClaude(), RenewedClaude());
+            var refresher = new StubClaudeRefresher(_ => throw new Exception("External replacement must be reused"));
+            var handler = new StubHandler(request => { Equal("renewed", request.Headers.Authorization?.Parameter); return JsonResponse("""{"five_hour":{"utilization":7}}"""); });
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher);
+            Equal(UsageStatus.Ready, (await provider.FetchAsync()).Status); Equal(0, refresher.Calls);
+        });
+        await TestAsync("Claude missing credentials remove previous account quota", async () =>
+        {
+            var credentials = new MutableCredentials(RenewedClaude());
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(new StubHandler(_ => JsonResponse("""{"five_hour":{"utilization":100}}"""))));
+            Equal(1, (await provider.FetchAsync()).Windows.Count);
+            credentials.Current = null;
+            var missing = await provider.FetchAsync(); Equal(UsageStatus.NotConnected, missing.Status); Equal(0, missing.Windows.Count);
+        });
+        await TestAsync("Claude cancellation during renewal propagates without rendering stale quotas", async () =>
+        {
+            var credentials = new MutableCredentials(ExpiredClaude());
+            using var cancellation = new CancellationTokenSource();
+            var refresher = new StubClaudeRefresher(token => { cancellation.Cancel(); return Task.FromCanceled<ClaudeRefreshOutcome>(token); });
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(new StubHandler(_ => throw new Exception("No usage"))), refresher);
+            try { await provider.FetchAsync(cancellation.Token); throw new Exception("Cancellation did not propagate"); }
+            catch (OperationCanceledException) { }
+        });
         foreach (var kind in OAuthProviders)
         {
             foreach (var status in new[] { HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden })
@@ -639,6 +764,9 @@ sealed class RegressionSuite
         True(!start.Environment.ContainsKey("NODE_OPTIONS")); True(!start.Environment.ContainsKey("NODE_PATH"));
     }
     private static UsageCredential Credential() => new() { AccessToken = "test-secret", AccountId = "test-account" };
+    private static UsageCredential ExpiredClaude() => new() { AccessToken = "expired", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1) };
+    private static UsageCredential RenewedClaude() => new() { AccessToken = "renewed", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1), Plan = "pro" };
+    private static void ExpireCache(UsageProvider provider) => typeof(UsageProvider).GetField("_nextAttempt", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(provider, DateTimeOffset.MinValue);
     private static UsageProvider Provider(StubHandler handler, UsageCredential? credential, UsageProviderKind kind = UsageProviderKind.Codex) => new(kind, new StubCredentials(credential), new HttpClient(handler));
     private static UsageProvider Provider(StubHandler handler, UsageProviderKind kind = UsageProviderKind.Codex) => Provider(handler, Credential(), kind);
     private static HttpResponseMessage JsonResponse(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body) };
@@ -655,6 +783,18 @@ sealed class MutableCredentials(UsageCredential? credential) : ICredentialReader
 {
     public UsageCredential? Current { get; set; } = credential;
     public Task<UsageCredential?> ReadAsync(UsageProviderKind provider, CancellationToken cancellationToken = default) => Task.FromResult(Current);
+}
+
+sealed class StubClaudeRefresher(Func<CancellationToken, Task<ClaudeRefreshOutcome>> refresh) : IClaudeCredentialRefresher
+{
+    public int Calls { get; private set; }
+    public Task<ClaudeRefreshOutcome> RefreshAsync(CancellationToken cancellationToken = default) { Calls++; return refresh(cancellationToken); }
+}
+
+sealed class SequencedClaudeCredentials(UsageCredential first, UsageCredential replacement) : ICredentialReader
+{
+    private int _reads;
+    public Task<UsageCredential?> ReadAsync(UsageProviderKind provider, CancellationToken cancellationToken = default) => Task.FromResult<UsageCredential?>(Interlocked.Increment(ref _reads) == 1 ? first : replacement);
 }
 
 sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler

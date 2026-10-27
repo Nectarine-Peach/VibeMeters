@@ -7,7 +7,7 @@ using VibeMeters.Models;
 
 namespace VibeMeters.Services;
 
-// Never serialized, logged, refreshed, or persisted by VibeMeters.
+// Never serialized, logged or persisted by VibeMeters. Claude refresh belongs to its official CLI.
 public sealed class UsageCredential
 {
     public required string AccessToken { get; init; }

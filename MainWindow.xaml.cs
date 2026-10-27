@@ -176,7 +176,8 @@ public partial class MainWindow : Window
         public double MeterHeight=>Size(3,6);
         public double MeterGap=>Size(4,9);
     }
-    private static int QuotaRowCount(UsageSnapshot snapshot)=>snapshot.Windows.Count==0?(snapshot.Status==UsageStatus.Ready?1:PlaceholderNames(snapshot.Provider).Length):snapshot.Windows.Count;
+    private static bool ClaudeNeedsLogin(UsageSnapshot snapshot)=>snapshot.Provider==UsageProviderKind.Claude&&snapshot.Status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected;
+    private static int QuotaRowCount(UsageSnapshot snapshot)=>ClaudeNeedsLogin(snapshot)?1:snapshot.Windows.Count==0?(snapshot.Status==UsageStatus.Ready?1:PlaceholderNames(snapshot.Provider).Length):snapshot.Windows.Count;
     private static double CardHeight(UsageSnapshot snapshot,CardMetrics metrics)=>2+metrics.PadTop+metrics.PadBottom+metrics.HeadingHeight+metrics.DividerTop+1+metrics.DividerBottom+QuotaRowCount(snapshot)*metrics.RowHeight;
     private double LayoutHeight(UsageProviderKind[] providers,bool wide,CardMetrics metrics)
     {
@@ -268,6 +269,14 @@ public partial class MainWindow : Window
         var stack=new StackPanel();
         stack.Children.Add(ProviderHeading(snapshot,metrics));
         stack.Children.Add(new Border { Background=Palette("WindowBorder"),Height=1,Margin=new Thickness(0,metrics.DividerTop,0,metrics.DividerBottom),Opacity=0.7 });
+        if(ClaudeNeedsLogin(snapshot))
+        {
+            var login=new Button { Content=snapshot.Status==UsageStatus.AuthenticationRequired?"재로그인 필요 · 로그인":"로그인 필요 · 연결",Style=(Style)FindResource("StatusButton"),Width=double.NaN,Height=metrics.RowHeight,FontSize=metrics.LabelFont,Foreground=Palette("WarningText"),HorizontalContentAlignment=HorizontalAlignment.Left,ToolTip=WrappedTip(ProviderTooltip(snapshot)) };
+            login.Click+=(_,_)=>LoginRequested?.Invoke(UsageProviderKind.Claude);
+            System.Windows.Automation.AutomationProperties.SetName(login,"Claude 다시 로그인");
+            stack.Children.Add(login);
+            return new Border { Height=CardHeight(snapshot,metrics),Background=Palette("SurfaceBackground"),BorderBrush=Palette("WindowBorder"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(metrics.CardRadius),Padding=new Thickness(metrics.PadHorizontal,metrics.PadTop,metrics.PadHorizontal,metrics.PadBottom),Child=stack };
+        }
         if(snapshot.Status==UsageStatus.Ready&&snapshot.Windows.Count==0)
         {
             stack.Children.Add(new TextBlock { Text="연결됨 · 비율 미제공",Foreground=Palette("SecondaryText"),FontSize=metrics.LabelFont,Height=metrics.RowHeight,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis,ToolTip=WrappedTip(ProviderTooltip(snapshot)) });

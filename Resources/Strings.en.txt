@@ -215,3 +215,9 @@ Grok 로그인|Sign in to Grok
 초기화 대기|Reset pending
 데모 데이터|Demo data
 데모|Demo
+재로그인 필요 · 로그인|Sign in again
+로그인 필요 · 연결|Sign in to connect
+Claude 다시 로그인|Sign in to Claude again
+자동 인증 갱신에 Claude Code가 필요합니다. 설정에서 다시 로그인해 주세요.|Automatic authentication renewal requires Claude Code. Sign in again in Settings.
+자동 인증 갱신에는 Claude Code 2.1.301 이상이 필요합니다. CLI를 업데이트하거나 다시 로그인해 주세요.|Automatic authentication renewal requires Claude Code 2.1.301 or later. Update the CLI or sign in again.
+자동 인증 갱신에 실패했습니다. 설정에서 Claude에 다시 로그인해 주세요.|Authentication could not be renewed automatically. Sign in to Claude again in Settings.

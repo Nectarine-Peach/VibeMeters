@@ -37,6 +37,7 @@ public sealed class UsageProvider : IUsageProvider
     }) { Timeout = TimeSpan.FromSeconds(15), MaxResponseContentBufferSize = 1024 * 1024 };
     private readonly HttpClient _http;
     private readonly ICredentialReader _credentials;
+    private readonly IClaudeCredentialRefresher? _claudeRefresh;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private DateTimeOffset _nextAttempt;
     private UsageSnapshot? _last;
@@ -48,13 +49,16 @@ public sealed class UsageProvider : IUsageProvider
 
     public UsageProviderKind Kind { get; }
 
-    public UsageProvider(UsageProviderKind kind, ICredentialReader credentials, HttpClient? httpClient = null)
+    public UsageProvider(UsageProviderKind kind, ICredentialReader credentials, HttpClient? httpClient = null,
+        IClaudeCredentialRefresher? claudeRefresher = null)
     {
         if (kind is not (UsageProviderKind.Codex or UsageProviderKind.Claude))
             throw new ArgumentException("This HTTP provider supports Codex and Claude only.", nameof(kind));
         Kind = kind;
         _credentials = credentials;
         _http = httpClient ?? SharedClient;
+        _claudeRefresh = kind == UsageProviderKind.Claude ? claudeRefresher ?? (credentials is CredentialReader reader
+            ? new ClaudeCredentialRefresher(Path.GetDirectoryName(reader.GetCredentialPath(kind))!) : null) : null;
     }
 
     // Explicit login can change Claude identity without a stable account ID.
@@ -88,8 +92,7 @@ public sealed class UsageProvider : IUsageProvider
             // A fresh login can recover authentication errors immediately. Routine token
             // renewal must not bypass the normal polling floor or network/server backoff.
             // Retain only a one-way digest, never a second copy of the access token.
-            var fingerprint = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-                System.Text.Encoding.UTF8.GetBytes(credential.AccessToken + "\n" + credential.AccountId)));
+            var fingerprint = Fingerprint(credential);
             if (!string.Equals(fingerprint, _credentialFingerprint, StringComparison.Ordinal))
             {
                 var firstCredential = _credentialFingerprint is null;
@@ -107,68 +110,128 @@ public sealed class UsageProvider : IUsageProvider
                 }
             }
             if (_last is not null && now < _nextAttempt) return _last;
+            var refreshed = false;
             if (credential.ExpiresAt is { } expiry && expiry <= now)
-                return Save(UsageStatus.AuthenticationRequired, "인증 갱신이 필요합니다. 설정에서 다시 로그인해 주세요.");
-
-            var endpoint = Kind == UsageProviderKind.Codex ? "https://chatgpt.com/backend-api/wham/usage" : "https://api.anthropic.com/api/oauth/usage";
-            using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential.AccessToken);
-            request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            request.Headers.UserAgent.ParseAdd("VibeMeters/1.0");
-            if (Kind == UsageProviderKind.Codex && !string.IsNullOrWhiteSpace(credential.AccountId))
-                request.Headers.Add("ChatGPT-Account-Id", credential.AccountId);
-            if (Kind == UsageProviderKind.Claude) request.Headers.Add("anthropic-beta", "oauth-2025-04-20");
-
-            try
             {
-                // ResponseContentRead applies HttpClient's timeout and size cap to the entire body.
-                using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
-                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-                {
-                    _nextAttempt = DateTimeOffset.UtcNow.AddMinutes(5);
-                    return Save(UsageStatus.AuthenticationRequired, response.StatusCode == HttpStatusCode.Unauthorized
-                        ? "인증이 만료되었습니다. 설정에서 다시 로그인해 주세요."
-                        : "조회 권한이 없습니다. 회사 계정의 서비스 권한·SSO 및 네트워크 정책을 확인해 주세요.");
-                }
-                if (response.StatusCode == HttpStatusCode.ProxyAuthenticationRequired)
-                    return Failure("회사 프록시 인증이 필요합니다. Windows 프록시 및 네트워크 로그인을 확인해 주세요.");
-                if (response.StatusCode == HttpStatusCode.TooManyRequests)
-                {
-                    _rateLimitFailures = Math.Min(_rateLimitFailures + 1, 6);
-                    var receivedAt = DateTimeOffset.UtcNow;
-                    // Conservative app policy; this is not a claimed published provider limit.
-                    var minutes = Kind == UsageProviderKind.Claude
-                        ? new[] { 5, 10, 20, 30, 60, 60 }[_rateLimitFailures - 1]
-                        : Math.Min(60, Math.Pow(2, _rateLimitFailures - 1));
-                    _nextAttempt = receivedAt.AddMinutes(minutes);
-                    var retryHeader = response.Headers.RetryAfter;
-                    var serverRetry = retryHeader?.Date ?? (retryHeader?.Delta is { } delta ? receivedAt.Add(delta) : receivedAt);
-                    if (serverRetry > _nextAttempt) _nextAttempt = serverRetry;
-                    var previous = _last?.Windows.Count > 0 ? " · 이전 값 표시" : "";
-                    var retryTime = _nextAttempt.ToLocalTime();
-                    var timeLabel = retryTime.Date == DateTimeOffset.Now.Date ? retryTime.ToString("HH:mm") : retryTime.ToString("MM/dd HH:mm");
-                    return Save(UsageStatus.RateLimited, $"조회 일시 제한{previous} · {timeLabel} 이후 재시도", retryAfter: _nextAttempt);
-                }
-                if (!response.IsSuccessStatusCode) return Failure("서버에 연결할 수 없습니다. 잠시 후 다시 확인합니다.");
-                await using var body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-                using var json = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken).ConfigureAwait(false);
-                var parsed = UsageParser.Parse(Kind, json.RootElement, now, credential.Plan);
-                if (parsed.Status != UsageStatus.Ready)
-                    return Failure(parsed.Message ?? "사용량 정보를 확인할 수 없습니다. 잠시 후 다시 확인합니다.");
-                _failures = 0;
-                _rateLimitFailures = 0;
-                _nextAttempt = DateTimeOffset.UtcNow.AddSeconds(Kind == UsageProviderKind.Claude ? 120 : 15);
-                _last = parsed;
-                return parsed;
+                if (Kind != UsageProviderKind.Claude)
+                    return Save(UsageStatus.AuthenticationRequired, "인증 갱신이 필요합니다. 설정에서 다시 로그인해 주세요.");
+                var recovery = await RefreshClaudeAsync(credential, cancellationToken).ConfigureAwait(false);
+                if (recovery.Credential is null) return ClaudeAuthenticationRequired(recovery.Outcome);
+                credential = recovery.Credential;
+                _credentialFingerprint = Fingerprint(credential);
+                refreshed = true;
             }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            { return Failure("연결 시간이 초과되었습니다. 잠시 후 다시 확인합니다."); }
-            catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or FormatException or ArgumentException or InvalidOperationException)
-            { return Failure("사용량을 가져올 수 없습니다. 네트워크 또는 응답 형식을 확인해 주세요."); }
+
+            for (;;)
+            {
+                var endpoint = Kind == UsageProviderKind.Codex ? "https://chatgpt.com/backend-api/wham/usage" : "https://api.anthropic.com/api/oauth/usage";
+                using var request = new HttpRequestMessage(HttpMethod.Get, endpoint);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", credential.AccessToken);
+                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                request.Headers.UserAgent.ParseAdd("VibeMeters/1.0");
+                if (Kind == UsageProviderKind.Codex && !string.IsNullOrWhiteSpace(credential.AccountId))
+                    request.Headers.Add("ChatGPT-Account-Id", credential.AccountId);
+                if (Kind == UsageProviderKind.Claude) request.Headers.Add("anthropic-beta", "oauth-2025-04-20");
+
+                try
+                {
+                    // ResponseContentRead applies HttpClient's timeout and size cap to the entire body.
+                    using var response = await _http.SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
+                    if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+                    {
+                        if (Kind == UsageProviderKind.Claude && response.StatusCode == HttpStatusCode.Unauthorized && !refreshed)
+                        {
+                            var recovery = await RefreshClaudeAsync(credential, cancellationToken).ConfigureAwait(false);
+                            if (recovery.Credential is null) return ClaudeAuthenticationRequired(recovery.Outcome);
+                            credential = recovery.Credential;
+                            _credentialFingerprint = Fingerprint(credential);
+                            refreshed = true;
+                            continue; // At most one retry, using only the newly read token.
+                        }
+                        _nextAttempt = DateTimeOffset.UtcNow.AddMinutes(5);
+                        return Save(UsageStatus.AuthenticationRequired, response.StatusCode == HttpStatusCode.Unauthorized
+                            ? "인증이 만료되었습니다. 설정에서 다시 로그인해 주세요."
+                            : "조회 권한이 없습니다. 회사 계정의 서비스 권한·SSO 및 네트워크 정책을 확인해 주세요.");
+                    }
+                    if (response.StatusCode == HttpStatusCode.ProxyAuthenticationRequired)
+                        return Failure("회사 프록시 인증이 필요합니다. Windows 프록시 및 네트워크 로그인을 확인해 주세요.");
+                    if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                    {
+                        _rateLimitFailures = Math.Min(_rateLimitFailures + 1, 6);
+                        var receivedAt = DateTimeOffset.UtcNow;
+                        // Conservative app policy; this is not a claimed published provider limit.
+                        var minutes = Kind == UsageProviderKind.Claude
+                            ? new[] { 5, 10, 20, 30, 60, 60 }[_rateLimitFailures - 1]
+                            : Math.Min(60, Math.Pow(2, _rateLimitFailures - 1));
+                        _nextAttempt = receivedAt.AddMinutes(minutes);
+                        var retryHeader = response.Headers.RetryAfter;
+                        var serverRetry = retryHeader?.Date ?? (retryHeader?.Delta is { } delta ? receivedAt.Add(delta) : receivedAt);
+                        if (serverRetry > _nextAttempt) _nextAttempt = serverRetry;
+                        var previous = _last?.Windows.Count > 0 ? " · 이전 값 표시" : "";
+                        var retryTime = _nextAttempt.ToLocalTime();
+                        var timeLabel = retryTime.Date == DateTimeOffset.Now.Date ? retryTime.ToString("HH:mm") : retryTime.ToString("MM/dd HH:mm");
+                        return Save(UsageStatus.RateLimited, $"조회 일시 제한{previous} · {timeLabel} 이후 재시도", retryAfter: _nextAttempt);
+                    }
+                    if (!response.IsSuccessStatusCode) return Failure("서버에 연결할 수 없습니다. 잠시 후 다시 확인합니다.");
+                    await using var body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+                    using var json = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken).ConfigureAwait(false);
+                    var parsed = UsageParser.Parse(Kind, json.RootElement, now, credential.Plan);
+                    if (parsed.Status != UsageStatus.Ready)
+                        return Failure(parsed.Message ?? "사용량 정보를 확인할 수 없습니다. 잠시 후 다시 확인합니다.");
+                    _failures = 0;
+                    _rateLimitFailures = 0;
+                    _nextAttempt = DateTimeOffset.UtcNow.AddSeconds(Kind == UsageProviderKind.Claude ? 120 : 15);
+                    _credentialFingerprint = Fingerprint(credential);
+                    _last = parsed;
+                    return parsed;
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                { return Failure("연결 시간이 초과되었습니다. 잠시 후 다시 확인합니다."); }
+                catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or FormatException or ArgumentException or InvalidOperationException)
+                { return Failure("사용량을 가져올 수 없습니다. 네트워크 또는 응답 형식을 확인해 주세요."); }
+            }
         }
         catch (Exception ex) when (ex is FormatException or ArgumentException)
         { return Save(UsageStatus.AuthenticationRequired, "로그인 정보 형식이 올바르지 않습니다. CLI에서 다시 로그인해 주세요."); }
         finally { _gate.Release(); }
+    }
+
+    private static string Fingerprint(UsageCredential credential) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+        System.Text.Encoding.UTF8.GetBytes(credential.AccessToken + "\n" + credential.AccountId)));
+
+    private async Task<(UsageCredential? Credential, ClaudeRefreshOutcome Outcome)> RefreshClaudeAsync(
+        UsageCredential rejected, CancellationToken cancellationToken)
+    {
+        if (_last is not null) _last = _last with { Windows = [] };
+        try
+        {
+            // Another CLI/login may already have replaced the rejected token. Read it
+            // again rather than writing an old account/token over the current file.
+            var current = await _credentials.ReadAsync(Kind, cancellationToken).ConfigureAwait(false);
+            if (IsReplacement(current)) return (current, ClaudeRefreshOutcome.Completed);
+            var outcome = _claudeRefresh is null ? ClaudeRefreshOutcome.CliMissing
+                : await _claudeRefresh.RefreshAsync(cancellationToken).ConfigureAwait(false);
+            current = await _credentials.ReadAsync(Kind, cancellationToken).ConfigureAwait(false);
+            return (IsReplacement(current) ? current : null, outcome);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException
+            or InvalidOperationException or System.ComponentModel.Win32Exception)
+        { return (null, ClaudeRefreshOutcome.Failed); }
+
+        bool IsReplacement(UsageCredential? value) => value is not null
+            && value.ExpiresAt is { } expiry && expiry > DateTimeOffset.UtcNow
+            && !string.Equals(value.AccessToken, rejected.AccessToken, StringComparison.Ordinal);
+    }
+
+    private UsageSnapshot ClaudeAuthenticationRequired(ClaudeRefreshOutcome outcome)
+    {
+        _nextAttempt = DateTimeOffset.UtcNow.AddMinutes(5);
+        return Save(UsageStatus.AuthenticationRequired, outcome switch
+        {
+            ClaudeRefreshOutcome.CliMissing => "자동 인증 갱신에 Claude Code가 필요합니다. 설정에서 다시 로그인해 주세요.",
+            ClaudeRefreshOutcome.CliOutdated => "자동 인증 갱신에는 Claude Code 2.1.301 이상이 필요합니다. CLI를 업데이트하거나 다시 로그인해 주세요.",
+            _ => "자동 인증 갱신에 실패했습니다. 설정에서 Claude에 다시 로그인해 주세요."
+        });
     }
 
     private UsageSnapshot Failure(string message)
@@ -181,8 +244,9 @@ public sealed class UsageProvider : IUsageProvider
 
     private UsageSnapshot Save(UsageStatus status, string message, DateTimeOffset? retryAfter = null)
     {
-        if (status != UsageStatus.RateLimited && _last?.Windows.Count > 0) message = "이전 조회값 표시 중 · " + message;
-        _last = new(Kind, status, _last?.Windows ?? [], DateTimeOffset.UtcNow, _last?.Plan, message, retryAfter);
+        var clear = Kind == UsageProviderKind.Claude && status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected;
+        if (!clear && status != UsageStatus.RateLimited && _last?.Windows.Count > 0) message = "이전 조회값 표시 중 · " + message;
+        _last = new(Kind, status, clear ? [] : _last?.Windows ?? [], DateTimeOffset.UtcNow, _last?.Plan, message, retryAfter);
         return _last;
     }
 }

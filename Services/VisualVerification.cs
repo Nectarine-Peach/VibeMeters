@@ -271,21 +271,28 @@ internal sealed class VisualVerification
         AssertMainLayout("cached quota rows",new[]{("Codex",1),("Claude",2)});
         Check("cached values stay at full opacity",Descendants<TextBlock>(Cards()[1]).Where(t=>t.Text.EndsWith("%",StringComparison.Ordinal)).All(t=>Close(t.Opacity,1)&&Ancestors(t).OfType<UIElement>().All(parent=>Close(parent.Opacity,1))));
         Capture(_window,"window-cached-dark.png");
-        _render(new UsageSnapshot(UsageProviderKind.Claude,UsageStatus.AuthenticationRequired,Array.Empty<UsageWindow>(),DemoTime,Message:"로그인이 필요합니다."));
+        _render(new UsageSnapshot(UsageProviderKind.Claude,UsageStatus.AuthenticationRequired,Demo(UsageProviderKind.Claude).Windows,DemoTime,Message:"로그인이 필요합니다."));
         await StableAsync(_window);
-        AssertMainLayout("honest missing-data placeholders",new[]{("Codex",1),("Claude",2)});
-        Check("missing data has dashes and empty tracks",Rows(Cards()[1]).All(row=>ValueText(row)=="—"&&Close(Meter(row).Value,0)));
+        AssertMainLayout("explicit Claude reauthentication state",new[]{("Codex",1),("Claude",0)});
+        Check("Claude authentication never shows old percentages or empty meters",!Descendants<ProgressBar>(Cards()[1]).Any()&&!Descendants<TextBlock>(Cards()[1]).Any(text=>text.Text.EndsWith("%",StringComparison.Ordinal)));
         var invoked=false;
         void Login(UsageProviderKind kind) { if(kind==UsageProviderKind.Claude) invoked=true; }
         _window.LoginRequested+=Login;
         try
         {
-            var connect=Descendants<Button>(_window).SingleOrDefault(button=>AutomationProperties.GetName(button)=="Claude 로그인");
+            var connect=Descendants<Button>(_window).SingleOrDefault(button=>AutomationProperties.GetName(button)=="Claude 다시 로그인");
             Check("authentication recovery action exposed",connect!=null);
             if(connect!=null) Click(connect);
             Check("authentication recovery dispatches login event",invoked);
         }
         finally { _window.LoginRequested-=Login; }
+        await ResizeAsync(220,140);
+        Check("Claude reauthentication text fits minimum width",Descendants<Button>(Cards()[1]).Where(button=>button.Content is string).All(button=>button.ActualWidth>=new FormattedText((string)button.Content,CultureInfo.GetCultureInfo("ko-KR"),FlowDirection.LeftToRight,new Typeface(button.FontFamily,button.FontStyle,button.FontWeight,button.FontStretch),button.FontSize,Brushes.White,1).WidthIncludingTrailingWhitespace));
+        Localizer.SetLanguage(AppLanguage.English);await StableAsync(_window);
+        Check("Claude reauthentication action localizes immediately",Descendants<Button>(Cards()[1]).Any(button=>button.Content as string=="Sign in again"));
+        Check("English Claude reauthentication text fits minimum width",TextFits(Cards()[1],Cards()[1]));
+        Capture(_window,"window-login-required-en.png");
+        Localizer.SetLanguage(AppLanguage.Korean);await StableAsync(_window);
         Capture(_window,"window-login-required-dark.png");
         _render(Demo(UsageProviderKind.Claude));await StableAsync(_window);
     }

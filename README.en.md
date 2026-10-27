@@ -117,8 +117,9 @@ Updates use polling rather than a real-time server stream. Provider cooldowns ca
 | Situation | What to do |
 | --- | --- |
 | Codex or Claude is not connected | Sign in through the official CLI or Settings, then refresh. Credential-file changes trigger a new check. |
+| Claude asks you to sign in again | Automatic renewal with official Claude Code 2.1.301 or later did not yield a new valid credential. Use the card action or Claude Login in Settings. |
 | Claude reports a temporary query limit | Wait for the retry time in the tooltip. HTTP 429 restricts the **usage lookup**; it does not by itself mean the subscription quota is exhausted. |
-| A previous percentage remains visible after an error | It is the last successful value. Read the status tooltip before treating it as current. |
+| A previous percentage remains visible after an error | It is the last successful value. Read the status tooltip before treating it as current. Claude authentication failures and disconnected credentials hide old percentages and show a sign-in action. |
 | Gemini has no quota information | Personal accounts require a signed-in Antigravity CLI 1.4.7 or newer; business accounts retain the bundled Code Assist runtime and project access. See [account details](docs/account-usage.md). |
 | Startup stops working after moving the app | Toggle Windows startup off and on in Settings to update the saved path. |
 
@@ -131,7 +132,7 @@ Claude successful lookups have a **two-minute minimum**. After HTTP 429, VibeMet
 
 Native WPF/.NET 8, with no embedded browser or continuous animation. Codex and Claude use in-process HTTP. Gemini business polling uses a short-lived hidden Node process; personal Gemini and Grok polling use their installed official CLI. The package includes .NET and is not code-signed.
 
-- Codex reads `%USERPROFILE%\.codex\auth.json` (`CODEX_HOME` supported); Claude reads `%USERPROFILE%\.claude\.credentials.json` (`CLAUDE_CONFIG_DIR` supported). VibeMeters does not persist or refresh these tokens. Credential-manager-only Codex/Claude logins are currently unsupported.
+- Codex reads `%USERPROFILE%\.codex\auth.json` (`CODEX_HOME` supported); Claude reads `%USERPROFILE%\.claude\.credentials.json` (`CLAUDE_CONFIG_DIR` supported). VibeMeters does not persist tokens or write credential files. When Claude expires or returns HTTP 401, it runs the installed official Claude Code 2.1.301+ noninteractive `auth status` once, then rereads the file and retries usage only with a changed, unexpired token. The CLI owns token rotation and storage. Failed renewal shows a sign-in action and a five-minute retry delay. The app waits up to 45 seconds but does not terminate a running CLI during credential storage. If that CLI never exits, further automatic renewal remains blocked; check the official CLI and sign in manually if needed. It never starts browser sign-in or a model request automatically. Credential-manager-only Codex/Claude logins are currently unsupported.
 - Gemini business accounts use bundled official `@google/gemini-cli-core` **0.65.0**. Unsupported personal accounts use the installed official Antigravity CLI's `/usage` JSON command. The card explicitly shows **Gemini · Antigravity**: these shared Gemini model quotas are separate from Gemini web/app limits. Its Login button opens the official Antigravity client. Each official client manages its own authentication; VibeMeters does not read keyring tokens or forward raw tokens to settings or quota output.
 - Grok uses the installed official Build CLI. The app watches auth-file modification time without reading credentials or tokens. The package does not bundle or automatically install Grok CLI or a browser extension.
 - Preferences live in `%LOCALAPPDATA%\VibeMeters\settings.json`. Optional startup registration uses the current user's Windows Run key. Credentials are not included in source or release packages.

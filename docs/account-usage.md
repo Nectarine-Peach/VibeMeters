@@ -40,4 +40,14 @@ CLI의 원시 출력과 OAuth URL은 파일이나 로그에 저장하지 않습�
 
 Codex의 파일 기반 `CODEX_HOME/auth.json`과 Claude의 `CLAUDE_CONFIG_DIR/.credentials.json` 인증을 읽습니다. 이번 PC에서 확인한 인증 저장소는 모두 파일 기반입니다. OS keyring만 사용하는 다른 환경은 이번 변경에서 지원을 검증하지 않았습니다.
 
+## Claude 인증 자동 갱신과 재로그인 표시
+
+2026-10-27 조사에서 저장된 Claude Pro 인증은 전날 21:21 KST에 만료되었고, 같은 토큰의 usage API는 HTTP 401을 반환했습니다. 기존 앱은 인증 실패에도 마지막 비율을 보존해 새로고침이 멈춘 것처럼 보일 수 있었습니다.
+
+만료·HTTP 401 때 설치된 **공식 Claude Code 2.1.301 이상**의 비대화형 `claude auth status`를 한 번 실행하여 CLI 자체 인증 갱신을 시도합니다. [공식 CLI 명령](https://code.claude.com/docs/en/cli-reference)과 [2.1.301 변경 기록](https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md)의 짧은 명령 중 인증 갱신 중단 수정이 기준입니다. CLI 성공 종료만으로 갱신 성공을 판단하지 않고, 같은 설정 경로의 인증 파일을 다시 읽어 **토큰 교체와 미래 만료 시각**을 확인한 뒤 사용량을 다시 요청합니다. 401 재요청도 실패하면 추가 갱신을 반복하지 않습니다.
+
+앱은 refresh token을 직접 읽거나 교환하지 않고, 인증 파일·잠금·회전 토큰 저장은 공식 CLI가 관리합니다. 원본의 미지 필드를 덮어쓰거나 별도 토큰 복사본을 만들지 않습니다. 조회 중 다른 CLI/로그인이 토큰을 바꾼 경우 현재 파일 값을 다시 읽습니다. 자동 갱신용 CLI에는 같은 `CLAUDE_CONFIG_DIR`를 전달하고 별도 API 키·OAuth 환경 토큰·gateway 인증은 사용하지 않습니다. 프록시·회사 CA 설정은 유지합니다.
+
+갱신 실패·구버전 CLI·CLI 누락·401/403·인증 파일 제거 때는 이전 Claude 비율을 숨기고 카드에 **재로그인 필요 / 로그인 필요** 버튼을 표시합니다. 자동 갱신 실패는 5분 후 다시 시도하고, 새 자격증명이나 명시적 로그인 완료는 즉시 다시 확인합니다. 서버의 429 대기는 그대로 유지합니다. CLI 명령 대기는 45초이며, 토큰 저장 중 강제 종료로 회전 토큰을 잃지 않도록 대기가 끝나도 실행 중 명령은 종료시키지 않습니다. 명령이 끝나기 전에는 추가 갱신 명령을 중복 실행하지 않습니다. 브라우저나 모델 요청은 자동으로 열지 않습니다.
+
 공식 참고: [Codex 인증](https://learn.chatgpt.com/docs/auth), [Claude CLI](https://code.claude.com/docs/en/cli-reference), [Claude 회사 네트워크](https://code.claude.com/docs/en/network-config).

@@ -1,3 +1,24 @@
+# v1.4.8 배포 검증 — 2026-10-27
+
+Claude 인증 복구와 명시적 재로그인 카드를 포함하는 배포입니다. 아래 구현 단계의 210/288 및 실계정 기록은 이전 작업 기록으로 보존하며 이번 릴리스 절차에서 재실행하거나 새 검증 결과로 간주하지 않습니다.
+
+이번 절차는 최종 커밋으로 기존 `scripts/publish.ps1`의 Release self-contained 컴파일·패키징과 계정 없는 Gemini 내장 진단만 실행합니다. ZIP 전체 파일과 staging 해시, README/docs/이미지 원본 해시·상대 링크, EXE 버전/HEAD, 원격 태그·릴리스 본문·asset 크기/digest를 확인합니다. 회귀·전체 UI 스모크·실계정 조회/로그인·CLI 설치·현재 실행 앱 교체는 사용자 요청으로 생략합니다. 배포 근거는 로컬 `dist/releases/v1.4.8/archive-verification.json` 및 `github-release.json`에 남깁니다.
+
+---
+# Claude 인증 자동 갱신과 재로그인 표시 — 2026-10-27
+
+만료·HTTP 401에서 설치된 공식 Claude Code 2.1.301 이상의 `auth status`로 CLI 자체 인증 갱신을 한 번 시도합니다. 앱은 인증 파일을 쓰거나 refresh token을 직접 교환하지 않습니다. 파일을 다시 읽어 교체된 토큰과 미래 만료를 확인한 뒤 usage를 재요청하며, 실패·401/403·연결 해제 때 이전 Claude 비율을 제거하고 로그인 버튼을 표시합니다. 기존 429 대기와 Codex 경로는 유지합니다. [계약과 출처](docs/account-usage.md#claude-인증-자동-갱신과-재로그인-표시).
+
+- `dotnet run --project tests\VibeMeters.Tests.csproj -c Release`는 컴파일 후 .NET 8 공유 런타임 부재로 실행하지 못했습니다. 설치된 공유 런타임은 10.0.11이며 환경은 변경하지 않았습니다.
+- 기존 self-contained 명령 `dotnet run --project tests\VibeMeters.Tests.csproj -c Release -r win-x64 --self-contained true`는 **210/210 통과**했습니다. 만료 성공/실패, CLI 성공이어도 토큰 미교체·만료 정보 누락이면 거부, 401 단일 재요청, 반복 401/403 수치 제거, 20개 동시 요청의 갱신 1회, 외부 토큰 교체, 취소, 다른 인증 환경 제외·프록시/CA 보존, 기존 polling/429 회귀를 포함합니다. 인증 회귀는 합성 자격증명과 HTTP fixture를 사용했습니다.
+- 위 빌드의 `bin\Release\net8.0-windows\win-x64\VibeMeters.exe --smoke-test`는 **288/288 통과**했습니다. 이전 비율이 담긴 인증 실패 snapshot도 수치와 미터 없이 표시하며, 로그인 이벤트와 최소 220px에서 한국어/영어 즉시 전환을 확인했습니다. `artifacts/window-login-required-dark.png`, `artifacts/window-login-required-en.png`를 직접 열어 확인했습니다. 합성 데이터·메모리 설정의 WPF 렌더이며 실계정 화면 캡처와 구분합니다.
+- `dotnet run --project tests\VibeMeters.Tests.csproj -c Release -r win-x64 --self-contained true --no-build -- --claude-live-check`는 **2026-10-27 10:20:51 KST**, `Ready / pro`, 5시간 남음 **45%**, 주간 남음 **77%**를 반환했습니다. 조사 중 원본 자격증명이 이미 교체되어 실제 만료 토큰의 CLI 회전을 재현한 결과는 아닙니다. `auth status` 종료 코드만으로 갱신을 보장하지 않습니다.
+- `git diff --check` 통과. 실행 중 설치 앱 `D:\Applications\VibeMeters\VibeMeters.exe`의 PID **12200**, 시작 시각 **2026-10-26 14:46:57 KST**, SHA256 **ac924f7c1820fffad41708e300a69e7d5dc24e3bd2d62bea347f08b7a8cdcd8e**는 그대로 보존했습니다. 설치 앱 교체·재시작·배포·푸시는 하지 않았습니다. 수정 빌드는 위 self-contained 출력 경로에 있으며, 기존 앱이 실행 중일 때 새 EXE를 실행하면 단일 인스턴스 정책으로 기존 창을 활성화하므로 적용에는 기존 앱 종료 후 새 EXE 실행 또는 별도 교체가 필요합니다.
+
+남은 경계: 실제 만료·폐기 토큰의 갱신, 회사 SSO/프록시 오류·OS keyring 인증은 이번 실행에서 재현하지 않았습니다. 공식 CLI의 인증 초기화 동작에 의존하므로 갱신되지 않으면 재로그인을 안내합니다. 45초 대기 초과·호출 취소 시 토큰 저장 중인 CLI를 강제 종료하지 않으며, 완료할 때까지 추가 갱신 실행을 막습니다. CLI 자체가 종료되지 않으면 해당 비대화형 프로세스와 갱신 차단이 남을 수 있습니다.
+
+---
+
 # v1.4.7 영어 현지화 — 2026-10-26
 
 시스템/한국어/English 설정을 추가했습니다. 기본 시스템 모드는 Windows UI 언어가 한국어이면 한국어, 그 외에는 영어입니다. 표시 문구·툴팁·접근성·트레이/알림·설치/로그인 상태를 중앙 카탈로그로 현지화하며 제공자 snapshot과 API/한도 식별자는 변경하지 않습니다. 언어 변경을 위한 새 조회도 추가하지 않습니다.

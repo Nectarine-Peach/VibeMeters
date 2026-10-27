@@ -31,7 +31,10 @@ public partial class App : Application
     private readonly List<FileSystemWatcher> _credentialWatchers = new();
     private IReadOnlyList<IUsageProvider> _providers = Array.Empty<IUsageProvider>();
     private readonly Dictionary<UsageProviderKind, UsageSnapshot> _latest = new();
-    private bool _refreshing, _exiting, _suspended, _demo, _locked, _sleeping, _credentialsChanged;
+    private readonly RefreshRequestGate _refreshRequests = new();
+    private bool _refreshing => _refreshRequests.IsRunning;
+    private bool _exiting, _suspended, _demo, _locked, _sleeping, _credentialsChanged;
+    private DateTimeOffset? _nextAutomaticAt;
     private DateTimeOffset _lastRefresh;
     private readonly Dictionary<string, int> _alertLevels = new();
     private HashSet<UsageProviderKind> _activeProviders = new();
@@ -60,7 +63,7 @@ public partial class App : Application
         MainWindow = _window;
         _activationWait = ThreadPool.RegisterWaitForSingleObject(_activateEvent, (_, _) => Dispatcher.InvokeAsync(ShowWindow), null, Timeout.Infinite, false);
         _window.Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/VibeMeters.ico"));
-        _window.RefreshRequested += async () => await RefreshAsync();
+        _window.RefreshRequested += async () => await RefreshAsync(RefreshTrigger.Manual);
         _window.LoginRequested += StartLogin;
         _window.SettingsChanged += ApplySettings;
         _window.GeometryChanged += ScheduleWindowStateSave;
@@ -72,13 +75,18 @@ public partial class App : Application
         OnThemeChanged();
         _providers = _smokeTest ? Array.Empty<IUsageProvider>() : UsageProviderFactory.CreateDefault();
         if (!_demo) WatchCredentials();
-        _timer.Tick += async (_, _) => await RefreshAsync();
+        _timer.Tick += async (_, _) =>
+        {
+            _nextAutomaticAt = RefreshPolicy.NextAutomatic(DateTimeOffset.UtcNow, _settings.RefreshIntervalSeconds, _suspended);
+            foreach (var snapshot in _latest.Values) _window!.RenderSnapshot(WithSchedule(snapshot));
+            await RefreshAsync(RefreshTrigger.Automatic);
+        };
         ApplySettings();
         SystemEvents.PowerModeChanged += OnPowerMode;
         SystemEvents.SessionSwitch += OnSessionSwitch;
         var startupLaunch = e.Args.Contains("--startup") || e.Args.Contains("--hidden");
         if (!startupLaunch || _settings.WindowVisible) ShowWindow();
-        _ = RefreshAsync();
+        _ = RefreshAsync(RefreshTrigger.Automatic);
         if (e.Args.Contains("--smoke-test")) _ = SmokeTestAsync();
     }
 
@@ -88,7 +96,7 @@ public partial class App : Application
         _tray = new Forms.NotifyIcon { Icon = new System.Drawing.Icon(iconStream), Text = "VibeMeters · 사용량 확인", Visible = true };
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("사용량 창 열기", null, (_, _) => Dispatcher.Invoke(ShowWindow));
-        menu.Items.Add("지금 새로고침", null, (_, _) => Dispatcher.InvokeAsync(async () => await RefreshAsync()));
+        menu.Items.Add("지금 새로고침", null, (_, _) => Dispatcher.InvokeAsync(async () => await RefreshAsync(RefreshTrigger.Manual)));
         menu.Items.Add("항상 위에 표시", null, (_, _) => Dispatcher.Invoke(() => { _settings.AlwaysOnTop = !_settings.AlwaysOnTop; _window!.Topmost = _settings.AlwaysOnTop; ApplySettings(); }));
         menu.Items.Add("Claude 로그인", null, (_, _) => Dispatcher.Invoke(() => StartLogin(UsageProviderKind.Claude)));
         menu.Items.Add("Codex 로그인", null, (_, _) => Dispatcher.Invoke(() => StartLogin(UsageProviderKind.Codex)));
@@ -136,7 +144,7 @@ public partial class App : Application
                 if (provider == UsageProviderKind.Grok)
                     foreach (var usage in _providers.OfType<GrokUsageProvider>()) usage.NotifyLoginCompleted();
                 if (_refreshing) _credentialsChanged = true;
-                else await RefreshAsync();
+                else await RefreshAsync(RefreshTrigger.Login);
             }
         }
         catch (OperationCanceledException) { if (!_exiting) _window.SetLoginStatus(provider, false, "로그인이 취소되었습니다."); }
@@ -149,7 +157,7 @@ public partial class App : Application
         {
             _credentialDebounce.Stop();
             if (_refreshing) { _credentialsChanged = true; return; }
-            await RefreshAsync();
+            await RefreshAsync(RefreshTrigger.Credentials);
         };
         foreach (var kind in Enum.GetValues<UsageProviderKind>())
         {
@@ -174,7 +182,7 @@ public partial class App : Application
         _window.WindowState = WindowState.Normal;
         _window.Activate();
         ScheduleWindowStateSave();
-        if (DateTimeOffset.UtcNow - _lastRefresh > TimeSpan.FromSeconds(30)) _ = RefreshAsync();
+        if (DateTimeOffset.UtcNow - _lastRefresh > TimeSpan.FromSeconds(30)) _ = RefreshAsync(RefreshTrigger.Activation);
     }
 
     private void HideWindow()
@@ -214,12 +222,13 @@ public partial class App : Application
         _activeProviders = visible;
         _window!.Topmost = _settings.AlwaysOnTop;
         _window.ShowInTaskbar = _settings.ShowInTaskbar;
-        foreach (var snapshot in _latest.Values) _window.RenderSnapshot(snapshot);
+        _nextAutomaticAt = RefreshPolicy.NextAutomatic(DateTimeOffset.UtcNow, _settings.RefreshIntervalSeconds, _suspended);
+        foreach (var snapshot in _latest.Values) _window.RenderSnapshot(WithSchedule(snapshot));
         UpdateTray();
         if (enabledNewProvider && !_smokeTest && _lastRefresh != default)
         {
             if (_refreshing) _credentialsChanged = true;
-            else Dispatcher.InvokeAsync(async () => await RefreshAsync());
+            else Dispatcher.InvokeAsync(async () => await RefreshAsync(RefreshTrigger.Automatic));
         }
         _timer.Stop();
         if (_settings.RefreshIntervalSeconds > 0 && !_suspended)
@@ -232,10 +241,15 @@ public partial class App : Application
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException) { _window.UpdateStatus("설정을 저장하지 못했습니다. 폴더 권한을 확인해 주세요."); }
     }
 
-    private async Task RefreshAsync()
+    private async Task RefreshAsync(RefreshTrigger trigger, DateTimeOffset? queuedAt = null)
     {
-        if (_refreshing || _exiting || _suspended) return;
-        _refreshing = true;
+        if (_exiting || _suspended) return;
+        var requestedAt = queuedAt ?? DateTimeOffset.UtcNow;
+        if (!_refreshRequests.TryBegin(trigger, requestedAt))
+        {
+            if (trigger == RefreshTrigger.Manual) _window!.UpdateStatus("조회 중 · 수동 새로고침을 예약했습니다.");
+            return;
+        }
         _lastRefresh = DateTimeOffset.UtcNow;
         _window!.SetRefreshing(true);
         try
@@ -262,7 +276,8 @@ public partial class App : Application
             await Task.WhenAll(_providers.Where(p => _settings.IsProviderVisible(p.Kind)).Select(async provider =>
             {
                 UsageSnapshot snapshot;
-                try { snapshot = await provider.FetchAsync(_lifetime.Token); }
+                try { snapshot = await provider.FetchAsync(_lifetime.Token,
+                    new UsageFetchOptions(RefreshPolicy.BypassSuccessCache(trigger), requestedAt)); }
                 catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
                 catch { snapshot = new UsageSnapshot(provider.Kind, UsageStatus.Unavailable, Array.Empty<UsageWindow>(), DateTimeOffset.UtcNow, Message: "조회 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."); }
                 if (!_exiting) Render(snapshot);
@@ -274,11 +289,16 @@ public partial class App : Application
         }
         finally
         {
-            _refreshing = false;
+            var pendingManual = _refreshRequests.Complete();
             if (!_exiting)
             {
                 _window.SetRefreshing(false);
-                if (_credentialsChanged) { _credentialsChanged = false; _credentialDebounce.Start(); }
+                if (pendingManual is { } pending)
+                {
+                    _credentialsChanged = false;
+                    _ = Dispatcher.InvokeAsync(async () => await RefreshAsync(RefreshTrigger.Manual, pending));
+                }
+                else if (_credentialsChanged) { _credentialsChanged = false; _credentialDebounce.Start(); }
             }
         }
     }
@@ -286,10 +306,15 @@ public partial class App : Application
     private void Render(UsageSnapshot snapshot)
     {
         _latest[snapshot.Provider] = snapshot;
-        _window!.RenderSnapshot(snapshot);
+        _window!.RenderSnapshot(WithSchedule(snapshot));
         UpdateTray();
         if (_tray != null) NotifyQuota(snapshot);
     }
+
+    private UsageSnapshot WithSchedule(UsageSnapshot snapshot) => snapshot with
+    {
+        NextAutomaticAt = _suspended ? null : RefreshPolicy.NextAutomaticQuery(snapshot, _nextAutomaticAt, _settings.RefreshIntervalSeconds)
+    };
 
     private void UpdateTray()
     {
@@ -336,7 +361,7 @@ public partial class App : Application
         else if (e.Mode == PowerModes.Resume) _sleeping = false;
         _suspended = _locked || _sleeping;
         ApplySettings();
-        if (e.Mode == PowerModes.Resume && !_suspended) _ = RefreshAsync();
+        if (e.Mode == PowerModes.Resume && !_suspended) _ = RefreshAsync(RefreshTrigger.Resume);
     });
     private void OnSessionSwitch(object sender, SessionSwitchEventArgs e) => Dispatcher.InvokeAsync(() =>
     {
@@ -344,7 +369,7 @@ public partial class App : Application
         else if (e.Reason == SessionSwitchReason.SessionUnlock) _locked = false;
         _suspended = _locked || _sleeping;
         ApplySettings();
-        if (e.Reason == SessionSwitchReason.SessionUnlock && !_suspended) _ = RefreshAsync();
+        if (e.Reason == SessionSwitchReason.SessionUnlock && !_suspended) _ = RefreshAsync(RefreshTrigger.Resume);
     });
 
     private async Task SmokeTestAsync()

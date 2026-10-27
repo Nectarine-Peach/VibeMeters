@@ -221,3 +221,19 @@ Claude 다시 로그인|Sign in to Claude again
 자동 인증 갱신에 Claude Code가 필요합니다. 설정에서 다시 로그인해 주세요.|Automatic authentication renewal requires Claude Code. Sign in again in Settings.
 자동 인증 갱신에는 Claude Code 2.1.301 이상이 필요합니다. CLI를 업데이트하거나 다시 로그인해 주세요.|Automatic authentication renewal requires Claude Code 2.1.301 or later. Update the CLI or sign in again.
 자동 인증 갱신에 실패했습니다. 설정에서 Claude에 다시 로그인해 주세요.|Authentication could not be renewed automatically. Sign in to Claude again in Settings.
+조회 중 · 수동 새로고침을 예약했습니다.|Lookup running · Manual refresh queued.
+조회 중 · 누르면 새로고침을 예약합니다.|Lookup running · Click to queue a refresh.
+요청 제한 대기|Rate-limit wait
+인증 대기|Auth wait
+오류 후 대기|Error wait
+로그인 확인 필요|Sign-in needed
+아직 조회 전|Not checked yet
+다음 자동 조회|Next automatic lookup
+다음 자동|Next auto
+사용량 관측|Usage observed
+조회 확인|Lookup checked
+저장된 결과 · 새 요청 없음|Cached result · No new request
+기본 성공 캐시 만료|Default success cache expires
+보호 대기 종료 · 재조회 가능|Protection ends · Retry allowed
+저장된 값|Cached
+확인|Checked

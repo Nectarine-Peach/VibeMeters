@@ -316,7 +316,7 @@ sealed class RegressionSuite
         {
             var handler = new StubHandler(_ => { var r = new HttpResponseMessage(HttpStatusCode.TooManyRequests); r.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromMinutes(5)); return r; });
             var provider = Provider(handler); var a = await provider.FetchAsync(); var b = await provider.FetchAsync();
-            Equal(1, handler.Calls); Equal(a, b); True(a.RetryAfter > DateTimeOffset.UtcNow.AddMinutes(4));
+            Equal(1, handler.Calls); EqualCached(a, b); True(a.RetryAfter > DateTimeOffset.UtcNow.AddMinutes(4));
         });
         await TestAsync("Malformed response safely unavailable", async () =>
         {
@@ -336,7 +336,7 @@ sealed class RegressionSuite
         await TestAsync("Codex request uses expected endpoint and account header", async () =>
         {
             var handler = new StubHandler(r => { Equal("https://chatgpt.com/backend-api/wham/usage", r.RequestUri?.AbsoluteUri); Equal("Bearer", r.Headers.Authorization?.Scheme); Equal("test-secret", r.Headers.Authorization?.Parameter); Equal("test-account", r.Headers.GetValues("ChatGPT-Account-Id").Single()); return JsonResponse("""{"rate_limit":{"primary_window":{"used_percent":12}}}"""); });
-            var p = Provider(handler); var a = await p.FetchAsync(); var b = await p.FetchAsync(); Equal(UsageStatus.Ready, a.Status); Equal(88d, a.Windows[0].RemainingPercent); Equal(a, b); Equal(1, handler.Calls);
+            var p = Provider(handler); var a = await p.FetchAsync(); var b = await p.FetchAsync(); Equal(UsageStatus.Ready, a.Status); Equal(88d, a.Windows[0].RemainingPercent); EqualCached(a, b); Equal(1, handler.Calls);
         });
         await TestAsync("Claude request sends OAuth beta header", async () =>
         {
@@ -357,6 +357,84 @@ sealed class RegressionSuite
             catch (OperationCanceledException) { }
         });
         await TestAsync("Credential files parsed from isolated fixture directory", CredentialFilesAsync);
+        Test("Refresh triggers distinguish scheduled/manual requests from credential and resume checks", () =>
+        {
+            True(RefreshPolicy.BypassSuccessCache(RefreshTrigger.Manual)); True(RefreshPolicy.BypassSuccessCache(RefreshTrigger.Automatic));
+            foreach (var trigger in new[] { RefreshTrigger.Credentials, RefreshTrigger.Login, RefreshTrigger.Resume, RefreshTrigger.Activation }) True(!RefreshPolicy.BypassSuccessCache(trigger));
+        });
+        Test("Automatic timer ignores success-cache phase and honors selected intervals", () =>
+        {
+            var start = DateTimeOffset.Parse("2026-10-27T00:00:00Z");
+            var last = new UsageSnapshot(UsageProviderKind.Claude, UsageStatus.Ready, [], start.AddSeconds(1));
+            foreach (var seconds in new[] { 30, 120, 300 })
+            {
+                var tick = start.AddSeconds(seconds);
+                True(!RefreshPolicy.CanReuse(last, start.AddMinutes(5), tick, new UsageFetchOptions(true, tick), tick));
+                Equal<DateTimeOffset?>(tick, RefreshPolicy.NextAutomatic(start, seconds, false));
+                Equal<DateTimeOffset?>(tick, RefreshPolicy.NextAutomaticQuery(last with { NextQueryAt = start.AddMinutes(5) }, tick, seconds));
+            }
+            Equal<DateTimeOffset?>(null, RefreshPolicy.NextAutomatic(start, 0, false));
+            Equal<DateTimeOffset?>(null, RefreshPolicy.NextAutomatic(start, 120, true));
+        });
+        Test("Protection expiry and next scheduled query have distinct times", () =>
+        {
+            var start = DateTimeOffset.Parse("2026-10-27T00:00:00Z");
+            var limited = new UsageSnapshot(UsageProviderKind.Claude, UsageStatus.RateLimited, [], start,
+                NextQueryAt: start.AddMinutes(5), WaitReason: UsageWaitReason.RateLimited);
+            Equal<DateTimeOffset?>(start.AddMinutes(6), RefreshPolicy.NextAutomaticQuery(limited, start.AddMinutes(2), 120));
+            Equal<DateTimeOffset?>(null, RefreshPolicy.NextAutomaticQuery(limited, null, 0));
+        });
+        Test("Running bulk refresh queues one manual request without dropping it or queuing automatic ticks", () =>
+        {
+            var gate = new RefreshRequestGate();
+            True(gate.TryBegin(RefreshTrigger.Automatic, Now));
+            True(!gate.TryBegin(RefreshTrigger.Automatic, Now.AddSeconds(1)));
+            True(!gate.TryBegin(RefreshTrigger.Manual, Now.AddSeconds(2)));
+            True(!gate.TryBegin(RefreshTrigger.Manual, Now.AddSeconds(3)));
+            Equal<DateTimeOffset?>(Now.AddSeconds(2), gate.Complete());
+            True(gate.TryBegin(RefreshTrigger.Manual, Now.AddSeconds(2)));
+            Equal<DateTimeOffset?>(null, gate.Complete());
+        });
+        foreach (var kind in Enum.GetValues<UsageProviderKind>())
+        {
+            await TestAsync($"{kind} manual and automatic requests bypass successful cache", async () =>
+            {
+                var calls = 0;
+                var provider = ControlledProvider(kind, () => { calls++; return UsageStatus.Ready; });
+                var first = await provider.FetchAsync(); Equal(1, calls);
+                var second = await provider.FetchAsync(default, new UsageFetchOptions(true, first.CheckedAt.AddTicks(1)));
+                Equal(2, calls); True(!second.IsCached); True(second.ObservedAt is not null);
+                var third = await provider.FetchAsync(default, new UsageFetchOptions(true, second.CheckedAt.AddTicks(1)));
+                Equal(3, calls); True(third.CheckedAt >= second.CheckedAt);
+            });
+            foreach (var status in new[] { UsageStatus.RateLimited, UsageStatus.AuthenticationRequired, UsageStatus.Unavailable })
+                await TestAsync($"{kind} forced refresh preserves {status} protection and next time", async () =>
+                {
+                    var calls = 0;
+                    var provider = ControlledProvider(kind, () => { calls++; return status; });
+                    var first = await provider.FetchAsync();
+                    var second = await provider.FetchAsync(default, new UsageFetchOptions(true, first.CheckedAt.AddTicks(1)));
+                    Equal(1, calls); Equal(first.Status, second.Status); True(second.IsCached);
+                    Equal(first.CheckedAt, second.CheckedAt); Equal(first.NextQueryAt, second.NextQueryAt);
+                });
+            await TestAsync($"{kind} concurrent forced requests share one completed lookup", async () =>
+            {
+                var calls = 0;
+                var provider = ControlledProvider(kind, () => { calls++; return UsageStatus.Ready; });
+                var options = new UsageFetchOptions(true, DateTimeOffset.UtcNow);
+                var snapshots = await Task.WhenAll(Enumerable.Range(0, 20).Select(_ => provider.FetchAsync(default, options)));
+                Equal(1, calls); True(snapshots.All(snapshot => snapshot.Status == UsageStatus.Ready));
+            });
+        }
+        await TestAsync("Failed lookup retains data observation time separately from attempt and retry time", async () =>
+        {
+            var calls = 0;
+            var provider = (UsageProvider)ControlledProvider(UsageProviderKind.Claude, () => ++calls == 1 ? UsageStatus.Ready : UsageStatus.Unavailable);
+            var first = await provider.FetchAsync(); ExpireCache(provider);
+            var failed = await provider.FetchAsync();
+            Equal(first.ObservedAt, failed.ObservedAt); True(failed.CheckedAt >= first.CheckedAt); True(failed.NextQueryAt > failed.CheckedAt);
+            Equal(UsageWaitReason.FailureBackoff, failed.WaitReason);
+        });
         Test("Claude silent renewal only supports CLI versions with safe short-command shutdown", () =>
         {
             True(ClaudeCredentialRefresher.IsSupportedVersion("2.1.301 (Claude Code)"));
@@ -407,7 +485,7 @@ sealed class RegressionSuite
                 var failed = await provider.FetchAsync();
                 Equal(UsageStatus.AuthenticationRequired, failed.Status); Equal(0, failed.Windows.Count);
                 True(!failed.Message!.Contains("이전"));
-                Equal(failed, await provider.FetchAsync()); Equal(1, refresher.Calls); Equal(1, handler.Calls);
+                EqualCached(failed, await provider.FetchAsync()); Equal(1, refresher.Calls); Equal(1, handler.Calls);
             });
         await TestAsync("Claude renewal rejects replacement lacking future expiry", async () =>
         {
@@ -448,7 +526,7 @@ sealed class RegressionSuite
                 Equal(UsageStatus.AuthenticationRequired, failed.Status); Equal(0, failed.Windows.Count);
                 Equal(status == HttpStatusCode.Unauthorized ? 3 : 2, handler.Calls);
                 Equal(status == HttpStatusCode.Unauthorized ? 1 : 0, refresher.Calls);
-                Equal(failed, await provider.FetchAsync());
+                EqualCached(failed, await provider.FetchAsync());
             });
         await TestAsync("Claude externally replaced account is reread without overwriting or refreshing", async () =>
         {
@@ -498,7 +576,7 @@ sealed class RegressionSuite
                 var limited = await provider.FetchAsync();
                 credentials.Current = new UsageCredential { AccessToken = "new-login", AccountId = "new-account" };
                 var retried = await provider.FetchAsync();
-                Equal(UsageStatus.RateLimited, retried.Status); Equal(limited, retried); Equal(1, handler.Calls);
+                Equal(UsageStatus.RateLimited, retried.Status); EqualCached(limited, retried); Equal(1, handler.Calls);
                 True(retried.RetryAfter > DateTimeOffset.UtcNow.AddSeconds(kind == UsageProviderKind.Claude ? 290 : 50));
             });
             await TestAsync($"{kind} successful polling floor survives token renewal", async () =>
@@ -508,7 +586,7 @@ sealed class RegressionSuite
                 var provider = new UsageProvider(kind, credentials, new HttpClient(handler));
                 var original = await provider.FetchAsync();
                 credentials.Current = new UsageCredential { AccessToken = "renewed-token", AccountId = "test-account" };
-                Equal(original, await provider.FetchAsync()); Equal(1, handler.Calls);
+                EqualCached(original, await provider.FetchAsync()); Equal(1, handler.Calls);
             });
             await TestAsync($"{kind} expired credential replaced by login recovers", async () =>
             {
@@ -767,6 +845,20 @@ sealed class RegressionSuite
     private static UsageCredential ExpiredClaude() => new() { AccessToken = "expired", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1) };
     private static UsageCredential RenewedClaude() => new() { AccessToken = "renewed", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1), Plan = "pro" };
     private static void ExpireCache(UsageProvider provider) => typeof(UsageProvider).GetField("_nextAttempt", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(provider, DateTimeOffset.MinValue);
+    private static void EqualCached(UsageSnapshot expected, UsageSnapshot actual) => Equal(expected with { IsCached = true, WaitReason = RefreshPolicy.Reason(expected.Status) }, actual);
+    private static IUsageProvider ControlledProvider(UsageProviderKind kind, Func<UsageStatus> status)
+    {
+        if (kind is UsageProviderKind.Codex or UsageProviderKind.Claude)
+            return Provider(new StubHandler(_ => status() switch
+            {
+                UsageStatus.Ready => JsonResponse(kind == UsageProviderKind.Codex ? """{"rate_limit":{"primary_window":{"used_percent":12}}}""" : """{"five_hour":{"utilization":12}}"""),
+                UsageStatus.RateLimited => new HttpResponseMessage(HttpStatusCode.TooManyRequests),
+                UsageStatus.AuthenticationRequired => new HttpResponseMessage(HttpStatusCode.Forbidden),
+                _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+            }), kind: kind);
+        Task<UsageSnapshot> Read(CancellationToken _) => Task.FromResult(new UsageSnapshot(kind, status(), [new("fixture", 12, null)], DateTimeOffset.UtcNow));
+        return kind == UsageProviderKind.Gemini ? new GeminiUsageProvider(Read, () => 1) : new GrokUsageProvider(Read, () => 1);
+    }
     private static UsageProvider Provider(StubHandler handler, UsageCredential? credential, UsageProviderKind kind = UsageProviderKind.Codex) => new(kind, new StubCredentials(credential), new HttpClient(handler));
     private static UsageProvider Provider(StubHandler handler, UsageProviderKind kind = UsageProviderKind.Codex) => Provider(handler, Credential(), kind);
     private static HttpResponseMessage JsonResponse(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body) };

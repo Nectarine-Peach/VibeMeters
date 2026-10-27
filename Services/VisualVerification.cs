@@ -75,6 +75,7 @@ internal sealed class VisualVerification
             await CaptureScenario("wide dark",600,300,"window-wide-dark.png");
 
             await CheckWindowActionsAsync();
+            await CheckRefreshStatusAsync();
             await ResizeAsync(360,267);
             var beforeSettingsSize=new Size(_window.ActualWidth,_window.ActualHeight);
             Click((Button)_window.FindName("SettingsButton"));
@@ -236,7 +237,7 @@ internal sealed class VisualVerification
         _settings.ShowClaude=true;_settings.ShowGemini=true;
         _window.ApplyProviderVisibility();_window.FitDesignSize();await StableAsync(_window);
         AssertMainLayout("all services",new[]{("Codex",1),("Claude",2),("Gemini",2)});
-        Check("all services natural design height",Close(_window.ActualWidth,360)&&Close(_window.ActualHeight,394));
+        Check("all services natural design height with three refresh-status rows",Close(_window.ActualWidth,360)&&Close(_window.ActualHeight,442));
         Capture(_window,"window-all-services-dark.png");
         _window.Width=220;_window.Height=140;await StableAsync(_window);
         AssertMainLayout("all services minimum readable size",new[]{("Codex",1),("Claude",2),("Gemini",2)});
@@ -318,6 +319,36 @@ internal sealed class VisualVerification
         _render(Demo(UsageProviderKind.Codex));_render(Demo(UsageProviderKind.Claude));
         await ResizeAsync(360,267);
     }
+    private async Task CheckRefreshStatusAsync()
+    {
+        var ready=Demo(UsageProviderKind.Claude) with { ObservedAt=DemoTime,NextAutomaticAt=DemoTime.AddMinutes(2) };
+        _window.RenderSnapshot(ready);await ResizeAsync(220,140);
+        Check("refresh status separates observation from next automatic query",Descendants<TextBlock>(Cards()[1]).Any(text=>text.Text.Contains("확인 ",StringComparison.Ordinal)&&text.Text.Contains("다음 자동",StringComparison.Ordinal)));
+        Check("refresh status minimum width stays inside card",TextFits(Cards()[1],Cards()[1]));
+        Capture(_window,"window-refresh-schedule-ko.png");
+        var limited=ready with { Status=UsageStatus.RateLimited,CheckedAt=DemoTime.AddMinutes(1),NextQueryAt=DemoTime.AddMinutes(5),NextAutomaticAt=DemoTime.AddMinutes(6),WaitReason=UsageWaitReason.RateLimited,IsCached=true };
+        _window.RenderSnapshot(limited);await StableAsync(_window);
+        Check("protection reason is visible on the compact card",Descendants<TextBlock>(Cards()[1]).Any(text=>text.Text.StartsWith("요청 제한 대기",StringComparison.Ordinal)));
+        var details=UsageRefreshText.Details(limited);
+        Check("protection details preserve observation, attempt and eligibility separately",details.Contains("12:00:00",StringComparison.Ordinal)&&details.Contains("12:01:00",StringComparison.Ordinal)&&details.Contains("12:05:00",StringComparison.Ordinal)&&details.Contains("12:06:00",StringComparison.Ordinal));
+        Localizer.SetLanguage(AppLanguage.English);await StableAsync(_window);
+        Check("protection reason translates immediately",Descendants<TextBlock>(Cards()[1]).Any(text=>text.Text.StartsWith("Rate-limit wait",StringComparison.Ordinal)));
+        Check("English refresh wait text stays inside minimum card",TextFits(Cards()[1],Cards()[1]));
+        Capture(_window,"window-refresh-wait-en.png");
+        Localizer.SetLanguage(AppLanguage.Korean);
+        var requested=0;void Requested()=>requested++;
+        _window.RefreshRequested+=Requested;
+        try
+        {
+            _window.SetRefreshing(true);var button=(Button)_window.FindName("RefreshButton");
+            Check("refresh button accepts a request while lookup is running",button.IsEnabled);
+            Click(button);Check("running refresh button dispatches request",requested==1);
+        }
+        finally { _window.RefreshRequested-=Requested;_window.SetRefreshing(false); }
+        foreach(var kind in Enum.GetValues<UsageProviderKind>()) _render(Demo(kind));
+        await StableAsync(_window);
+    }
+
     private void AssertMainLayout(string scenario,(string Provider,int Rows)[] expected)
     {
         var cards=Cards();

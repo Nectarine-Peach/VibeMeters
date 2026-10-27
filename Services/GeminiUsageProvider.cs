@@ -25,8 +25,9 @@ public sealed class GeminiUsageProvider : IUsageProvider
     { _read = read; _stamp = credentialStamp; }
     public void NotifyLoginCompleted() => Interlocked.Exchange(ref _loginCompleted, 1);
 
-    public async Task<UsageSnapshot> FetchAsync(CancellationToken cancellationToken = default)
+    public async Task<UsageSnapshot> FetchAsync(CancellationToken cancellationToken = default, UsageFetchOptions options = default)
     {
+        var requestedAt = options.RequestedAt ?? DateTimeOffset.UtcNow;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -36,10 +37,10 @@ public sealed class GeminiUsageProvider : IUsageProvider
             {
                 if (stamp != _credentialStamp) GeminiCliBridge.ResetRoute();
                 _credentialStamp = stamp;
-                _last = rateLimited ? _last! with { Windows = [], Message = "계정이 변경되었습니다. 기존 요청 제한 대기 후 사용량을 확인합니다." } : null;
+                _last = rateLimited ? _last! with { Windows = [], ObservedAt = null, Message = "계정이 변경되었습니다. 기존 요청 제한 대기 후 사용량을 확인합니다." } : null;
                 if (!rateLimited) _nextAttempt = default;
             }
-            if (_last is not null && DateTimeOffset.UtcNow < _nextAttempt) return _last;
+            if (RefreshPolicy.CanReuse(_last, _nextAttempt, DateTimeOffset.UtcNow, options, requestedAt)) return RefreshPolicy.Reuse(_last!, _nextAttempt);
             var snapshot = await _read(cancellationToken).ConfigureAwait(false);
             _credentialStamp = _stamp(); // Official client may renew its own credentials.
             // Keyring identity is owned by agy and not exposed in /usage. Requery every
@@ -52,8 +53,12 @@ public sealed class GeminiUsageProvider : IUsageProvider
                 && _last.Plan != AntigravityUsageBridge.Source)
                 snapshot = snapshot with { Windows = _last.Windows, Plan = _last.Plan,
                     Message = "이전 조회값 표시 중 · " + snapshot.Message };
-            _last = snapshot;
-            return snapshot;
+            var checkedAt = DateTimeOffset.UtcNow;
+            _last = snapshot with { CheckedAt = checkedAt,
+                ObservedAt = snapshot.Status == UsageStatus.Ready ? checkedAt : snapshot.Windows.Count > 0 ? _last?.ObservedAt : null,
+                NextQueryAt = _nextAttempt > checkedAt ? _nextAttempt : null,
+                WaitReason = snapshot.Status == UsageStatus.Ready ? UsageWaitReason.None : RefreshPolicy.Reason(snapshot.Status) };
+            return _last;
         }
         finally { _gate.Release(); }
     }

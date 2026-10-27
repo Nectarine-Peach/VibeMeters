@@ -21,8 +21,9 @@ public sealed class GrokUsageProvider : IUsageProvider
     { _read = read; _stamp = credentialStamp; }
     public void NotifyLoginCompleted() => Interlocked.Increment(ref _loginGeneration);
 
-    public async Task<UsageSnapshot> FetchAsync(CancellationToken cancellationToken = default)
+    public async Task<UsageSnapshot> FetchAsync(CancellationToken cancellationToken = default, UsageFetchOptions options = default)
     {
+        var requestedAt = options.RequestedAt ?? DateTimeOffset.UtcNow;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -31,10 +32,10 @@ public sealed class GrokUsageProvider : IUsageProvider
             if (stamp != _credentialStamp || generation != _observedGeneration)
             {
                 _credentialStamp = stamp; _observedGeneration = generation;
-                _last = limited ? _last! with { Windows = [], Message = "로그인이 변경되었습니다. 기존 요청 제한 대기 후 다시 확인합니다." } : null;
+                _last = limited ? _last! with { Windows = [], ObservedAt = null, Message = "로그인이 변경되었습니다. 기존 요청 제한 대기 후 다시 확인합니다." } : null;
                 if (!limited) _nextAttempt = default;
             }
-            if (_last is not null && DateTimeOffset.UtcNow < _nextAttempt) return _last;
+            if (RefreshPolicy.CanReuse(_last, _nextAttempt, DateTimeOffset.UtcNow, options, requestedAt)) return RefreshPolicy.Reuse(_last!, _nextAttempt);
             var snapshot = await _read(cancellationToken).ConfigureAwait(false);
             var currentStamp = _stamp(); var currentGeneration = Volatile.Read(ref _loginGeneration);
             if (stamp != currentStamp || generation != currentGeneration)
@@ -43,7 +44,8 @@ public sealed class GrokUsageProvider : IUsageProvider
                 {
                     _credentialStamp = currentStamp; _observedGeneration = currentGeneration;
                     _nextAttempt = DateTimeOffset.UtcNow.AddMinutes(10);
-                    return _last = snapshot with { Windows = [], RetryAfter = _nextAttempt,
+                    return _last = snapshot with { Windows = [], ObservedAt = null, RetryAfter = _nextAttempt,
+                        NextQueryAt = _nextAttempt, WaitReason = UsageWaitReason.RateLimited,
                         Message = "로그인 정보가 변경되었습니다. 기존 요청 제한 대기 후 다시 확인합니다." };
                 }
                 _last = null; _nextAttempt = default;
@@ -59,7 +61,11 @@ public sealed class GrokUsageProvider : IUsageProvider
             };
             if (snapshot.Status == UsageStatus.RateLimited) snapshot = snapshot with { RetryAfter = _nextAttempt };
             // Errors always have empty windows, including after account changes. Never borrow old values.
-            _last = snapshot.Status == UsageStatus.Ready ? snapshot : snapshot with { Windows = [] };
+            var checkedAt = DateTimeOffset.UtcNow;
+            _last = snapshot with { CheckedAt = checkedAt, Windows = snapshot.Status == UsageStatus.Ready ? snapshot.Windows : [],
+                ObservedAt = snapshot.Status == UsageStatus.Ready ? checkedAt : null,
+                NextQueryAt = _nextAttempt == DateTimeOffset.MaxValue ? null : _nextAttempt,
+                WaitReason = snapshot.Status == UsageStatus.Ready ? UsageWaitReason.None : RefreshPolicy.Reason(snapshot.Status) };
             return _last;
         }
         finally { _gate.Release(); }

@@ -14,7 +14,7 @@ namespace VibeMeters.Services;
 public interface IUsageProvider
 {
     UsageProviderKind Kind { get; }
-    Task<UsageSnapshot> FetchAsync(CancellationToken cancellationToken = default);
+    Task<UsageSnapshot> FetchAsync(CancellationToken cancellationToken = default, UsageFetchOptions options = default);
 }
 
 public static class UsageProviderFactory
@@ -64,8 +64,9 @@ public sealed class UsageProvider : IUsageProvider
     // Explicit login can change Claude identity without a stable account ID.
     public void NotifyLoginCompleted() => Interlocked.Exchange(ref _loginCompleted, 1);
 
-    public async Task<UsageSnapshot> FetchAsync(CancellationToken cancellationToken = default)
+    public async Task<UsageSnapshot> FetchAsync(CancellationToken cancellationToken = default, UsageFetchOptions options = default)
     {
+        var requestedAt = options.RequestedAt ?? DateTimeOffset.UtcNow;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -83,7 +84,7 @@ public sealed class UsageProvider : IUsageProvider
             }
             // Server cooldown applies to all refresh triggers, including automatic CLI
             // token renewal and explicit refresh. Claude does not supply a stable account ID.
-            if (_last?.Status == UsageStatus.RateLimited && now < _nextAttempt) return _last;
+            if (_last?.Status == UsageStatus.RateLimited && now < _nextAttempt) return RefreshPolicy.Reuse(_last, _nextAttempt);
             UsageCredential? credential;
             try { credential = await _credentials.ReadAsync(Kind, cancellationToken).ConfigureAwait(false); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -109,7 +110,7 @@ public sealed class UsageProvider : IUsageProvider
                     _last = null;
                 }
             }
-            if (_last is not null && now < _nextAttempt) return _last;
+            if (RefreshPolicy.CanReuse(_last, _nextAttempt, now, options, requestedAt)) return RefreshPolicy.Reuse(_last!, _nextAttempt);
             var refreshed = false;
             if (credential.ExpiresAt is { } expiry && expiry <= now)
             {
@@ -175,15 +176,16 @@ public sealed class UsageProvider : IUsageProvider
                     if (!response.IsSuccessStatusCode) return Failure("서버에 연결할 수 없습니다. 잠시 후 다시 확인합니다.");
                     await using var body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
                     using var json = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken).ConfigureAwait(false);
-                    var parsed = UsageParser.Parse(Kind, json.RootElement, now, credential.Plan);
+                    var observedAt = DateTimeOffset.UtcNow;
+                    var parsed = UsageParser.Parse(Kind, json.RootElement, observedAt, credential.Plan);
                     if (parsed.Status != UsageStatus.Ready)
                         return Failure(parsed.Message ?? "사용량 정보를 확인할 수 없습니다. 잠시 후 다시 확인합니다.");
                     _failures = 0;
                     _rateLimitFailures = 0;
                     _nextAttempt = DateTimeOffset.UtcNow.AddSeconds(Kind == UsageProviderKind.Claude ? 120 : 15);
                     _credentialFingerprint = Fingerprint(credential);
-                    _last = parsed;
-                    return parsed;
+                    _last = parsed with { ObservedAt = observedAt, NextQueryAt = _nextAttempt };
+                    return _last;
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 { return Failure("연결 시간이 초과되었습니다. 잠시 후 다시 확인합니다."); }
@@ -202,7 +204,7 @@ public sealed class UsageProvider : IUsageProvider
     private async Task<(UsageCredential? Credential, ClaudeRefreshOutcome Outcome)> RefreshClaudeAsync(
         UsageCredential rejected, CancellationToken cancellationToken)
     {
-        if (_last is not null) _last = _last with { Windows = [] };
+        if (_last is not null) _last = _last with { Windows = [], ObservedAt = null };
         try
         {
             // Another CLI/login may already have replaced the rejected token. Read it
@@ -246,7 +248,10 @@ public sealed class UsageProvider : IUsageProvider
     {
         var clear = Kind == UsageProviderKind.Claude && status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected;
         if (!clear && status != UsageStatus.RateLimited && _last?.Windows.Count > 0) message = "이전 조회값 표시 중 · " + message;
-        _last = new(Kind, status, clear ? [] : _last?.Windows ?? [], DateTimeOffset.UtcNow, _last?.Plan, message, retryAfter);
+        _last = new(Kind, status, clear ? [] : _last?.Windows ?? [], DateTimeOffset.UtcNow, _last?.Plan, message, retryAfter,
+            ObservedAt: clear ? null : _last?.ObservedAt,
+            NextQueryAt: _nextAttempt > DateTimeOffset.UtcNow && _nextAttempt != DateTimeOffset.MaxValue ? _nextAttempt : null,
+            WaitReason: RefreshPolicy.Reason(status));
         return _last;
     }
 }

@@ -159,6 +159,7 @@ public partial class MainWindow : Window
         public double FramePadding=>Size(6,10);
         public double BottomPadding=>Size(4,10);
         public double HeadingHeight=>Size(12,26);
+        public double StatusHeight=>Size(11,16);
         public double HeadingFont=>Size(9,16);
         public double BasisFont=>Size(8,11);
         public double LabelFont=>Size(8,12);
@@ -178,7 +179,7 @@ public partial class MainWindow : Window
     }
     private static bool ClaudeNeedsLogin(UsageSnapshot snapshot)=>snapshot.Provider==UsageProviderKind.Claude&&snapshot.Status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected;
     private static int QuotaRowCount(UsageSnapshot snapshot)=>ClaudeNeedsLogin(snapshot)?1:snapshot.Windows.Count==0?(snapshot.Status==UsageStatus.Ready?1:PlaceholderNames(snapshot.Provider).Length):snapshot.Windows.Count;
-    private static double CardHeight(UsageSnapshot snapshot,CardMetrics metrics)=>2+metrics.PadTop+metrics.PadBottom+metrics.HeadingHeight+metrics.DividerTop+1+metrics.DividerBottom+QuotaRowCount(snapshot)*metrics.RowHeight;
+    private static double CardHeight(UsageSnapshot snapshot,CardMetrics metrics)=>2+metrics.PadTop+metrics.PadBottom+metrics.HeadingHeight+metrics.StatusHeight+metrics.DividerTop+1+metrics.DividerBottom+QuotaRowCount(snapshot)*metrics.RowHeight;
     private double LayoutHeight(UsageProviderKind[] providers,bool wide,CardMetrics metrics)
     {
         var cards=providers.Length==0?70:wide?providers.Max(kind=>CardHeight(Snapshot(kind),metrics)):providers.Sum(kind=>CardHeight(Snapshot(kind),metrics))+Math.Max(0,providers.Length-1)*metrics.Gap;
@@ -268,6 +269,7 @@ public partial class MainWindow : Window
     {
         var stack=new StackPanel();
         stack.Children.Add(ProviderHeading(snapshot,metrics));
+        stack.Children.Add(new TextBlock { Text=UsageRefreshText.Summary(snapshot),Foreground=Palette("SecondaryText"),FontSize=metrics.Size(8,10),Height=metrics.StatusHeight,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center,ToolTip=WrappedTip(UsageRefreshText.Details(snapshot)) });
         stack.Children.Add(new Border { Background=Palette("WindowBorder"),Height=1,Margin=new Thickness(0,metrics.DividerTop,0,metrics.DividerBottom),Opacity=0.7 });
         if(ClaudeNeedsLogin(snapshot))
         {
@@ -328,6 +330,7 @@ public partial class MainWindow : Window
     {
         var message=ShortMessage(snapshot.Message);
         var heading=$"{snapshot.Provider}{(string.IsNullOrWhiteSpace(snapshot.Plan)?"":" · "+snapshot.Plan)}\n{ProviderStatus(snapshot)}";
+        heading += "\n"+UsageRefreshText.Details(snapshot);
         return string.IsNullOrWhiteSpace(message)?heading:heading+"\n"+message;
     }
     private static string ShortMessage(string? message)
@@ -352,8 +355,8 @@ public partial class MainWindow : Window
     public void SetRefreshing(bool refreshing)
     {
         if(!Dispatcher.CheckAccess()) { Dispatcher.Invoke(()=>SetRefreshing(refreshing)); return; }
-        RefreshButton.IsEnabled=!refreshing;
-        RefreshButton.ToolTip=refreshing?"사용량 확인 중…":"지금 새로고침 (F5)";
+        RefreshButton.IsEnabled=true;
+        RefreshButton.ToolTip=refreshing?"조회 중 · 누르면 새로고침을 예약합니다.":"지금 새로고침 (F5)";
         Localizer.Apply(this);
     }
     public void UpdateStatus(string text)
@@ -376,7 +379,7 @@ public partial class MainWindow : Window
         var delta=resets.Value-DateTimeOffset.Now;
         return delta<=TimeSpan.Zero?"초기화 대기":delta.TotalDays>=1?$"{(int)delta.TotalDays}일 {delta.Hours}시간 ↻":delta.TotalHours>=1?$"{(int)delta.TotalHours}시간 {delta.Minutes}분 ↻":$"{Math.Max(1,(int)delta.TotalMinutes)}분 ↻";
     }
-    private static string WindowTooltip(UsageWindow quota,UsageSnapshot snapshot)=>$"{snapshot.Provider} · {quota.Name}\n남음 {quota.RemainingPercent:0.#}% · 사용 {quota.UsedPercent:0.#}%\n{ResetShort(quota.ResetsAt)} · {quota.ResetsAt?.ToLocalTime().ToString("M/d HH:mm",CultureInfo.InvariantCulture)??"초기화 정보 없음"}\n{ProviderStatus(snapshot)}";
+    private static string WindowTooltip(UsageWindow quota,UsageSnapshot snapshot)=>$"{snapshot.Provider} · {quota.Name}\n남음 {quota.RemainingPercent:0.#}% · 사용 {quota.UsedPercent:0.#}%\n{ResetShort(quota.ResetsAt)} · {quota.ResetsAt?.ToLocalTime().ToString("M/d HH:mm",CultureInfo.InvariantCulture)??"초기화 정보 없음"}\n{ProviderStatus(snapshot)}\n{UsageRefreshText.Details(snapshot)}";
     protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
     { base.OnPropertyChanged(e); if(_initialized&&e.Property==TopmostProperty) { Settings.AlwaysOnTop=Topmost; UpdatePin(); } }
     private void UpdatePin() { PinButton.Foreground=Palette(Topmost?"CodexAccent":"SecondaryText"); PinButton.ToolTip=Topmost?"항상 위: 켜짐":"항상 위: 꺼짐"; Localizer.Apply(PinButton); }

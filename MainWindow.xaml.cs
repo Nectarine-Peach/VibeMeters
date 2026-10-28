@@ -177,7 +177,7 @@ public partial class MainWindow : Window
         public double MeterHeight=>Size(3,6);
         public double MeterGap=>Size(4,9);
     }
-    private static bool ClaudeNeedsLogin(UsageSnapshot snapshot)=>snapshot.Provider==UsageProviderKind.Claude&&snapshot.Status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected;
+    private static bool ClaudeNeedsLogin(UsageSnapshot snapshot)=>snapshot.Provider==UsageProviderKind.Claude&&snapshot.Status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected or UsageStatus.AuthenticationRecovering or UsageStatus.AuthenticationRetry;
     private static int QuotaRowCount(UsageSnapshot snapshot)=>ClaudeNeedsLogin(snapshot)?1:snapshot.Windows.Count==0?(snapshot.Status==UsageStatus.Ready?1:PlaceholderNames(snapshot.Provider).Length):snapshot.Windows.Count;
     private static double CardHeight(UsageSnapshot snapshot,CardMetrics metrics)=>2+metrics.PadTop+metrics.PadBottom+metrics.HeadingHeight+metrics.StatusHeight+metrics.DividerTop+1+metrics.DividerBottom+QuotaRowCount(snapshot)*metrics.RowHeight;
     private double LayoutHeight(UsageProviderKind[] providers,bool wide,CardMetrics metrics)
@@ -273,9 +273,10 @@ public partial class MainWindow : Window
         stack.Children.Add(new Border { Background=Palette("WindowBorder"),Height=1,Margin=new Thickness(0,metrics.DividerTop,0,metrics.DividerBottom),Opacity=0.7 });
         if(ClaudeNeedsLogin(snapshot))
         {
-            var login=new Button { Content=snapshot.Status==UsageStatus.AuthenticationRequired?"재로그인 필요 · 로그인":"로그인 필요 · 연결",Style=(Style)FindResource("StatusButton"),Width=double.NaN,Height=metrics.RowHeight,FontSize=metrics.LabelFont,Foreground=Palette("WarningText"),HorizontalContentAlignment=HorizontalAlignment.Left,ToolTip=WrappedTip(ProviderTooltip(snapshot)) };
+            var label=snapshot.Status switch { UsageStatus.AuthenticationRequired=>"재로그인 필요 · 로그인",UsageStatus.AuthenticationRecovering=>"자동 복구 확인 중…",UsageStatus.AuthenticationRetry when snapshot.AuthenticationWorkPending=>"갱신 진행 중 · 다시 확인",UsageStatus.AuthenticationRetry=>"다시 확인 · 로그인 선택",_=>"로그인 필요 · 연결" };
+            var login=new Button { Content=label,IsEnabled=snapshot.Status!=UsageStatus.AuthenticationRecovering,Style=(Style)FindResource("StatusButton"),Width=double.NaN,Height=metrics.RowHeight,FontSize=metrics.LabelFont,Foreground=Palette("WarningText"),HorizontalContentAlignment=HorizontalAlignment.Left,ToolTip=WrappedTip(ProviderTooltip(snapshot)) };
             login.Click+=(_,_)=>LoginRequested?.Invoke(UsageProviderKind.Claude);
-            System.Windows.Automation.AutomationProperties.SetName(login,"Claude 다시 로그인");
+            System.Windows.Automation.AutomationProperties.SetName(login,snapshot.Status switch { UsageStatus.AuthenticationRecovering=>"Claude 인증 갱신 확인 중",UsageStatus.AuthenticationRetry=>"Claude 인증 다시 확인",UsageStatus.NotConnected=>"Claude 로그인",_=>"Claude 다시 로그인" });
             stack.Children.Add(login);
             return new Border { Height=CardHeight(snapshot,metrics),Background=Palette("SurfaceBackground"),BorderBrush=Palette("WindowBorder"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(metrics.CardRadius),Padding=new Thickness(metrics.PadHorizontal,metrics.PadTop,metrics.PadHorizontal,metrics.PadBottom),Child=stack };
         }
@@ -372,7 +373,7 @@ public partial class MainWindow : Window
         if (_statusSource.Length>0) UpdateStatus(_statusSource);
     }
     private static Brush Palette(string key) => (Brush)Application.Current.FindResource(key);
-    private static string StatusLabel(UsageStatus status)=>status switch { UsageStatus.Ready=>"연결됨",UsageStatus.NotConnected=>"연결 필요",UsageStatus.AuthenticationRequired=>"로그인 필요",UsageStatus.RateLimited=>"잠시 대기",_=>"확인 불가" };
+    private static string StatusLabel(UsageStatus status)=>status switch { UsageStatus.Ready=>"연결됨",UsageStatus.NotConnected=>"연결 필요",UsageStatus.AuthenticationRequired=>"로그인 필요",UsageStatus.AuthenticationRecovering=>"인증 갱신 확인 중",UsageStatus.AuthenticationRetry=>"인증 재시도 대기",UsageStatus.RateLimited=>"잠시 대기",_=>"확인 불가" };
     private static string ResetShort(DateTimeOffset? resets)
     {
         if(resets is null) return "—";

@@ -4,9 +4,9 @@ using System.Collections.Generic;
 namespace VibeMeters.Models;
 
 public enum UsageProviderKind { Codex, Claude, Gemini, Grok }
-public enum UsageStatus { Ready, NotConnected, AuthenticationRequired, RateLimited, Unavailable }
-public enum UsageWaitReason { None, SuccessCache, RateLimited, AuthenticationBackoff, FailureBackoff }
-public readonly record struct UsageFetchOptions(bool BypassSuccessCache = false, DateTimeOffset? RequestedAt = null);
+public enum UsageStatus { Ready, NotConnected, AuthenticationRequired, RateLimited, Unavailable, AuthenticationRecovering, AuthenticationRetry }
+public enum UsageWaitReason { None, SuccessCache, RateLimited, AuthenticationBackoff, FailureBackoff, AuthenticationRecovery }
+public readonly record struct UsageFetchOptions(bool BypassSuccessCache = false, DateTimeOffset? RequestedAt = null, bool RecoverAuthentication = false);
 
 public sealed record UsageWindow(string Name, double UsedPercent, DateTimeOffset? ResetsAt, TimeSpan? Duration = null)
 {
@@ -25,4 +25,5 @@ public sealed record UsageSnapshot(
     DateTimeOffset? NextQueryAt = null,
     UsageWaitReason WaitReason = UsageWaitReason.None,
     bool IsCached = false,
-    DateTimeOffset? NextAutomaticAt = null);
+    DateTimeOffset? NextAutomaticAt = null,
+    bool AuthenticationWorkPending = false);

@@ -7,6 +7,12 @@ using System.Text.Json;
 using VibeMeters.Models;
 using VibeMeters.Services;
 
+if (args.Contains("--claude-recovery-check"))
+{
+    var recovery = await ClaudeRecoveryRegressionSuite.RunAsync();
+    Console.WriteLine($"{recovery.Passed} passed; {recovery.Failed} failed.");
+    return recovery.Failed == 0 ? 0 : 1;
+}
 if (args.Contains("--claude-live-check"))
 {
     var actual = await new UsageProvider(UsageProviderKind.Claude, new CredentialReader()).FetchAsync();
@@ -435,6 +441,42 @@ sealed class RegressionSuite
             Equal(first.ObservedAt, failed.ObservedAt); True(failed.CheckedAt >= first.CheckedAt); True(failed.NextQueryAt > failed.CheckedAt);
             Equal(UsageWaitReason.FailureBackoff, failed.WaitReason);
         });
+        await TestAsync("Claude refresh followed by network failure cannot retain an old observation timestamp", async () =>
+        {
+            var credentials = new MutableCredentials(new UsageCredential { AccessToken = "expired", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) });
+            var calls = 0;
+            var handler = new StubHandler(_ => ++calls == 1 ? JsonResponse("""{"five_hour":{"utilization":40}}""") : new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+            var refresher = new StubClaudeRefresher(_ => { credentials.Current = RenewedClaude(); return Task.FromResult(ClaudeRefreshOutcome.Completed); });
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher);
+            True((await provider.FetchAsync()).ObservedAt is not null);
+            credentials.Current = ExpiredClaude(); ExpireCache(provider);
+            var failed = await provider.FetchAsync();
+            Equal(UsageStatus.Unavailable, failed.Status); Equal(0, failed.Windows.Count); Equal<DateTimeOffset?>(null, failed.ObservedAt);
+        });
+        await TestAsync("Gemini account change clears observation timestamp while preserving rate-limit deadline", async () =>
+        {
+            var calls = 0; long stamp = 1;
+            var provider = new GeminiUsageProvider(_ => Task.FromResult(new UsageSnapshot(UsageProviderKind.Gemini,
+                ++calls == 1 ? UsageStatus.Ready : UsageStatus.RateLimited,
+                calls == 1 ? [new("company", 10, null)] : [], DateTimeOffset.UtcNow, "company")), () => stamp);
+            var first = await provider.FetchAsync();
+            var limited = await provider.FetchAsync(default, new UsageFetchOptions(true, first.CheckedAt.AddTicks(1)));
+            True(limited.ObservedAt is not null); stamp++;
+            var switched = await provider.FetchAsync();
+            Equal(0, switched.Windows.Count); Equal<DateTimeOffset?>(null, switched.ObservedAt); Equal(limited.RetryAfter, switched.RetryAfter); Equal(2, calls);
+        });
+        await TestAsync("Grok mid-query account change strips any supplied old observation timestamp", async () =>
+        {
+            long stamp = 1;
+            var provider = new GrokUsageProvider(_ =>
+            {
+                stamp++;
+                return Task.FromResult(new UsageSnapshot(UsageProviderKind.Grok, UsageStatus.RateLimited, [], DateTimeOffset.UtcNow, ObservedAt: Now));
+            }, () => stamp);
+            var switched = await provider.FetchAsync();
+            Equal(UsageStatus.RateLimited, switched.Status); Equal(0, switched.Windows.Count); Equal<DateTimeOffset?>(null, switched.ObservedAt);
+            True(switched.NextQueryAt > DateTimeOffset.UtcNow);
+        });
         Test("Claude silent renewal only supports CLI versions with safe short-command shutdown", () =>
         {
             True(ClaudeCredentialRefresher.IsSupportedVersion("2.1.301 (Claude Code)"));
@@ -478,12 +520,12 @@ sealed class RegressionSuite
                 var credentials = new MutableCredentials(new UsageCredential { AccessToken = "expired", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) });
                 var refresher = new StubClaudeRefresher(_ => Task.FromResult(outcome));
                 var handler = new StubHandler(_ => JsonResponse("""{"five_hour":{"utilization":100}}"""));
-                var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher);
+                var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher, new FakeClaudeClock());
                 Equal(1, (await provider.FetchAsync()).Windows.Count);
                 credentials.Current = ExpiredClaude();
                 ExpireCache(provider);
                 var failed = await provider.FetchAsync();
-                Equal(UsageStatus.AuthenticationRequired, failed.Status); Equal(0, failed.Windows.Count);
+                Equal(outcome == ClaudeRefreshOutcome.AuthenticationRejected ? UsageStatus.AuthenticationRequired : UsageStatus.AuthenticationRetry, failed.Status); Equal(0, failed.Windows.Count);
                 True(!failed.Message!.Contains("이전"));
                 EqualCached(failed, await provider.FetchAsync()); Equal(1, refresher.Calls); Equal(1, handler.Calls);
             });
@@ -496,8 +538,8 @@ sealed class RegressionSuite
                 return Task.FromResult(ClaudeRefreshOutcome.Completed);
             });
             var handler = new StubHandler(_ => throw new Exception("Usage must not be called"));
-            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher);
-            Equal(UsageStatus.AuthenticationRequired, (await provider.FetchAsync()).Status); Equal(0, handler.Calls);
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher, new FakeClaudeClock());
+            Equal(UsageStatus.AuthenticationRetry, (await provider.FetchAsync()).Status); Equal(0, handler.Calls);
         });
         await TestAsync("Claude early 401 renews and retries usage exactly once", async () =>
         {
@@ -523,7 +565,7 @@ sealed class RegressionSuite
                 var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher);
                 Equal(1, (await provider.FetchAsync()).Windows.Count); ExpireCache(provider);
                 var failed = await provider.FetchAsync();
-                Equal(UsageStatus.AuthenticationRequired, failed.Status); Equal(0, failed.Windows.Count);
+                Equal(status == HttpStatusCode.Unauthorized ? UsageStatus.AuthenticationRequired : UsageStatus.Unavailable, failed.Status); Equal(0, failed.Windows.Count);
                 Equal(status == HttpStatusCode.Unauthorized ? 3 : 2, handler.Calls);
                 Equal(status == HttpStatusCode.Unauthorized ? 1 : 0, refresher.Calls);
                 EqualCached(failed, await provider.FetchAsync());
@@ -572,7 +614,7 @@ sealed class RegressionSuite
             {
                 var credentials = new MutableCredentials(Credential());
                 var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.TooManyRequests));
-                var provider = new UsageProvider(kind, credentials, new HttpClient(handler));
+                var provider = new UsageProvider(kind, credentials, new HttpClient(handler), clock: new FakeClaudeClock());
                 var limited = await provider.FetchAsync();
                 credentials.Current = new UsageCredential { AccessToken = "new-login", AccountId = "new-account" };
                 var retried = await provider.FetchAsync();
@@ -593,7 +635,7 @@ sealed class RegressionSuite
                 var credentials = new MutableCredentials(new UsageCredential { AccessToken = "expired", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1) });
                 var handler = new StubHandler(_ => JsonResponse(kind == UsageProviderKind.Codex ? """{"rate_limit":{"primary_window":{"used_percent":0}}}""" : """{"five_hour":{"utilization":0}}"""));
                 var provider = new UsageProvider(kind, credentials, new HttpClient(handler));
-                Equal(UsageStatus.AuthenticationRequired, (await provider.FetchAsync()).Status); Equal(0, handler.Calls);
+                Equal(kind == UsageProviderKind.Claude ? UsageStatus.AuthenticationRetry : UsageStatus.AuthenticationRequired, (await provider.FetchAsync()).Status); Equal(0, handler.Calls);
                 credentials.Current = new UsageCredential { AccessToken = "valid", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) };
                 Equal(UsageStatus.Ready, (await provider.FetchAsync()).Status); Equal(1, handler.Calls);
             });
@@ -754,6 +796,7 @@ sealed class RegressionSuite
                 True(!result.Success); True(result.Message.Contains("취소", StringComparison.Ordinal));
             });
         var grok = await GrokRegressionSuite.RunAsync(); _passed += grok.Passed; _failed += grok.Failed;
+        var recovery = await ClaudeRecoveryRegressionSuite.RunAsync(); _passed += recovery.Passed; _failed += recovery.Failed;
         Console.WriteLine($"\n{_passed} passed; {_failed} failed.");
         return _failed == 0 ? 0 : 1;
     }
@@ -845,7 +888,8 @@ sealed class RegressionSuite
     private static UsageCredential ExpiredClaude() => new() { AccessToken = "expired", ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-1) };
     private static UsageCredential RenewedClaude() => new() { AccessToken = "renewed", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1), Plan = "pro" };
     private static void ExpireCache(UsageProvider provider) => typeof(UsageProvider).GetField("_nextAttempt", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(provider, DateTimeOffset.MinValue);
-    private static void EqualCached(UsageSnapshot expected, UsageSnapshot actual) => Equal(expected with { IsCached = true, WaitReason = RefreshPolicy.Reason(expected.Status) }, actual);
+    private static void EqualCached(UsageSnapshot expected, UsageSnapshot actual) => Equal(expected with { IsCached = true,
+        WaitReason = expected.Status == UsageStatus.Ready ? UsageWaitReason.SuccessCache : expected.WaitReason != UsageWaitReason.None ? expected.WaitReason : RefreshPolicy.Reason(expected.Status) }, actual);
     private static IUsageProvider ControlledProvider(UsageProviderKind kind, Func<UsageStatus> status)
     {
         if (kind is UsageProviderKind.Codex or UsageProviderKind.Claude)

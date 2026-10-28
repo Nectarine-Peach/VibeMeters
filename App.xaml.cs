@@ -74,6 +74,11 @@ public partial class App : Application
         CreateTray();
         OnThemeChanged();
         _providers = _smokeTest ? Array.Empty<IUsageProvider>() : UsageProviderFactory.CreateDefault();
+        foreach (var provider in _providers.OfType<UsageProvider>())
+            provider.AuthenticationProgress += snapshot =>
+            {
+                if (!_exiting) _ = Dispatcher.InvokeAsync(() => { if (!_exiting) Render(snapshot); });
+            };
         if (!_demo) WatchCredentials();
         _timer.Tick += async (_, _) =>
         {
@@ -117,23 +122,31 @@ public partial class App : Application
         _window!.SetLoginStatus(provider, true, "백그라운드에서 로그인을 준비합니다. 브라우저에서 인증을 완료해 주세요.");
         try
         {
-            if ((provider is UsageProviderKind.Codex or UsageProviderKind.Claude) && OfficialCliInstaller.Find(provider) is null)
-            {
-                ShowWindow();
-                var installer = new CliInstallWindow(provider, _lifetime.Token) { Owner = _window, Topmost = _window.Topmost };
-                installer.ShowDialog();
-                if (_exiting) return;
-                if (!installer.Installed)
-                {
-                    _window.SetLoginStatus(provider, false, "CLI 설치를 완료하지 않았습니다. 로그인 버튼에서 다시 설치할 수 있습니다.");
-                    return;
-                }
-            }
             var progress = new Progress<string>(message =>
             {
                 if (!_exiting) _window.SetLoginStatus(provider, true, message);
             });
-            var result = await LoginService.LoginAsync(provider, _lifetime.Token, progress);
+            LoginResult result;
+            if (provider == UsageProviderKind.Claude && _providers.OfType<UsageProvider>().FirstOrDefault(p => p.Kind == provider) is { } claude)
+            {
+                _window.SetLoginStatus(provider, true, "브라우저를 열기 전에 기존 인증의 자동 복구를 확인합니다.");
+                var flow = await ClaudeLoginFlow.RunAsync(
+                    async token =>
+                    {
+                        var snapshot = await claude.FetchAsync(token, new UsageFetchOptions(true, DateTimeOffset.UtcNow, RecoverAuthentication: true));
+                        if (!_exiting) Render(snapshot);
+                        return snapshot;
+                    },
+                    token => PrepareAndLoginAsync(provider, token, progress), _lifetime.Token, new ClaudeAuthDiagnostics());
+                if (_exiting) return;
+                result = flow.Result;
+                if (!flow.LoginStarted)
+                {
+                    _window.SetLoginStatus(provider, false, result.Message);
+                    return;
+                }
+            }
+            else result = await PrepareAndLoginAsync(provider, _lifetime.Token, progress);
             if (_exiting) return;
             _window.SetLoginStatus(provider, false, result.Message);
             if (result.Success)
@@ -149,6 +162,19 @@ public partial class App : Application
         }
         catch (OperationCanceledException) { if (!_exiting) _window.SetLoginStatus(provider, false, "로그인이 취소되었습니다."); }
         finally { _loginsInProgress.Remove(provider); }
+    }
+
+    private async Task<LoginResult> PrepareAndLoginAsync(UsageProviderKind provider, CancellationToken token, IProgress<string> progress)
+    {
+        if ((provider is UsageProviderKind.Codex or UsageProviderKind.Claude) && OfficialCliInstaller.Find(provider) is null)
+        {
+            ShowWindow();
+            var installer = new CliInstallWindow(provider, token) { Owner = _window, Topmost = _window!.Topmost };
+            installer.ShowDialog();
+            token.ThrowIfCancellationRequested();
+            if (!installer.Installed) return new(false, "CLI 설치를 완료하지 않았습니다. 로그인 버튼에서 다시 설치할 수 있습니다.");
+        }
+        return await LoginService.LoginAsync(provider, token, progress);
     }
 
     private void WatchCredentials()

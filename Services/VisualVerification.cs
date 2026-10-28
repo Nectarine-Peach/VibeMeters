@@ -295,6 +295,16 @@ internal sealed class VisualVerification
         Capture(_window,"window-login-required-en.png");
         Localizer.SetLanguage(AppLanguage.Korean);await StableAsync(_window);
         Capture(_window,"window-login-required-dark.png");
+        _window.RenderSnapshot(new(UsageProviderKind.Claude,UsageStatus.AuthenticationRecovering,Demo(UsageProviderKind.Claude).Windows,DemoTime,WaitReason:UsageWaitReason.AuthenticationRecovery));
+        await StableAsync(_window);
+        Check("Claude pending recovery is distinct from required login",Descendants<Button>(Cards()[1]).Any(button=>button.Content as string=="자동 복구 확인 중…"&&!button.IsEnabled)&&!Descendants<ProgressBar>(Cards()[1]).Any());
+        var retry=new UsageSnapshot(UsageProviderKind.Claude,UsageStatus.AuthenticationRetry,[],DemoTime,NextQueryAt:DemoTime.AddSeconds(30),WaitReason:UsageWaitReason.AuthenticationRecovery,AuthenticationWorkPending:true);
+        _window.RenderSnapshot(retry);await StableAsync(_window);
+        Check("Claude retry accessibility describes recovery rather than required login",Descendants<Button>(Cards()[1]).Any(button=>AutomationProperties.GetName(button)=="Claude 인증 다시 확인")&&!Descendants<TextBlock>(Cards()[1]).Any(text=>text.Text.Contains("재로그인 필요",StringComparison.Ordinal)));
+        Localizer.SetLanguage(AppLanguage.English);await StableAsync(_window);
+        Check("Claude retry and pending state localize at minimum width",TextFits(Cards()[1],Cards()[1])&&Descendants<Button>(Cards()[1]).Any(button=>button.Content as string=="Renewal pending · Check again"));
+        Capture(_window,"window-auth-retry-en.png");
+        Localizer.SetLanguage(AppLanguage.Korean);
         _render(Demo(UsageProviderKind.Claude));await StableAsync(_window);
     }
     private async Task CheckBusinessStatesAsync()

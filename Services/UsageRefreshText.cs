@@ -10,6 +10,9 @@ public static class UsageRefreshText
 
     public static string Summary(UsageSnapshot snapshot)
     {
+        if (snapshot.Status == UsageStatus.AuthenticationRecovering) return Label("인증 갱신 확인 중");
+        if (snapshot.Status == UsageStatus.AuthenticationRetry)
+            return Label("인증 재시도 대기") + (snapshot.NextQueryAt is { } retry ? " · " + Time(retry) : "");
         if (snapshot.WaitReason is UsageWaitReason.RateLimited or UsageWaitReason.AuthenticationBackoff or UsageWaitReason.FailureBackoff)
         {
             var reason = snapshot.WaitReason switch

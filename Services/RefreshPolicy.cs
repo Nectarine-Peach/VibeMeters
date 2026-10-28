@@ -43,7 +43,8 @@ public static class RefreshPolicy
     {
         IsCached = true,
         NextQueryAt = next == DateTimeOffset.MaxValue ? null : next,
-        WaitReason = Reason(snapshot.Status)
+        WaitReason = snapshot.Status == UsageStatus.Ready ? UsageWaitReason.SuccessCache
+            : snapshot.WaitReason != UsageWaitReason.None ? snapshot.WaitReason : Reason(snapshot.Status)
     };
 
     public static UsageWaitReason Reason(UsageStatus status) => status switch
@@ -51,6 +52,7 @@ public static class RefreshPolicy
         UsageStatus.Ready => UsageWaitReason.SuccessCache,
         UsageStatus.RateLimited => UsageWaitReason.RateLimited,
         UsageStatus.AuthenticationRequired or UsageStatus.NotConnected => UsageWaitReason.AuthenticationBackoff,
+        UsageStatus.AuthenticationRetry or UsageStatus.AuthenticationRecovering => UsageWaitReason.AuthenticationRecovery,
         _ => UsageWaitReason.FailureBackoff
     };
 
@@ -60,6 +62,7 @@ public static class RefreshPolicy
     public static DateTimeOffset? NextAutomaticQuery(UsageSnapshot snapshot, DateTimeOffset? nextTick, int intervalSeconds)
     {
         if (nextTick is null || intervalSeconds <= 0) return null;
+        if (snapshot.Status == UsageStatus.AuthenticationRecovering) return null;
         if (snapshot.Status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected && snapshot.NextQueryAt is null) return null;
         if (snapshot.Status == UsageStatus.Ready || snapshot.NextQueryAt is not { } earliest || earliest <= nextTick) return nextTick;
         var intervalTicks = TimeSpan.FromSeconds(Math.Max(30, intervalSeconds)).Ticks;

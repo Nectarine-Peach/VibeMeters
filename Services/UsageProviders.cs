@@ -38,6 +38,8 @@ public sealed class UsageProvider : IUsageProvider
     private readonly HttpClient _http;
     private readonly ICredentialReader _credentials;
     private readonly IClaudeCredentialRefresher? _claudeRefresh;
+    private readonly IClaudeRecoveryClock _clock;
+    private readonly IClaudeAuthDiagnostics? _diagnostics;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private DateTimeOffset _nextAttempt;
     private UsageSnapshot? _last;
@@ -46,31 +48,38 @@ public sealed class UsageProvider : IUsageProvider
     private string? _credentialFingerprint;
     private string? _accountId;
     private int _loginCompleted;
+    private int _loginGeneration;
+    public event Action<UsageSnapshot>? AuthenticationProgress;
 
     public UsageProviderKind Kind { get; }
 
     public UsageProvider(UsageProviderKind kind, ICredentialReader credentials, HttpClient? httpClient = null,
-        IClaudeCredentialRefresher? claudeRefresher = null)
+        IClaudeCredentialRefresher? claudeRefresher = null, IClaudeRecoveryClock? clock = null,
+        IClaudeAuthDiagnostics? diagnostics = null)
     {
         if (kind is not (UsageProviderKind.Codex or UsageProviderKind.Claude))
             throw new ArgumentException("This HTTP provider supports Codex and Claude only.", nameof(kind));
         Kind = kind;
         _credentials = credentials;
         _http = httpClient ?? SharedClient;
+        _clock = clock ?? ClaudeRecoveryClock.Instance;
+        _diagnostics = diagnostics ?? (kind == UsageProviderKind.Claude && credentials is CredentialReader ? new ClaudeAuthDiagnostics() : null);
         _claudeRefresh = kind == UsageProviderKind.Claude ? claudeRefresher ?? (credentials is CredentialReader reader
-            ? new ClaudeCredentialRefresher(Path.GetDirectoryName(reader.GetCredentialPath(kind))!) : null) : null;
+            ? new ClaudeCredentialRefresher(Path.GetDirectoryName(reader.GetCredentialPath(kind))!, clock: _clock, diagnostics: _diagnostics) : null) : null;
     }
 
     // Explicit login can change Claude identity without a stable account ID.
-    public void NotifyLoginCompleted() => Interlocked.Exchange(ref _loginCompleted, 1);
+    public void NotifyLoginCompleted() { Interlocked.Increment(ref _loginGeneration); Interlocked.Exchange(ref _loginCompleted, 1); }
 
     public async Task<UsageSnapshot> FetchAsync(CancellationToken cancellationToken = default, UsageFetchOptions options = default)
     {
-        var requestedAt = options.RequestedAt ?? DateTimeOffset.UtcNow;
+        var requestedAt = options.RequestedAt ?? _clock.UtcNow;
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var now = DateTimeOffset.UtcNow;
+            var generation = Volatile.Read(ref _loginGeneration);
+            var recoveringBeforeFetch = _last?.Status is UsageStatus.AuthenticationRequired or UsageStatus.AuthenticationRetry or UsageStatus.AuthenticationRecovering;
+            var now = _clock.UtcNow;
             if (Interlocked.Exchange(ref _loginCompleted, 0) != 0)
             {
                 var rateLimited = _last?.Status == UsageStatus.RateLimited && now < _nextAttempt;
@@ -88,12 +97,18 @@ public sealed class UsageProvider : IUsageProvider
             UsageCredential? credential;
             try { credential = await _credentials.ReadAsync(Kind, cancellationToken).ConfigureAwait(false); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
-            { return Save(UsageStatus.NotConnected, "로그인 정보를 읽을 수 없습니다. 해당 CLI에서 다시 로그인해 주세요."); }
+            {
+                return Kind == UsageProviderKind.Claude
+                    ? ClaudeRecoveryDeferred(ClaudeRefreshOutcome.Failed, "로그인 파일을 잠시 읽지 못했습니다. 기존 인증을 다시 확인합니다.")
+                    : Save(UsageStatus.NotConnected, "로그인 정보를 읽을 수 없습니다. 해당 CLI에서 다시 로그인해 주세요.");
+            }
             if (credential is null) return Save(UsageStatus.NotConnected, Kind == UsageProviderKind.Codex ? "Codex CLI에서 ChatGPT 계정으로 로그인해 주세요." : "Claude Code에서 구독 계정으로 로그인해 주세요.");
             // A fresh login can recover authentication errors immediately. Routine token
             // renewal must not bypass the normal polling floor or network/server backoff.
             // Retain only a one-way digest, never a second copy of the access token.
             var fingerprint = Fingerprint(credential);
+            if (Kind == UsageProviderKind.Claude && _last?.Status == UsageStatus.NotConnected)
+            { _last = null; _nextAttempt = default; }
             if (!string.Equals(fingerprint, _credentialFingerprint, StringComparison.Ordinal))
             {
                 var firstCredential = _credentialFingerprint is null;
@@ -102,7 +117,7 @@ public sealed class UsageProvider : IUsageProvider
                     && !string.Equals(_accountId, credential.AccountId, StringComparison.Ordinal);
                 _credentialFingerprint = fingerprint;
                 _accountId = credential.AccountId;
-                if (firstCredential || accountChanged || _last?.Status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected)
+                if (firstCredential || accountChanged || _last?.WaitReason == UsageWaitReason.AuthenticationBackoff || _last?.Status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected or UsageStatus.AuthenticationRetry)
                 {
                     _failures = 0;
                     if (firstCredential || accountChanged) _rateLimitFailures = 0;
@@ -110,14 +125,16 @@ public sealed class UsageProvider : IUsageProvider
                     _last = null;
                 }
             }
-            if (RefreshPolicy.CanReuse(_last, _nextAttempt, now, options, requestedAt)) return RefreshPolicy.Reuse(_last!, _nextAttempt);
+            var retryRecovery = Kind == UsageProviderKind.Claude && options.RecoverAuthentication
+                && (_last?.Status is UsageStatus.AuthenticationRetry or UsageStatus.AuthenticationRequired || _last?.WaitReason == UsageWaitReason.AuthenticationBackoff);
+            if (!retryRecovery && RefreshPolicy.CanReuse(_last, _nextAttempt, now, options, requestedAt)) return RefreshPolicy.Reuse(_last!, _nextAttempt);
             var refreshed = false;
             if (credential.ExpiresAt is { } expiry && expiry <= now)
             {
                 if (Kind != UsageProviderKind.Claude)
                     return Save(UsageStatus.AuthenticationRequired, "인증 갱신이 필요합니다. 설정에서 다시 로그인해 주세요.");
                 var recovery = await RefreshClaudeAsync(credential, cancellationToken).ConfigureAwait(false);
-                if (recovery.Credential is null) return ClaudeAuthenticationRequired(recovery.Outcome);
+                if (recovery.Credential is null) return ClaudeRecoveryDeferred(recovery.Outcome);
                 credential = recovery.Credential;
                 _credentialFingerprint = Fingerprint(credential);
                 refreshed = true;
@@ -143,13 +160,18 @@ public sealed class UsageProvider : IUsageProvider
                         if (Kind == UsageProviderKind.Claude && response.StatusCode == HttpStatusCode.Unauthorized && !refreshed)
                         {
                             var recovery = await RefreshClaudeAsync(credential, cancellationToken).ConfigureAwait(false);
-                            if (recovery.Credential is null) return ClaudeAuthenticationRequired(recovery.Outcome);
+                            if (recovery.Credential is null) return ClaudeRecoveryDeferred(recovery.Outcome);
                             credential = recovery.Credential;
                             _credentialFingerprint = Fingerprint(credential);
                             refreshed = true;
                             continue; // At most one retry, using only the newly read token.
                         }
-                        _nextAttempt = DateTimeOffset.UtcNow.AddMinutes(5);
+                        _nextAttempt = _clock.UtcNow.AddMinutes(5);
+                        if (Kind == UsageProviderKind.Claude && response.StatusCode == HttpStatusCode.Forbidden)
+                        {
+                            if (_last is not null) _last = _last with { Windows = [], ObservedAt = null };
+                            return _last = Save(UsageStatus.Unavailable, "조회 권한이 없습니다. 회사 계정의 서비스 권한·SSO 및 네트워크 정책을 확인해 주세요.") with { WaitReason = UsageWaitReason.AuthenticationBackoff };
+                        }
                         return Save(UsageStatus.AuthenticationRequired, response.StatusCode == HttpStatusCode.Unauthorized
                             ? "인증이 만료되었습니다. 설정에서 다시 로그인해 주세요."
                             : "조회 권한이 없습니다. 회사 계정의 서비스 권한·SSO 및 네트워크 정책을 확인해 주세요.");
@@ -159,7 +181,7 @@ public sealed class UsageProvider : IUsageProvider
                     if (response.StatusCode == HttpStatusCode.TooManyRequests)
                     {
                         _rateLimitFailures = Math.Min(_rateLimitFailures + 1, 6);
-                        var receivedAt = DateTimeOffset.UtcNow;
+                        var receivedAt = _clock.UtcNow;
                         // Conservative app policy; this is not a claimed published provider limit.
                         var minutes = Kind == UsageProviderKind.Claude
                             ? new[] { 5, 10, 20, 30, 60, 60 }[_rateLimitFailures - 1]
@@ -176,13 +198,21 @@ public sealed class UsageProvider : IUsageProvider
                     if (!response.IsSuccessStatusCode) return Failure("서버에 연결할 수 없습니다. 잠시 후 다시 확인합니다.");
                     await using var body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
                     using var json = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken).ConfigureAwait(false);
-                    var observedAt = DateTimeOffset.UtcNow;
+                    var observedAt = _clock.UtcNow;
                     var parsed = UsageParser.Parse(Kind, json.RootElement, observedAt, credential.Plan);
                     if (parsed.Status != UsageStatus.Ready)
                         return Failure(parsed.Message ?? "사용량 정보를 확인할 수 없습니다. 잠시 후 다시 확인합니다.");
+                    if (Kind == UsageProviderKind.Claude)
+                    {
+                        var current = await ReadClaudeSafelyAsync(cancellationToken).ConfigureAwait(false);
+                        if (generation != Volatile.Read(ref _loginGeneration) || current is null || Fingerprint(current) != Fingerprint(credential))
+                            return ClaudeRecoveryDeferred(ClaudeRefreshOutcome.Pending, "조회 중 로그인이 변경되었습니다. 현재 인증을 다시 확인합니다.");
+                        if (refreshed || options.RecoverAuthentication || recoveringBeforeFetch)
+                            _diagnostics?.Write(ClaudeAuthEvent.RecoverySucceeded, credentialChanged: refreshed || recoveringBeforeFetch, futureExpiry: credential.ExpiresAt > _clock.UtcNow);
+                    }
                     _failures = 0;
                     _rateLimitFailures = 0;
-                    _nextAttempt = DateTimeOffset.UtcNow.AddSeconds(Kind == UsageProviderKind.Claude ? 120 : 15);
+                    _nextAttempt = _clock.UtcNow.AddSeconds(Kind == UsageProviderKind.Claude ? 120 : 15);
                     _credentialFingerprint = Fingerprint(credential);
                     _last = parsed with { ObservedAt = observedAt, NextQueryAt = _nextAttempt };
                     return _last;
@@ -204,53 +234,81 @@ public sealed class UsageProvider : IUsageProvider
     private async Task<(UsageCredential? Credential, ClaudeRefreshOutcome Outcome)> RefreshClaudeAsync(
         UsageCredential rejected, CancellationToken cancellationToken)
     {
-        if (_last is not null) _last = _last with { Windows = [], ObservedAt = null };
+        _nextAttempt = default;
+        _last = new(Kind, UsageStatus.AuthenticationRecovering, [], _clock.UtcNow, _last?.Plan,
+            Message: "인증 갱신을 확인하고 있습니다. 잠시 기다려 주세요.", WaitReason: UsageWaitReason.AuthenticationRecovery);
+        AuthenticationProgress?.Invoke(_last);
+        _diagnostics?.Write(ClaudeAuthEvent.RecoveryStarted);
         try
         {
             // Another CLI/login may already have replaced the rejected token. Read it
             // again rather than writing an old account/token over the current file.
-            var current = await _credentials.ReadAsync(Kind, cancellationToken).ConfigureAwait(false);
+            var current = await ReadClaudeSafelyAsync(cancellationToken).ConfigureAwait(false);
             if (IsReplacement(current)) return (current, ClaudeRefreshOutcome.Completed);
             var outcome = _claudeRefresh is null ? ClaudeRefreshOutcome.CliMissing
                 : await _claudeRefresh.RefreshAsync(cancellationToken).ConfigureAwait(false);
-            current = await _credentials.ReadAsync(Kind, cancellationToken).ConfigureAwait(false);
-            return (IsReplacement(current) ? current : null, outcome);
+            for (var attempt = 0; attempt <= 16; attempt++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                current = await ReadClaudeSafelyAsync(cancellationToken).ConfigureAwait(false);
+                if (IsReplacement(current))
+                {
+                    _diagnostics?.Write(ClaudeAuthEvent.FileObserved, outcome, credentialChanged: true, futureExpiry: true);
+                    return (current, outcome);
+                }
+                if (attempt == 16 || outcome is ClaudeRefreshOutcome.CliMissing or ClaudeRefreshOutcome.CliOutdated or ClaudeRefreshOutcome.AuthenticationRejected) break;
+                await _clock.DelayAsync(TimeSpan.FromMilliseconds(500), cancellationToken).ConfigureAwait(false);
+            }
+            _diagnostics?.Write(ClaudeAuthEvent.FileObserved, outcome, credentialChanged: current is not null && current.AccessToken != rejected.AccessToken,
+                futureExpiry: current?.ExpiresAt > _clock.UtcNow);
+            return (null, outcome);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException
             or InvalidOperationException or System.ComponentModel.Win32Exception)
         { return (null, ClaudeRefreshOutcome.Failed); }
 
         bool IsReplacement(UsageCredential? value) => value is not null
-            && value.ExpiresAt is { } expiry && expiry > DateTimeOffset.UtcNow
+            && value.ExpiresAt is { } expiry && expiry > _clock.UtcNow
             && !string.Equals(value.AccessToken, rejected.AccessToken, StringComparison.Ordinal);
     }
 
-    private UsageSnapshot ClaudeAuthenticationRequired(ClaudeRefreshOutcome outcome)
+    private async Task<UsageCredential?> ReadClaudeSafelyAsync(CancellationToken cancellationToken)
     {
-        _nextAttempt = DateTimeOffset.UtcNow.AddMinutes(5);
-        return Save(UsageStatus.AuthenticationRequired, outcome switch
+        try { return await _credentials.ReadAsync(Kind, cancellationToken).ConfigureAwait(false); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException) { return null; }
+    }
+
+    private UsageSnapshot ClaudeRecoveryDeferred(ClaudeRefreshOutcome outcome, string? message = null)
+    {
+        var rejected = outcome == ClaudeRefreshOutcome.AuthenticationRejected;
+        _nextAttempt = _clock.UtcNow.AddSeconds(rejected ? 300 : 30);
+        _diagnostics?.Write(ClaudeAuthEvent.RecoveryDeferred, outcome);
+        var snapshot = Save(rejected ? UsageStatus.AuthenticationRequired : UsageStatus.AuthenticationRetry, message ?? (outcome switch
         {
-            ClaudeRefreshOutcome.CliMissing => "자동 인증 갱신에 Claude Code가 필요합니다. 설정에서 다시 로그인해 주세요.",
-            ClaudeRefreshOutcome.CliOutdated => "자동 인증 갱신에는 Claude Code 2.1.301 이상이 필요합니다. CLI를 업데이트하거나 다시 로그인해 주세요.",
-            _ => "자동 인증 갱신에 실패했습니다. 설정에서 Claude에 다시 로그인해 주세요."
-        });
+            ClaudeRefreshOutcome.AuthenticationRejected => "저장된 인증 갱신이 거부되었습니다. Claude에 다시 로그인해 주세요.",
+            ClaudeRefreshOutcome.CliMissing => "자동 복구에 Claude Code가 필요합니다. 다시 확인하거나 로그인할 수 있습니다.",
+            ClaudeRefreshOutcome.CliOutdated => "자동 복구에는 Claude Code 2.1.301 이상이 필요합니다. CLI를 업데이트하거나 로그인해 주세요.",
+            ClaudeRefreshOutcome.Pending or ClaudeRefreshOutcome.TimedOut => "다른 인증 갱신이나 저장을 기다리고 있습니다. 잠시 후 다시 확인합니다.",
+            _ => "인증 복구를 아직 확인하지 못했습니다. 잠시 후 다시 확인하거나 로그인을 선택할 수 있습니다."
+        }));
+        return _last = snapshot with { AuthenticationWorkPending = outcome is ClaudeRefreshOutcome.Pending or ClaudeRefreshOutcome.TimedOut };
     }
 
     private UsageSnapshot Failure(string message)
     {
         _failures = Math.Min(_failures + 1, 6);
         var floor = Kind == UsageProviderKind.Claude ? 120 : 30;
-        _nextAttempt = DateTimeOffset.UtcNow.AddSeconds(Math.Min(1800, floor * Math.Pow(2, _failures - 1)));
+        _nextAttempt = _clock.UtcNow.AddSeconds(Math.Min(1800, floor * Math.Pow(2, _failures - 1)));
         return Save(UsageStatus.Unavailable, message, retryAfter: _nextAttempt);
     }
 
     private UsageSnapshot Save(UsageStatus status, string message, DateTimeOffset? retryAfter = null)
     {
-        var clear = Kind == UsageProviderKind.Claude && status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected;
+        var clear = Kind == UsageProviderKind.Claude && status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected or UsageStatus.AuthenticationRetry or UsageStatus.AuthenticationRecovering;
         if (!clear && status != UsageStatus.RateLimited && _last?.Windows.Count > 0) message = "이전 조회값 표시 중 · " + message;
-        _last = new(Kind, status, clear ? [] : _last?.Windows ?? [], DateTimeOffset.UtcNow, _last?.Plan, message, retryAfter,
+        _last = new(Kind, status, clear ? [] : _last?.Windows ?? [], _clock.UtcNow, _last?.Plan, message, retryAfter,
             ObservedAt: clear ? null : _last?.ObservedAt,
-            NextQueryAt: _nextAttempt > DateTimeOffset.UtcNow && _nextAttempt != DateTimeOffset.MaxValue ? _nextAttempt : null,
+            NextQueryAt: _nextAttempt > _clock.UtcNow && _nextAttempt != DateTimeOffset.MaxValue ? _nextAttempt : null,
             WaitReason: RefreshPolicy.Reason(status));
         return _last;
     }

@@ -1,3 +1,44 @@
+# v1.4.10 릴리스 패키징 — 2026-10-28
+
+Claude 복구 상태 분리·설정 경로별 CLI 공유·로그인 사전 확인 변경을 포함합니다. 아래 구현/로컬 적용 단계의 260개 고유 검증, 302 UI 스모크 및 실계정 기록은 과거 작업 기록으로 보존하며 이번 게시 절차에서 재실행하거나 새 결과로 간주하지 않습니다. 현재 실행 앱은 이번 배포 작업에서 교체하지 않습니다.
+
+이번 검증은 최종 커밋의 기존 `scripts/publish.ps1` Release self-contained 빌드·패키징, 계정 없는 Gemini 내장 진단 2개와 ZIP 전체 staging SHA·README/docs/이미지 원본·상대 링크·EXE 버전/HEAD 확인입니다. 원격 master/tag와 릴리스 본문·asset 크기/digest를 확인하며 증거는 `dist/releases/v1.4.10/archive-verification.json`과 `github-release.json`에 보관합니다. 회귀·전체 UI 스모크·실계정 조회/로그인·CLI 설치·현재 앱 교체는 요청에 따라 생략합니다. 기존 스크린샷은 이전 버전의 합성 렌더입니다.
+
+진단은 현재/보관 파일 2개로 기록하며 64KiB 이상이면 다음 append 전에 회전하므로 한 행 초과가 가능합니다. 최종 수정 7일 지난 파일을 다음 기록 시 정리하며 행별 보존 기한 보장이 아닙니다. 완료된 CLI 작업은 설정 경로별 표에 다음 요청까지 유지하고, 미종료 CLI는 대기 취소 이후에도 공유합니다. CLI 강제 종료나 자동 브라우저/모델 호출을 추가하지 않았습니다.
+
+---
+# v1.4.10 Claude 잠금 해제 복구·로그인 사전 확인 — 2026-10-28
+
+기존 `VERIFICATION.md`와 `tests/Program.cs`의 미커밋 작업을 보존하고, 상태 명령의 갱신 완료 미보장을 반영했습니다. `인증 갱신 확인 중 / 인증 재시도 대기 / 재로그인 필요`를 구분하며 최초 CLI12초(진행 중 작업 공유2초)와 파일 반영500ms×16회=8초로 확인을 제한합니다. 새 토큰·미래 만료 이후 실제 usage 성공까지 확인합니다. 인증 확인 단계 최대약20초와 usage HTTP의 기존15초 제한은 별도입니다. 429/Retry-After·일반 서버 보호 대기는 유지합니다. 사용자 로그인 요청은 인증 전용 대기를 한번 재확인해 복구되면 브라우저를 생략하며 알려진 진행 중 CLI에는 경쟁 로그인을 만들지 않습니다.
+
+실행한 검증:
+
+- `dotnet run --project tests\VibeMeters.Tests.csproj -c Release -r win-x64 --self-contained true`: 앱 빌드 성공. **259 통과/1 실패**. 실패는 상태 명령 성공·파일 미교체의 fake clock에서 `OnDelay?.Invoke(++Delays)`가 callback=null이면 계수 증가도 생략하는 테스트 측정 오류였습니다. 실제 AuthRetry·8초 경과·30초 다음 시각은 모두 맞았고 계수만0이었습니다. `Delays++; OnDelay?.Invoke(Delays)`로 고쳐 정확16회·8초·AuthRetry 수용기준을 유지했습니다.
+- `dotnet run --project tests\VibeMeters.Tests.csproj -c Release -r win-x64 --self-contained true -- --claude-recovery-check`: 수정한 관련 **19/19 통과**. 변경 없는 기존241개와 합쳐 **260개 고유 검증의 성공 증거**를 확보했습니다. 전체 suite를 관성적으로 반복하지 않았습니다. fake clock/runner로12시간 경과, 지연저장, CLI timeout공유·취소, 구조화 거부와 일시 실패, 계정 변경, preflight browser0/1, 429 유지, 진단 회전·보존을 확인했습니다.
+- self-contained 빌드 EXE의 `--smoke-test`: **302/302 통과**. 최소220px 복구중/대기/확정 재로그인 상태, 수치 제거, 의미에 맞는 접근성 이름, 한영 전환을 확인했고 `artifacts/window-auth-retry-en.png`를 직접 열어 가독성을 확인했습니다. 합성 WPF 렌더입니다.
+- `dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o dist\VibeMeters-claude-recovery-local-1.4.10-20261028`: 성공. 검증 뒤 앱 소스 변경0을 해시로 확인했습니다. 입력 목록은 `dist/claude-recovery-verify-20261028/source-inputs.json`에 보관했습니다.
+- `tests\bin\Release\net8.0-windows\win-x64\VibeMeters.Tests.exe --claude-live-check`: **11:16:41 KST**, `Ready/pro`, 5시간 남음**75%**, 주간 남음**63%**. 현재 인증의 읽기 조회1회이며 실제12시간 잠금 후 복구 재현 증거가 아닙니다.
+
+로컬 적용은 `D:\Applications\VibeMeters\VibeMeters.exe`만 교체했습니다. 대상 PID+시작 시각과 영향 프로세스1개를 확인한 비강제 Windows Restart Manager 종료로 기존 **45968**을 종료하고 **55096**으로 재시작했습니다. 최종 시작 **2026-10-28 11:15:47 KST**, 버전 **1.4.10+d727a37aa1b54ea7d2ad630c25568f7e6964b4f4**, 설치/stage SHA256 **0e7d193cb7cdc7f1b222d919456733560bf0c151fee680202542b8b5bb00e124** 일치, 실행 프로세스1개입니다. 백업은 `dist/VibeMeters-before-claude-recovery-20261028/`입니다. 설정 차이0, 원래 `ShowInTaskbar=false` 유지, Gemini runtime7개 파일 해시 변화0입니다. taskbar 임시 변경·CLI 로그인·브라우저·토큰 만료 강제·원격 릴리스/푸시는 실행하지 않았습니다.
+
+남은 경계: 실계정 토큰을 만료시키거나 실제12시간 잠금·SSO/프록시/refresh 실패를 재현하지 않았습니다. 공식 `auth status`는 여전히 확실한 refresh API가 아니므로 미확정 상태를 솔직히 표시합니다. CLI가 끝나지 않으면 앱은 파일을 재확인하고 진행 작업을 공유하지만 강제로 종료하거나 경쟁 로그인을 만들지 않으므로 CLI 자체 상태 확인이 필요할 수 있습니다. 최소 진단은 닫힌 원인 enum·종료코드·변경/미래만료 bool만 저장하며 원시 토큰/계정/CLI 출력은 기록하지 않습니다.
+
+---
+
+# v1.4.9 로컬 동작 검증·실행 앱 적용 — 2026-10-27 20:40 KST
+
+이번 로컬 적용 요청에서는 수동/자동 성공 캐시 우회, 보호 대기 유지와 실행 앱 반영을 검증했습니다. 아래 별도 릴리스 절차의 검증 생략 기록과 구분합니다.
+
+- `dotnet run --project tests\VibeMeters.Tests.csproj -c Release -r win-x64 --self-contained true`: 최초 **235/235**, 작업 중 추가된 관측 시각 제거 보완을 고정 commit `d727a37aa1b54ea7d2ad630c25568f7e6964b4f4` 기준으로 검증한 최종 **238/238 통과**. 추가 회귀 3개는 Claude 갱신 후 네트워크 실패, Gemini 계정 변경 중 제한, Grok 조회 중 계정 변경에서 수치가 없을 때 이전 관측 시각도 제거하는지 확인합니다.
+- `dotnet build -c Release -r win-x64 --self-contained true`: 경고/오류 **0개**. 빌드 EXE의 `--smoke-test`: **298/298 통과**. 처음에는 상태 줄 추가 전의 세 서비스 자연 높이 394px 고정 기대가 한 항목 실패했고, 의도한 상태 줄 16px×3을 포함한 **442px** 계약으로 갱신하여 다시 통과했습니다. 최소 220px 한국어/영어·보호 대기·관측/다음 자동 시각·조회 중 수동 버튼은 합성 WPF 검증입니다. 관측 시각 null 보완은 레이아웃/스케줄 변경이 아니므로 WPF 전체를 다시 실행하지 않았습니다.
+- 로컬 stage는 `dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o dist\VibeMeters-refresh-local-1.4.9-20261027`로 생성했습니다. 이후 작업 중 커밋된 관측 시각 제거 보완 4곳을 발견해, 최종 앱 소스를 `d727a37`로 고정하고 version/hash/`archive-verification.json` provenance가 확인된 기존 `dist/releases/v1.4.9/VibeMeters-win-x64/VibeMeters.exe`를 최종 적용했습니다. 불필요한 중복 publish는 하지 않았습니다.
+- `D:\Applications\VibeMeters\VibeMeters.exe`의 최종 실행 PID는 **45968**, 시작 **20:40:04 KST**, 버전 **1.4.9+d727a37aa1b54ea7d2ad630c25568f7e6964b4f4**, SHA256 **fdd26597d4b388ef5efb1e6043aa4a00dc202dd4273f2e6b146a95078a0925a9**입니다. 매 종료는 Restart Manager에 대상 PID+시작 시각을 등록하고 영향 목록이 해당 프로세스 한 개임을 확인한 **비강제** 종료로 수행했습니다. 기존 EXE·설정과 runtime 해시 기록은 `dist/VibeMeters-before-refresh-20261027/`에 보관했습니다. Gemini runtime **7개 파일 해시 변화 0개**, 원래 `ShowInTaskbar=false`를 복원했고 서비스/주기 설정을 유지했습니다. 설정 파일을 전체 덮어복원하지 않았습니다. 최종 geometry 비교는 높이 **209→253**, Left **1572→1588**, Top **981→919**였으며, 높이는 상태 줄의 최소 크기 변경입니다. 위치 변경이 창의 화면 경계 보정인지 사용자 조작인지는 구분하지 못했고 최신 위치를 덮어쓰지 않았습니다.
+- 실제 설치 앱의 접근성 텍스트에서 Claude 5시간 남음 **0%**, 주간 남음 **66%**, 관측 **20:32:37→20:34:36**, 다음 자동 조회 **20:36:36**을 확인했습니다. 이 관측은 최종 metadata null 보완 전의 동일한 refresh/scheduling 코드에서 수행했으며 보완 후 2분 관측을 반복하지 않았습니다. 수치가 같아도 관측 시각이 약 120초 뒤 갱신되어 기존 2분→4분 건너뛰기가 사라짐을 확인했습니다.
+
+실제 UI 자동화 제약: `ShowInTaskbar=false` 창은 Computer Use 목록에서 제외되어 검증 때 해당 필드만 임시 true로 바꾼 뒤 최신 설정에서 false만 복원했습니다. 접근성 텍스트는 읽혔지만 화면 캡처는 timeout, 버튼 클릭은 geometry 오류였고, F5/Tab 입력 반환만으로 실제 수동 입력 성공을 확인하지 못했습니다. 실제 수동 UI 입력은 미검증으로 남기며, 동일 수동 route와 성공 캐시 우회는 회귀·WPF로 검증했습니다. 이번 작업에서 로그인·계정 변경·강제 종료·운영 데이터 변경·원격 푸시는 실행하지 않았습니다.
+
+---
+
 # v1.4.9 조회 정책·시각 표시 배포 — 2026-10-27
 
 수동/자동 조회가 정상 성공 캐시만 우회하고 보호 대기는 유지하도록 트리거를 분리했습니다. 진행 중 수동 요청은 한 번으로 합치고, 요청 이후 완료된 결과는 중복 요청 없이 재사용합니다. 카드/툴팁은 수치 관측·결과 확인·보호 대기 종료·다음 가능한 자동 타이머 시각을 구분합니다. 계정 변경으로 수치를 제거하는 경로에서는 이전 관측 시각도 제거했습니다. 다음 자동 표시는 실행 보장이 아니라 설정 주기와 보호 대기로 계산한 시각이며 타이머/잠금/진행 중 조회에 따라 지연될 수 있습니다.

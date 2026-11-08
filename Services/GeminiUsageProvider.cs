@@ -46,14 +46,19 @@ public sealed class GeminiUsageProvider : IUsageProvider
             // Keyring identity is owned by agy and not exposed in /usage. Requery every
             // refresh and never carry numbers through a failure or account switch.
             var antigravity = snapshot.Plan == AntigravityUsageBridge.Source;
-            _nextAttempt = antigravity && snapshot.Status != UsageStatus.RateLimited ? default
-                : DateTimeOffset.UtcNow.AddMinutes(snapshot.Status == UsageStatus.RateLimited ? 10 : 5);
-            if (snapshot.Status == UsageStatus.RateLimited) snapshot = snapshot with { RetryAfter = _nextAttempt };
+            var checkedAt = DateTimeOffset.UtcNow;
+            if (snapshot.Status == UsageStatus.RateLimited)
+            {
+                _nextAttempt = checkedAt.AddMinutes(10);
+                if (snapshot.RetryAfter is { } serverDeadline && serverDeadline > _nextAttempt)
+                    _nextAttempt = serverDeadline;
+                snapshot = snapshot with { RetryAfter = _nextAttempt };
+            }
+            else _nextAttempt = antigravity ? default : checkedAt.AddMinutes(5);
             if (!antigravity && snapshot.Status != UsageStatus.Ready && _last?.Windows.Count > 0
                 && _last.Plan != AntigravityUsageBridge.Source)
                 snapshot = snapshot with { Windows = _last.Windows, Plan = _last.Plan,
                     Message = "이전 조회값 표시 중 · " + snapshot.Message };
-            var checkedAt = DateTimeOffset.UtcNow;
             _last = snapshot with { CheckedAt = checkedAt,
                 ObservedAt = snapshot.Status == UsageStatus.Ready ? checkedAt : snapshot.Windows.Count > 0 ? _last?.ObservedAt : null,
                 NextQueryAt = _nextAttempt > checkedAt ? _nextAttempt : null,

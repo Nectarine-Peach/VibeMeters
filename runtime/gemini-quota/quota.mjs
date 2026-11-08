@@ -2,6 +2,7 @@
 // Official code owns authentication and token renewal; credentials never leave it.
 import { writeSync } from 'node:fs';
 import { accountFailure } from './account-status.mjs';
+import { quotaRequestOptions, retryAfterDeadline } from './rate-limit.mjs';
 const suppressWrite = (chunk, encoding, callback) => {
   const done = typeof encoding === 'function' ? encoding : callback;
   if (typeof done === 'function') queueMicrotask(done);
@@ -57,7 +58,7 @@ try {
   };
   const client = await getOauthClient(AuthType.LOGIN_WITH_GOOGLE, config);
   const configuredProject = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID || undefined;
-  const server = new CodeAssistServer(client, configuredProject);
+  const server = new CodeAssistServer({ request: options => client.request(quotaRequestOptions(options)) }, configuredProject);
   const account = await server.loadCodeAssist({
     cloudaicompanionProject: configuredProject,
     metadata: { ideType: 'IDE_UNSPECIFIED', platform: 'WINDOWS_AMD64', pluginType: 'GEMINI', duetProject: configuredProject },
@@ -84,11 +85,12 @@ try {
     return finish({ status: 'Unavailable', reason: 'RUNTIME_REQUIRED', diagnostic:
       error?.name === 'ReferenceError' ? String(error.message).replace(/[^a-zA-Z0-9 _]/g, '').slice(0, 100)
       : String(error?.code || error?.name || 'RUNTIME_LOAD_FAILED').slice(0, 100) });
-  // Never return SDK messages, headers, response bodies, OAuth URLs, or account identifiers.
+  // Never return SDK messages, raw headers, response bodies, OAuth URLs, or account identifiers.
   const statusCode = Number(error?.response?.status || error?.status || error?.code);
   if (error?.code === 'AUTH_REQUIRED' || statusCode === 401 || statusCode === 403)
     return finish({ status: 'AuthenticationRequired', reason: 'AUTH_REQUIRED' });
-  if (statusCode === 429) return finish({ status: 'RateLimited', reason: 'RATE_LIMITED' });
+  if (statusCode === 429)
+    return finish({ status: 'RateLimited', reason: 'RATE_LIMITED', retryAfterUnixMs: retryAfterDeadline(error?.response?.headers) });
   return finish({ status: 'Unavailable', reason: error?.code === 'ERR_MODULE_NOT_FOUND' ? 'RUNTIME_REQUIRED' : 'NETWORK' });
 }
 }

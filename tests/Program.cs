@@ -230,6 +230,36 @@ sealed class RegressionSuite
             True(s.Message!.Contains("개인 계정 지원이 종료", StringComparison.Ordinal));
             True(!s.Message.Contains("프로젝트", StringComparison.Ordinal));
         });
+        await TestAsync("Gemini preserves a longer server cooldown across refresh and login", async () =>
+        {
+            var epoch = DateTimeOffset.UtcNow.AddHours(2).ToUnixTimeMilliseconds();
+            var deadline = DateTimeOffset.FromUnixTimeMilliseconds(epoch);
+            var limited = ParseGemini($$"""{"status":"RateLimited","reason":"RATE_LIMITED","retryAfterUnixMs":{{epoch}}}""");
+            Equal(deadline, limited.RetryAfter);
+            int calls = 0;
+            long stamp = 0;
+            var provider = new GeminiUsageProvider(_ => { calls++; return Task.FromResult(limited); }, () => stamp);
+            var first = await provider.FetchAsync();
+            Equal(deadline, first.RetryAfter);
+            Equal(deadline, first.NextQueryAt);
+            stamp++;
+            provider.NotifyLoginCompleted();
+            var cached = await provider.FetchAsync(options: new(BypassSuccessCache: true));
+            Equal(1, calls);
+            Equal(deadline, cached.RetryAfter);
+            Equal(deadline, cached.NextQueryAt);
+        });
+        await TestAsync("Gemini preserves its fallback cooldown for missing or invalid deadlines", async () =>
+        {
+            foreach (var value in new[] { "null", "\"3600\"", "-1", "1e300" })
+            {
+                var limited = ParseGemini($$"""{"status":"RateLimited","reason":"RATE_LIMITED","retryAfterUnixMs":{{value}}}""");
+                Equal<DateTimeOffset?>(null, limited.RetryAfter);
+                var provider = new GeminiUsageProvider(_ => Task.FromResult(limited), () => 0);
+                var snapshot = await provider.FetchAsync();
+                Equal(snapshot.CheckedAt.AddMinutes(10), snapshot.RetryAfter);
+            }
+        });
         const string agyQuota = """{"status":"SUCCESS","num_turns":0,"usage":{"total_tokens":0},"command":{"name":"usage","data":{"groups":[{"name":"Gemini Models","buckets":[{"id":"gemini-weekly","window":"weekly","remaining_fraction":0.625,"reset_time":"2026-11-02T04:36:49Z"},{"id":"gemini-5h","window":"5h","remaining_fraction":1,"reset_time":"2026-10-26T09:36:49Z"}]},{"name":"Claude and GPT models","buckets":[{"id":"3p-weekly","window":"weekly","remaining_fraction":0.1}]},{"name":"Gemini 4 Argon","buckets":[{"id":"gemini-argon-wtu-weekly","window":"weekly","remaining_fraction":0}]}]}}}""";
         Test("Antigravity command parses Gemini shared quotas without mixing Claude", () =>
         {

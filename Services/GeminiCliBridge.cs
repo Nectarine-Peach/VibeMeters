@@ -109,7 +109,8 @@ internal static class GeminiCliBridge
             return Text(root, "reason") switch
             {
                 "AUTH_REQUIRED" => Error(UsageStatus.AuthenticationRequired, "Gemini 로그인이 필요합니다. 로그인 후 자동으로 갱신됩니다."),
-                "RATE_LIMITED" => Error(UsageStatus.RateLimited, "Gemini 요청 제한 · 잠시 후 자동으로 다시 확인합니다."),
+                "RATE_LIMITED" => Error(UsageStatus.RateLimited, "Gemini 요청 제한 · 잠시 후 자동으로 다시 확인합니다.")
+                    with { RetryAfter = ReadRetryAfter(root) },
                 "PROJECT_REQUIRED" => Error(UsageStatus.Unavailable, "Gemini 계정에 Google Cloud 프로젝트 설정이 필요합니다."),
                 "UNSUPPORTED_CLIENT" => Error(UsageStatus.Unavailable, "Gemini CLI 개인 계정 지원이 종료되었습니다. Antigravity에서 사용량을 확인해 주세요."),
                 "RUNTIME_REQUIRED" => Error(UsageStatus.Unavailable, "Gemini 조회 런타임이 누락되었습니다. 앱을 다시 설치해 주세요."),
@@ -133,6 +134,14 @@ internal static class GeminiCliBridge
 
     private static UsageSnapshot Error(UsageStatus status, string message) =>
         new(UsageProviderKind.Gemini, status, [], DateTimeOffset.UtcNow, Message: message);
+
+    private static DateTimeOffset? ReadRetryAfter(JsonElement root)
+    {
+        if (!root.TryGetProperty("retryAfterUnixMs", out var value) || value.ValueKind != JsonValueKind.Number
+            || !value.TryGetInt64(out var milliseconds) || milliseconds < 0
+            || milliseconds > DateTimeOffset.MaxValue.AddDays(-1).ToUnixTimeMilliseconds()) return null;
+        return DateTimeOffset.FromUnixTimeMilliseconds(milliseconds);
+    }
 
     private static string? Text(JsonElement root, string key) => root.ValueKind == JsonValueKind.Object
         && root.TryGetProperty(key, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;

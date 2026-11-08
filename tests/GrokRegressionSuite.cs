@@ -127,15 +127,60 @@ internal static class GrokRegressionSuite
             var second = await provider.FetchAsync(); Require(calls == 1 && second.Windows.Count == 0);
             Require(second.RetryAfter == first.RetryAfter && first.RetryAfter > DateTimeOffset.UtcNow.AddMinutes(9));
         });
-        await Check("mid-query account change discards result and still preserves throttle", async () =>
+        await Check("a mid-query credential save rechecks once and caches only the replacement account's quotas", async () =>
         {
-            long stamp = 1;
-            var provider = new GrokUsageProvider(_ => { stamp++; return Task.FromResult(ready); }, () => stamp);
-            Require((await provider.FetchAsync()).Windows.Count == 0);
             var calls = 0;
-            var throttled = new GrokUsageProvider(_ => { calls++; stamp++; return Task.FromResult(Error("429 rate limit")); }, () => stamp);
-            await throttled.FetchAsync(); Require((await throttled.FetchAsync()).Status == UsageStatus.RateLimited && calls == 1);
+            long stamp = 1;
+            var replacement = Parse(Billing(true).Replace("\"creditUsagePercent\":32", "\"creditUsagePercent\":70"));
+            var provider = new GrokUsageProvider(_ =>
+            {
+                if (++calls != 1) return Task.FromResult(replacement);
+                stamp++;
+                return Task.FromResult(ready);
+            }, () => stamp);
+
+            var refreshed = await provider.FetchAsync();
+            Require(calls == 2 && refreshed.Status == UsageStatus.Ready && refreshed.Windows.SequenceEqual(replacement.Windows));
+            var cached = await provider.FetchAsync();
+            Require(calls == 2 && cached.IsCached && cached.Windows.SequenceEqual(replacement.Windows));
         });
+        foreach (var removed in new[] { false, true })
+            await Check($"mid-query credential {(removed ? "removal" : "churn")} does not reuse unverified results", async () =>
+            {
+                var calls = 0;
+                long stamp = 1;
+                var provider = new GrokUsageProvider(_ =>
+                {
+                    calls++;
+                    stamp = removed ? 0 : stamp + 1;
+                    return Task.FromResult(ready);
+                }, () => stamp);
+                var snapshot = await provider.FetchAsync();
+                Require(snapshot.Status == UsageStatus.Unavailable && snapshot.Windows.Count == 0 && snapshot.ObservedAt is null);
+                Require(calls == (removed ? 1 : 2));
+            });
+        foreach (var onFirstLookup in new[] { true, false })
+            await Check($"429 on the {(onFirstLookup ? "first" : "replacement")} lookup preserves its deadline across account changes", async () =>
+            {
+                var calls = 0;
+                long stamp = 1;
+                var deadline = DateTimeOffset.UtcNow.AddMinutes(45);
+                var rateLimited = Error("429 rate limit") with { RetryAfter = deadline };
+                var provider = new GrokUsageProvider(_ =>
+                {
+                    if (++calls == 1) stamp++;
+                    return Task.FromResult(onFirstLookup || calls > 1 ? rateLimited : ready);
+                }, () => stamp);
+
+                var limited = await provider.FetchAsync();
+                Require(limited.Status == UsageStatus.RateLimited && limited.RetryAfter == deadline && limited.NextQueryAt == deadline);
+                Require(limited.Windows.Count == 0 && limited.ObservedAt is null);
+                stamp++;
+                provider.NotifyLoginCompleted();
+                var afterSwitch = await provider.FetchAsync(options: new(BypassSuccessCache: true));
+                Require(afterSwitch.Status == UsageStatus.RateLimited && afterSwitch.RetryAfter == deadline && afterSwitch.NextQueryAt == deadline);
+                Require(afterSwitch.Windows.Count == 0 && calls == (onFirstLookup ? 1 : 2));
+            });
         await Check("explicit login generation invalidates an in-flight response", async () =>
         {
             var result = new TaskCompletionSource<UsageSnapshot>();

@@ -38,30 +38,40 @@ public sealed class GrokUsageProvider : IUsageProvider
             if (RefreshPolicy.CanReuse(_last, _nextAttempt, DateTimeOffset.UtcNow, options, requestedAt)) return RefreshPolicy.Reuse(_last!, _nextAttempt);
             var snapshot = await _read(cancellationToken).ConfigureAwait(false);
             var currentStamp = _stamp(); var currentGeneration = Volatile.Read(ref _loginGeneration);
+            // A concurrent credential save can invalidate an otherwise good answer. Run a new
+            // CLI once so its initialization loads the replacement file. Never retry a throttle.
+            if (snapshot.Status != UsageStatus.RateLimited && currentStamp != 0
+                && stamp != currentStamp && generation == currentGeneration)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                stamp = currentStamp;
+                snapshot = await _read(cancellationToken).ConfigureAwait(false);
+                currentStamp = _stamp();
+                currentGeneration = Volatile.Read(ref _loginGeneration);
+            }
+
             if (stamp != currentStamp || generation != currentGeneration)
             {
-                if (snapshot.Status == UsageStatus.RateLimited)
+                if (snapshot.Status != UsageStatus.RateLimited)
                 {
-                    _credentialStamp = currentStamp; _observedGeneration = currentGeneration;
-                    _nextAttempt = DateTimeOffset.UtcNow.AddMinutes(10);
-                    return _last = snapshot with { Windows = [], ObservedAt = null, RetryAfter = _nextAttempt,
-                        NextQueryAt = _nextAttempt, WaitReason = UsageWaitReason.RateLimited,
-                        Message = "로그인 정보가 변경되었습니다. 기존 요청 제한 대기 후 다시 확인합니다." };
+                    _last = null; _nextAttempt = default;
+                    return GrokCliBridge.Failure(UsageStatus.Unavailable, "조회 중 로그인 정보가 변경되었습니다. 새로고침해 주세요.");
                 }
-                _last = null; _nextAttempt = default;
-                return GrokCliBridge.Failure(UsageStatus.Unavailable, "조회 중 로그인 정보가 변경되었습니다. 새로고침해 주세요.");
+                snapshot = snapshot with { Message = "로그인 정보가 변경되었습니다. 기존 요청 제한 대기 후 다시 확인합니다." };
             }
+
+            _credentialStamp = currentStamp; _observedGeneration = currentGeneration;
+            var checkedAt = DateTimeOffset.UtcNow;
+            var minimumRateLimit = checkedAt.AddMinutes(10);
             _nextAttempt = snapshot.Status switch
             {
-                UsageStatus.Ready => DateTimeOffset.UtcNow.AddMinutes(2),
-                UsageStatus.RateLimited => DateTimeOffset.UtcNow.AddMinutes(10),
+                UsageStatus.Ready => checkedAt.AddMinutes(2),
+                UsageStatus.RateLimited => snapshot.RetryAfter is { } retry && retry > minimumRateLimit ? retry : minimumRateLimit,
                 UsageStatus.AuthenticationRequired => DateTimeOffset.MaxValue,
-                UsageStatus.NotConnected => DateTimeOffset.UtcNow.AddSeconds(30),
-                _ => DateTimeOffset.UtcNow.AddSeconds(30)
+                _ => checkedAt.AddSeconds(30)
             };
             if (snapshot.Status == UsageStatus.RateLimited) snapshot = snapshot with { RetryAfter = _nextAttempt };
             // Errors always have empty windows, including after account changes. Never borrow old values.
-            var checkedAt = DateTimeOffset.UtcNow;
             _last = snapshot with { CheckedAt = checkedAt, Windows = snapshot.Status == UsageStatus.Ready ? snapshot.Windows : [],
                 ObservedAt = snapshot.Status == UsageStatus.Ready ? checkedAt : null,
                 NextQueryAt = _nextAttempt == DateTimeOffset.MaxValue ? null : _nextAttempt,

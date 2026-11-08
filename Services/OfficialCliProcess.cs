@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace VibeMeters.Services;
@@ -12,8 +13,11 @@ internal static class OfficialCliProcess
     internal static ProcessStartInfo? CreateStartInfo(string name, params string[] arguments)
     {
         var executable = FindExecutable(name);
-        if (executable is null) return null;
+        return executable is null ? null : CreateStartInfoForExecutable(executable, arguments);
+    }
 
+    internal static ProcessStartInfo CreateStartInfoForExecutable(string executable, params string[] arguments)
+    {
         ProcessStartInfo start;
         if (Path.GetExtension(executable).Equals(".exe", StringComparison.OrdinalIgnoreCase))
         {
@@ -58,7 +62,9 @@ internal static class OfficialCliProcess
 
     private static string Quote(string value) => "'" + value.Replace("'", "''", StringComparison.Ordinal) + "'";
 
-    internal static string? FindExecutable(string name)
+    internal static string? FindExecutable(string name) => FindExecutables(name).FirstOrDefault();
+
+    internal static IEnumerable<string> FindExecutables(string name)
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var directories = new List<string>
@@ -77,20 +83,21 @@ internal static class OfficialCliProcess
         // changing the user's environment or requiring a VibeMeters restart.
         directories.AddRange((Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User) ?? "").Split(Path.PathSeparator));
         directories.AddRange((Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine) ?? "").Split(Path.PathSeparator));
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var entry in directories)
         {
             var directory = entry.Trim().Trim('"');
             if (!Path.IsPathFullyQualified(directory)) continue;
             foreach (var extension in new[] { ".exe", ".cmd" })
             {
+                string path;
                 try
                 {
-                    var path = Path.GetFullPath(Path.Combine(directory, name + extension));
-                    if (File.Exists(path)) return path;
+                    path = Path.GetFullPath(Path.Combine(directory, name + extension));
                 }
-                catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { }
+                catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { continue; }
+                if (seen.Add(path) && File.Exists(path)) yield return path;
             }
         }
-        return null;
     }
 }

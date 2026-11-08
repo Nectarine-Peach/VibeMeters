@@ -33,7 +33,11 @@ public sealed class RefreshRequestGate
 
 public static class RefreshPolicy
 {
-    public static bool BypassSuccessCache(RefreshTrigger trigger) => trigger is RefreshTrigger.Manual or RefreshTrigger.Automatic;
+    internal const int ClaudeSuccessCacheSeconds = 120;
+
+    public static bool BypassSuccessCache(RefreshTrigger trigger, UsageProviderKind provider, int intervalSeconds)
+        => trigger == RefreshTrigger.Manual || trigger == RefreshTrigger.Automatic
+            && (provider != UsageProviderKind.Claude || intervalSeconds >= ClaudeSuccessCacheSeconds);
 
     public static bool CanReuse(UsageSnapshot? last, DateTimeOffset next, DateTimeOffset now,
         UsageFetchOptions options, DateTimeOffset requestedAt) => last is not null && now < next
@@ -64,7 +68,8 @@ public static class RefreshPolicy
         if (nextTick is null || intervalSeconds <= 0) return null;
         if (snapshot.Status == UsageStatus.AuthenticationRecovering) return null;
         if (snapshot.Status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected && snapshot.NextQueryAt is null) return null;
-        if (snapshot.Status == UsageStatus.Ready || snapshot.NextQueryAt is not { } earliest || earliest <= nextTick) return nextTick;
+        if ((snapshot.Status == UsageStatus.Ready && BypassSuccessCache(RefreshTrigger.Automatic, snapshot.Provider, intervalSeconds))
+            || snapshot.NextQueryAt is not { } earliest || earliest <= nextTick) return nextTick;
         var intervalTicks = TimeSpan.FromSeconds(Math.Max(30, intervalSeconds)).Ticks;
         var ticks = earliest.UtcTicks - nextTick.Value.UtcTicks;
         return nextTick.Value.AddTicks(((ticks + intervalTicks - 1) / intervalTicks) * intervalTicks);

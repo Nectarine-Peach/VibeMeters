@@ -363,21 +363,30 @@ sealed class RegressionSuite
             catch (OperationCanceledException) { }
         });
         await TestAsync("Credential files parsed from isolated fixture directory", CredentialFilesAsync);
-        Test("Refresh triggers distinguish scheduled/manual requests from credential and resume checks", () =>
+        Test("Short automatic intervals reuse Claude's success cache, while manual refresh bypasses it", () =>
         {
-            True(RefreshPolicy.BypassSuccessCache(RefreshTrigger.Manual)); True(RefreshPolicy.BypassSuccessCache(RefreshTrigger.Automatic));
-            foreach (var trigger in new[] { RefreshTrigger.Credentials, RefreshTrigger.Login, RefreshTrigger.Resume, RefreshTrigger.Activation }) True(!RefreshPolicy.BypassSuccessCache(trigger));
+            foreach (var seconds in new[] { 30, 60 })
+            {
+                True(RefreshPolicy.BypassSuccessCache(RefreshTrigger.Manual, UsageProviderKind.Claude, seconds));
+                True(!RefreshPolicy.BypassSuccessCache(RefreshTrigger.Automatic, UsageProviderKind.Claude, seconds));
+                True(RefreshPolicy.BypassSuccessCache(RefreshTrigger.Automatic, UsageProviderKind.Codex, seconds));
+            }
+            foreach (var trigger in new[] { RefreshTrigger.Credentials, RefreshTrigger.Login, RefreshTrigger.Resume, RefreshTrigger.Activation })
+                True(!RefreshPolicy.BypassSuccessCache(trigger, UsageProviderKind.Claude, 120));
         });
-        Test("Automatic timer ignores success-cache phase and honors selected intervals", () =>
+        Test("Next Claude automatic lookup accounts for the short-interval success cache", () =>
         {
             var start = DateTimeOffset.Parse("2026-10-27T00:00:00Z");
-            var last = new UsageSnapshot(UsageProviderKind.Claude, UsageStatus.Ready, [], start.AddSeconds(1));
-            foreach (var seconds in new[] { 30, 120, 300 })
+            var last = new UsageSnapshot(UsageProviderKind.Claude, UsageStatus.Ready, [], start.AddSeconds(1), NextQueryAt: start.AddSeconds(121));
+            foreach (var seconds in new[] { 30, 60, 120, 300 })
             {
                 var tick = start.AddSeconds(seconds);
-                True(!RefreshPolicy.CanReuse(last, start.AddMinutes(5), tick, new UsageFetchOptions(true, tick), tick));
+                var bypass = RefreshPolicy.BypassSuccessCache(RefreshTrigger.Automatic, last.Provider, seconds);
+                Equal(seconds < 120, RefreshPolicy.CanReuse(last, last.NextQueryAt!.Value, tick, new UsageFetchOptions(bypass, tick), tick));
                 Equal<DateTimeOffset?>(tick, RefreshPolicy.NextAutomatic(start, seconds, false));
-                Equal<DateTimeOffset?>(tick, RefreshPolicy.NextAutomaticQuery(last with { NextQueryAt = start.AddMinutes(5) }, tick, seconds));
+                var expected = seconds < 120 ? start.AddSeconds(120 + seconds) : tick;
+                Equal<DateTimeOffset?>(expected, RefreshPolicy.NextAutomaticQuery(last, tick, seconds));
+                Equal<DateTimeOffset?>(tick, RefreshPolicy.NextAutomaticQuery(last with { Provider = UsageProviderKind.Codex }, tick, seconds));
             }
             Equal<DateTimeOffset?>(null, RefreshPolicy.NextAutomatic(start, 0, false));
             Equal<DateTimeOffset?>(null, RefreshPolicy.NextAutomatic(start, 120, true));
@@ -477,11 +486,11 @@ sealed class RegressionSuite
             Equal(UsageStatus.RateLimited, switched.Status); Equal(0, switched.Windows.Count); Equal<DateTimeOffset?>(null, switched.ObservedAt);
             True(switched.NextQueryAt > DateTimeOffset.UtcNow);
         });
-        Test("Claude silent renewal only supports CLI versions with safe short-command shutdown", () =>
+        Test("Claude silent renewal requires the CLI fix for slow sign-in refresh", () =>
         {
-            True(ClaudeCredentialRefresher.IsSupportedVersion("2.1.301 (Claude Code)"));
-            True(ClaudeCredentialRefresher.IsSupportedVersion("2.1.310 (Claude Code)\n"));
-            foreach (var version in new[] { "2.1.300 (Claude Code)", "unknown", "error 2.1.310", "2.1.301-beta" })
+            True(ClaudeCredentialRefresher.IsSupportedVersion("2.1.317 (Claude Code)"));
+            True(ClaudeCredentialRefresher.IsSupportedVersion("2.1.319 (Claude Code)\n"));
+            foreach (var version in new[] { "2.1.316 (Claude Code)", "2.1.301 (Claude Code)", "unknown", "error 2.1.319", "2.1.317-beta" })
                 True(!ClaudeCredentialRefresher.IsSupportedVersion(version));
         });
         Test("Claude silent renewal pins file-backed config and excludes alternate auth environments", () =>
@@ -556,7 +565,7 @@ sealed class RegressionSuite
             Equal(2, handler.Calls); Equal(1, refresher.Calls);
         });
         foreach (var status in new[] { HttpStatusCode.Unauthorized, HttpStatusCode.Forbidden })
-            await TestAsync($"Claude repeated {(int)status} hides last quota without retry loops", async () =>
+            await TestAsync($"Claude HTTP {(int)status} after an earlier success hides old quota without requiring login or looping", async () =>
             {
                 var credentials = new MutableCredentials(new UsageCredential { AccessToken = "expired", ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) });
                 var refresher = new StubClaudeRefresher(_ => { credentials.Current = RenewedClaude(); return Task.FromResult(ClaudeRefreshOutcome.Completed); });
@@ -565,7 +574,7 @@ sealed class RegressionSuite
                 var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher);
                 Equal(1, (await provider.FetchAsync()).Windows.Count); ExpireCache(provider);
                 var failed = await provider.FetchAsync();
-                Equal(status == HttpStatusCode.Unauthorized ? UsageStatus.AuthenticationRequired : UsageStatus.Unavailable, failed.Status); Equal(0, failed.Windows.Count);
+                Equal(status == HttpStatusCode.Unauthorized ? UsageStatus.AuthenticationRetry : UsageStatus.Unavailable, failed.Status); Equal(0, failed.Windows.Count);
                 Equal(status == HttpStatusCode.Unauthorized ? 3 : 2, handler.Calls);
                 Equal(status == HttpStatusCode.Unauthorized ? 1 : 0, refresher.Calls);
                 EqualCached(failed, await provider.FetchAsync());

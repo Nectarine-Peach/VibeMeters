@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http;
+using System.Reflection;
 using System.Text.Json;
 using VibeMeters.Models;
 using VibeMeters.Services;
@@ -40,6 +41,89 @@ internal static class ClaudeRecoveryRegressionSuite
         UsageCredential Fresh(FakeClaudeClock c) => new() { AccessToken = "fresh-fixture", ExpiresAt = c.UtcNow.AddHours(8) };
         var readyBody = """{"five_hour":{"utilization":17}}""";
 
+        await Check("a scheduled lookup renews a near-expiry token without interrupting usage display", async () =>
+        {
+            var clock = new FakeClaudeClock();
+            var credentials = new MutableCredentials(new UsageCredential { AccessToken = "old-fixture", ExpiresAt = clock.UtcNow.AddMinutes(4) });
+            var refresh = new StubClaudeRefresher(_ =>
+            {
+                credentials.Current = Fresh(clock);
+                return Task.FromResult(ClaudeRefreshOutcome.Completed);
+            });
+            var tokens = new List<string?>();
+            var handler = new StubHandler(request => { tokens.Add(request.Headers.Authorization?.Parameter); return Json(readyBody); });
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresh, clock);
+            var progress = new List<UsageStatus>();
+            provider.AuthenticationProgress += snapshot => progress.Add(snapshot.Status);
+
+            Require((await provider.FetchAsync()).Status == UsageStatus.Ready && refresh.Calls == 0);
+            clock.UtcNow += TimeSpan.FromSeconds(150);
+            var renewed = await provider.FetchAsync();
+
+            Require(renewed.Status == UsageStatus.Ready && renewed.Windows.Count == 1);
+            Require(refresh.Calls == 1 && tokens.SequenceEqual(new[] { "old-fixture", "fresh-fixture" }));
+            Require(progress.Count == 0);
+        });
+        await Check("inconclusive early renewal keeps the valid token and permits recovery after expiry", async () =>
+        {
+            var clock = new FakeClaudeClock();
+            var expiry = clock.UtcNow.AddSeconds(90);
+            var credentials = new MutableCredentials(new UsageCredential { AccessToken = "old-fixture", ExpiresAt = expiry });
+            var refresh = new StubClaudeRefresher(_ =>
+            {
+                if (clock.UtcNow >= expiry) credentials.Current = Fresh(clock);
+                return Task.FromResult(ClaudeRefreshOutcome.Completed);
+            });
+            var tokens = new List<string?>();
+            var handler = new StubHandler(request => { tokens.Add(request.Headers.Authorization?.Parameter); return Json(readyBody); });
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresh, clock);
+            var progress = new List<UsageStatus>();
+            provider.AuthenticationProgress += snapshot => progress.Add(snapshot.Status);
+
+            Require((await provider.FetchAsync()).Status == UsageStatus.Ready);
+            clock.UtcNow += TimeSpan.FromSeconds(1);
+            var manual = await provider.FetchAsync(options: new(BypassSuccessCache: true, RequestedAt: clock.UtcNow, RecoverAuthentication: true));
+            Require(manual.Status == UsageStatus.Ready && manual.Windows.Count == 1);
+            Require(refresh.Calls == 1 && clock.Delays == 0 && progress.Count == 0);
+            Require(tokens.SequenceEqual(new[] { "old-fixture", "old-fixture" }));
+
+            clock.UtcNow = expiry.AddSeconds(1);
+            var recovered = await provider.FetchAsync(options: new(BypassSuccessCache: true, RequestedAt: clock.UtcNow));
+            Require(recovered.Status == UsageStatus.Ready && refresh.Calls == 2 && tokens.Last() == "fresh-fixture");
+        });
+        await Check("near expiry cannot trigger renewal or usage while a server cooldown is active", async () =>
+        {
+            var clock = new FakeClaudeClock();
+            var credentials = new MutableCredentials(new UsageCredential { AccessToken = "old-fixture", ExpiresAt = clock.UtcNow.AddMinutes(3) });
+            var refresh = new StubClaudeRefresher(_ =>
+            {
+                credentials.Current = Fresh(clock);
+                return Task.FromResult(ClaudeRefreshOutcome.Completed);
+            });
+            var calls = 0;
+            var handler = new StubHandler(request =>
+            {
+                if (++calls > 1)
+                {
+                    Require(request.Headers.Authorization?.Parameter == "fresh-fixture");
+                    return Json(readyBody);
+                }
+                var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+                response.Headers.RetryAfter = new(TimeSpan.FromMinutes(8));
+                return response;
+            });
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresh, clock);
+
+            var limited = await provider.FetchAsync();
+            Require(limited.Status == UsageStatus.RateLimited && limited.RetryAfter == clock.UtcNow.AddMinutes(8));
+            clock.UtcNow += TimeSpan.FromMinutes(2);
+            var duringCooldown = await provider.FetchAsync(options: new(BypassSuccessCache: true, RequestedAt: clock.UtcNow, RecoverAuthentication: true));
+            Require(duringCooldown.Status == UsageStatus.RateLimited && duringCooldown.RetryAfter == limited.RetryAfter);
+            Require(refresh.Calls == 0 && handler.Calls == 1);
+
+            clock.UtcNow = limited.RetryAfter!.Value;
+            Require((await provider.FetchAsync()).Status == UsageStatus.Ready && refresh.Calls == 1 && handler.Calls == 2);
+        });
         await Check("twelve-hour lock, delayed credential save and visible recovery complete without login", async () =>
         {
             var clock = new FakeClaudeClock();
@@ -66,10 +150,31 @@ internal static class ClaudeRecoveryRegressionSuite
             if (clock.UtcNow - start != TimeSpan.FromSeconds(8) || clock.Delays != 16 || result.NextQueryAt != clock.UtcNow.AddSeconds(30))
                 throw new Exception($"Unexpected timing: elapsed {clock.UtcNow-start}, polls {clock.Delays}, next {result.NextQueryAt:o}, expected {clock.UtcNow.AddSeconds(30):o}");
         });
+        await Check("an outdated or broken CLI cannot shadow the first supported installation", async () =>
+        {
+            var clock = new FakeClaudeClock();
+            var status = Task.FromResult<ClaudeCliResult?>(new(0));
+            var broken = new FixtureRunner(_ => throw new System.ComponentModel.Win32Exception(), status);
+            var outdated = new FixtureRunner(_ => Task.FromResult<ClaudeCliResult?>(new(0, "2.1.316 (Claude Code)")), status);
+            var supported = new FixtureRunner(_ => Task.FromResult<ClaudeCliResult?>(new(0, "2.1.319 (Claude Code)")), status);
+            var later = new FixtureRunner(_ => throw new Exception("Later installations must not be probed"), status);
+            Func<IEnumerable<IClaudeCommandRunner>> candidates = () => [broken, outdated, supported, later];
+            var constructor = typeof(ClaudeCredentialRefresher).GetConstructor(BindingFlags.Instance | BindingFlags.NonPublic,
+                binder: null, [typeof(string), typeof(Func<IEnumerable<IClaudeCommandRunner>>), typeof(IClaudeRecoveryClock), typeof(IClaudeAuthDiagnostics)],
+                modifiers: null) ?? throw new Exception("Candidate resolver constructor missing");
+            var directory = Path.Combine(Path.GetTempPath(), "VibeMeters-cli-candidates-" + Guid.NewGuid().ToString("N"));
+            var refresher = (ClaudeCredentialRefresher)constructor.Invoke([directory, candidates, clock, null]);
+
+            Require(await refresher.RefreshAsync() == ClaudeRefreshOutcome.Completed);
+            Require(broken.Commands.SequenceEqual(new[] { "--version" }));
+            Require(outdated.Commands.SequenceEqual(new[] { "--version" }));
+            Require(supported.Commands.SequenceEqual(new[] { "--version", "auth status" }));
+            Require(later.Calls == 0);
+        });
         await Check("shared CLI timeout never starts a second refresh command", async () =>
         {
             var clock = new FakeClaudeClock(); var status = new TaskCompletionSource<ClaudeCliResult?>();
-            var runner = new FixtureRunner(args => Task.FromResult<ClaudeCliResult?>(new(0, "2.1.310 (Claude Code)")), status.Task);
+            var runner = new FixtureRunner(args => Task.FromResult<ClaudeCliResult?>(new(0, "2.1.319 (Claude Code)")), status.Task);
             var directory = Path.Combine(Path.GetTempPath(), "VibeMeters-clock-" + Guid.NewGuid().ToString("N"));
             var first = new ClaudeCredentialRefresher(directory, runner, clock);
             Require(await first.RefreshAsync() == ClaudeRefreshOutcome.TimedOut);
@@ -81,7 +186,7 @@ internal static class ClaudeRecoveryRegressionSuite
         {
             var clock = new FakeClaudeClock(); var credentials = new MutableCredentials(Expired(clock));
             var status = new TaskCompletionSource<ClaudeCliResult?>();
-            var runner = new FixtureRunner(_ => Task.FromResult<ClaudeCliResult?>(new(0, "2.1.310 (Claude Code)")), status.Task);
+            var runner = new FixtureRunner(_ => Task.FromResult<ClaudeCliResult?>(new(0, "2.1.319 (Claude Code)")), status.Task);
             var refresher = new ClaudeCredentialRefresher(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")), runner, clock);
             clock.OnDelay = count => { if (count == 4) { credentials.Current = Fresh(clock); status.TrySetResult(new(0)); } };
             var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(new StubHandler(_ => Json(readyBody))), refresher, clock);
@@ -109,14 +214,14 @@ internal static class ClaudeRecoveryRegressionSuite
             await Check($"CLI result classifies structured rejection separately from ordinary exit one {error.StartsWith('{')}", async () =>
             {
                 var clock = new FakeClaudeClock();
-                var runner = new FixtureRunner(_ => Task.FromResult<ClaudeCliResult?>(new(0, "2.1.310 (Claude Code)")), Task.FromResult<ClaudeCliResult?>(new(1, error: error)));
+                var runner = new FixtureRunner(_ => Task.FromResult<ClaudeCliResult?>(new(0, "2.1.319 (Claude Code)")), Task.FromResult<ClaudeCliResult?>(new(1, error: error)));
                 var refresher = new ClaudeCredentialRefresher(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")), runner, clock);
                 Require(await refresher.RefreshAsync() == (error.StartsWith('{') ? ClaudeRefreshOutcome.AuthenticationRejected : ClaudeRefreshOutcome.Failed));
             });
         await Check("cancellation while sharing CLI does not terminate or restart its work", async () =>
         {
             var clock = new FakeClaudeClock(); var status = new TaskCompletionSource<ClaudeCliResult?>();
-            var runner = new FixtureRunner(_ => Task.FromResult<ClaudeCliResult?>(new(0, "2.1.310 (Claude Code)")), status.Task);
+            var runner = new FixtureRunner(_ => Task.FromResult<ClaudeCliResult?>(new(0, "2.1.319 (Claude Code)")), status.Task);
             var refresher = new ClaudeCredentialRefresher(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")), runner, clock);
             using var cancel = new CancellationTokenSource(); clock.OnWait = _ => cancel.Cancel();
             try { await refresher.RefreshAsync(cancel.Token); throw new Exception("Cancellation missing"); } catch (OperationCanceledException) { }
@@ -151,13 +256,13 @@ internal static class ClaudeRecoveryRegressionSuite
         await Check("login preflight probes valid credentials despite previously required-login backoff", async () =>
         {
             var clock = new FakeClaudeClock(); var credentials = new MutableCredentials(Fresh(clock)); var browsers = 0; var calls = 0;
-            var refresher = new StubClaudeRefresher(_ => { credentials.Current = new() { AccessToken = "replacement-fixture", ExpiresAt = clock.UtcNow.AddHours(8) }; return Task.FromResult(ClaudeRefreshOutcome.Completed); });
-            var handler = new StubHandler(_ => ++calls <= 2 ? new(HttpStatusCode.Unauthorized) : Json(readyBody));
+            var refresher = new StubClaudeRefresher(_ => Task.FromResult(ClaudeRefreshOutcome.AuthenticationRejected));
+            var handler = new StubHandler(_ => ++calls == 1 ? new(HttpStatusCode.Unauthorized) : Json(readyBody));
             var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), refresher, clock);
             Require((await provider.FetchAsync()).Status == UsageStatus.AuthenticationRequired);
             var flow = await ClaudeLoginFlow.RunAsync(token => provider.FetchAsync(token, new(true, clock.UtcNow, true)),
                 _ => { browsers++; return Task.FromResult(new LoginResult(true, "fixture")); });
-            Require(!flow.LoginStarted && browsers == 0 && calls == 3 && flow.Snapshot.Status == UsageStatus.Ready);
+            Require(!flow.LoginStarted && browsers == 0 && calls == 2 && refresher.Calls == 1 && flow.Snapshot.Status == UsageStatus.Ready);
         });
         await Check("preflight preserves rate limit and suppresses browser login", async () =>
         {
@@ -225,7 +330,12 @@ internal static class ClaudeRecoveryRegressionSuite
     private static HttpResponseMessage Json(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body) };
     private sealed class FixtureRunner(Func<string[], Task<ClaudeCliResult?>> version, Task<ClaudeCliResult?> status) : IClaudeCommandRunner
     {
-        public int Calls { get; private set; }
-        public Task<ClaudeCliResult?> RunAsync(string[] arguments) { Calls++; return arguments[0] == "--version" ? version(arguments) : status; }
+        public List<string> Commands { get; } = new();
+        public int Calls => Commands.Count;
+        public Task<ClaudeCliResult?> RunAsync(string[] arguments)
+        {
+            Commands.Add(string.Join(' ', arguments));
+            return arguments[0] == "--version" ? version(arguments) : status;
+        }
     }
 }

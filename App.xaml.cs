@@ -303,7 +303,7 @@ public partial class App : Application
             {
                 UsageSnapshot snapshot;
                 try { snapshot = await provider.FetchAsync(_lifetime.Token,
-                    new UsageFetchOptions(RefreshPolicy.BypassSuccessCache(trigger), requestedAt)); }
+                    new UsageFetchOptions(RefreshPolicy.BypassSuccessCache(trigger, provider.Kind, _settings.RefreshIntervalSeconds), requestedAt)); }
                 catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
                 catch { snapshot = new UsageSnapshot(provider.Kind, UsageStatus.Unavailable, Array.Empty<UsageWindow>(), DateTimeOffset.UtcNow, Message: "조회 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."); }
                 if (!_exiting) Render(snapshot);

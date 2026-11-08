@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Text.Json;
@@ -35,19 +36,26 @@ public sealed class ClaudeCredentialRefresher : IClaudeCredentialRefresher
 {
     private static readonly object Sync = new();
     private static readonly Dictionary<string, Task<ClaudeRefreshOutcome>> Pending = new(StringComparer.OrdinalIgnoreCase);
-    private static readonly Version MinimumVersion = new(2, 1, 301);
+    private static readonly Version MinimumVersion = new(2, 1, 317);
     private readonly string _configDirectory;
-    private readonly IClaudeCommandRunner _runner;
+    private readonly Func<IEnumerable<IClaudeCommandRunner>> _getRunners;
     private readonly IClaudeRecoveryClock _clock;
     private readonly IClaudeAuthDiagnostics? _diagnostics;
 
     public ClaudeCredentialRefresher(string configDirectory, IClaudeCommandRunner? runner = null,
         IClaudeRecoveryClock? clock = null, IClaudeAuthDiagnostics? diagnostics = null)
+        : this(configDirectory, runner is null ? null : () => [runner], clock, diagnostics)
+    {
+    }
+
+    internal ClaudeCredentialRefresher(string configDirectory, Func<IEnumerable<IClaudeCommandRunner>>? runners,
+        IClaudeRecoveryClock? clock, IClaudeAuthDiagnostics? diagnostics)
     {
         _configDirectory = Path.GetFullPath(configDirectory);
-        _runner = runner ?? new OfficialClaudeCommandRunner(_configDirectory);
+        _getRunners = runners ?? (() => OfficialCliProcess.FindExecutables("claude")
+            .Select(executable => new OfficialClaudeCommandRunner(_configDirectory, executable)));
         _clock = clock ?? ClaudeRecoveryClock.Instance;
-        _diagnostics = diagnostics ?? (runner is null ? new ClaudeAuthDiagnostics() : null);
+        _diagnostics = diagnostics ?? (runners is null ? new ClaudeAuthDiagnostics() : null);
     }
 
     public async Task<ClaudeRefreshOutcome> RefreshAsync(CancellationToken cancellationToken = default)
@@ -75,22 +83,44 @@ public sealed class ClaudeCredentialRefresher : IClaudeCredentialRefresher
     {
         try
         {
-            var version = await _runner.RunAsync(["--version"]).ConfigureAwait(false);
-            if (version is null) return ClaudeRefreshOutcome.CliMissing;
-            if (version.ExitCode != 0 || !IsSupportedVersion(version.Output)) return ClaudeRefreshOutcome.CliOutdated;
-            // 2.1.301 fixed short commands exiting during OAuth refresh. There is no
-            // separate public refresh command; status initializes the CLI's own auth.
-            var status = await _runner.RunAsync(["auth", "status"]).ConfigureAwait(false);
-            var outcome = status is null ? ClaudeRefreshOutcome.CliMissing
-                : IsExplicitRejection(status.Error) ? ClaudeRefreshOutcome.AuthenticationRejected
-                : status.ExitCode == 0 ? ClaudeRefreshOutcome.Completed : ClaudeRefreshOutcome.Failed;
-            _diagnostics?.Write(ClaudeAuthEvent.CliCompleted, outcome, status?.ExitCode);
-            return outcome;
+            var unavailable = ClaudeRefreshOutcome.CliMissing;
+            foreach (var runner in _getRunners())
+            {
+                ClaudeCliResult? version;
+                try { version = await runner.RunAsync(["--version"]).ConfigureAwait(false); }
+                catch (Exception ex) when (IsProcessFailure(ex) || ex is TimeoutException)
+                {
+                    if (unavailable == ClaudeRefreshOutcome.CliMissing) unavailable = ClaudeRefreshOutcome.Failed;
+                    continue;
+                }
+                if (version is not { ExitCode: 0 })
+                {
+                    if (version is not null && unavailable == ClaudeRefreshOutcome.CliMissing) unavailable = ClaudeRefreshOutcome.Failed;
+                    continue;
+                }
+                if (!IsSupportedVersion(version.Output))
+                {
+                    unavailable = ClaudeRefreshOutcome.CliOutdated;
+                    continue;
+                }
+
+                // 2.1.317 fixed status exiting before a slow OAuth refresh was saved.
+                // Run status through the candidate whose version we just verified.
+                var status = await runner.RunAsync(["auth", "status"]).ConfigureAwait(false);
+                var outcome = status is null ? ClaudeRefreshOutcome.CliMissing
+                    : IsExplicitRejection(status.Error) ? ClaudeRefreshOutcome.AuthenticationRejected
+                    : status.ExitCode == 0 ? ClaudeRefreshOutcome.Completed : ClaudeRefreshOutcome.Failed;
+                _diagnostics?.Write(ClaudeAuthEvent.CliCompleted, outcome, status?.ExitCode);
+                return outcome;
+            }
+            return unavailable;
         }
-        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException
-            or IOException or UnauthorizedAccessException or ArgumentException)
+        catch (Exception ex) when (IsProcessFailure(ex))
         { return ClaudeRefreshOutcome.Failed; }
     }
+
+    private static bool IsProcessFailure(Exception ex) => ex is System.ComponentModel.Win32Exception or InvalidOperationException
+        or IOException or UnauthorizedAccessException or ArgumentException;
 
     public static bool IsSupportedVersion(string output)
     {
@@ -112,14 +142,6 @@ public sealed class ClaudeCredentialRefresher : IClaudeCredentialRefresher
         catch (JsonException) { return false; }
     }
 
-    internal static ProcessStartInfo? CreateStartInfo(string directory, params string[] arguments)
-    {
-        var start = OfficialCliProcess.CreateStartInfo("claude", arguments);
-        if (start is null) return null;
-        ConfigureEnvironment(start, directory);
-        return start;
-    }
-
     internal static void ConfigureEnvironment(ProcessStartInfo start, string directory)
     {
         start.Environment["CLAUDE_CONFIG_DIR"] = directory;
@@ -130,28 +152,42 @@ public sealed class ClaudeCredentialRefresher : IClaudeCredentialRefresher
             start.Environment.Remove(key);
     }
 
-    private sealed class OfficialClaudeCommandRunner(string directory) : IClaudeCommandRunner
+    private sealed class OfficialClaudeCommandRunner(string directory, string executable) : IClaudeCommandRunner
     {
         public async Task<ClaudeCliResult?> RunAsync(string[] arguments)
         {
-            var start = CreateStartInfo(directory, arguments);
-            if (start is null) return null;
+            var start = OfficialCliProcess.CreateStartInfoForExecutable(executable, arguments);
+            ConfigureEnvironment(start, directory);
             using var process = new Process { StartInfo = start };
             if (!process.Start()) return null;
             process.StandardInput.Close();
-            var output = DrainAsync(process.StandardOutput);
-            var error = DrainAsync(process.StandardError);
-            await process.WaitForExitAsync().ConfigureAwait(false);
-            return new(process.ExitCode, await output.ConfigureAwait(false), await error.ConfigureAwait(false));
+
+            // A broken version probe must not prevent finding a usable CLI. Once status
+            // starts, only the caller's wait is bounded so the CLI can persist its tokens.
+            using var probeTimeout = arguments is ["--version"] ? new CancellationTokenSource(TimeSpan.FromSeconds(3)) : null;
+            var cancellationToken = probeTimeout?.Token ?? CancellationToken.None;
+            var output = DrainAsync(process.StandardOutput, cancellationToken);
+            var error = DrainAsync(process.StandardError, cancellationToken);
+            try
+            {
+                await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+                var streams = await Task.WhenAll(output, error).WaitAsync(cancellationToken).ConfigureAwait(false);
+                return new(process.ExitCode, streams[0], streams[1]);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                OfficialCliProcess.Stop(process);
+                throw new TimeoutException();
+            }
         }
     }
 
-    private static async Task<string> DrainAsync(StreamReader stream)
+    private static async Task<string> DrainAsync(StreamReader stream, CancellationToken cancellationToken)
     {
         var result = new StringBuilder();
         var buffer = new char[1024];
         int count;
-        while ((count = await stream.ReadAsync(buffer.AsMemory()).ConfigureAwait(false)) > 0)
+        while ((count = await stream.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false)) > 0)
             if (result.Length < 4096) result.Append(buffer, 0, Math.Min(count, 4096 - result.Length));
         // Bounded transient data only: results are never logged, serialized or shown.
         return result.ToString();

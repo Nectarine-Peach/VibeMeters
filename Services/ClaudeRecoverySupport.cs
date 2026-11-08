@@ -21,7 +21,7 @@ public sealed class ClaudeRecoveryClock : IClaudeRecoveryClock
     public Task<T> WaitAsync<T>(Task<T> pending, TimeSpan timeout, CancellationToken cancellationToken) => pending.WaitAsync(timeout, cancellationToken);
 }
 
-public enum ClaudeAuthEvent { RecoveryStarted, CliCompleted, CliTimedOut, CliShared, FileObserved, RecoveryDeferred, RecoverySucceeded, PreflightReady, PreflightLimited, BrowserLoginRequested }
+public enum ClaudeAuthEvent { RecoveryStarted, CliCompleted, CliTimedOut, CliShared, FileObserved, RecoveryDeferred, RecoverySucceeded, PreflightReady, PreflightLimited, BrowserLoginRequested, ProactiveRenewalStarted }
 
 public interface IClaudeAuthDiagnostics
 {

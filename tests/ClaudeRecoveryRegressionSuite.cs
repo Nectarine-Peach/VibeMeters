@@ -124,6 +124,117 @@ internal static class ClaudeRecoveryRegressionSuite
             clock.UtcNow = limited.RetryAfter!.Value;
             Require((await provider.FetchAsync()).Status == UsageStatus.Ready && refresh.Calls == 1 && handler.Calls == 2);
         });
+        await Check("a saved 429 deadline survives a new provider and clears after a successful quota lookup", async () =>
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "VibeMeters-claude-cooldown-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var clock = new FakeClaudeClock();
+                var credentials = new MutableCredentials(Fresh(clock));
+                var calls = 0;
+                var handler = new StubHandler(_ => ++calls == 1 ? RateLimitedFor(TimeSpan.FromMinutes(45)) : Json(readyBody));
+                using var client = new HttpClient(handler);
+                var provider = new UsageProvider(UsageProviderKind.Claude, credentials, client, clock: clock, claudeCooldownDirectory: directory);
+
+                var limited = await provider.FetchAsync();
+                Require(limited.Status == UsageStatus.RateLimited && limited.RetryAfter == clock.UtcNow.AddMinutes(45));
+                var persisted = Directory.GetFiles(directory);
+                Require(persisted.Length == 1);
+                using (var document = JsonDocument.Parse(File.ReadAllText(persisted[0])))
+                {
+                    Require(document.RootElement.EnumerateObject().Count() == 2);
+                    Require(document.RootElement.GetProperty("RetryAt").GetDateTimeOffset() == limited.RetryAfter);
+                    Require(document.RootElement.GetProperty("ConsecutiveLimits").GetInt32() == 1);
+                }
+
+                var reopened = new UsageProvider(UsageProviderKind.Claude, credentials, client, clock: clock, claudeCooldownDirectory: directory);
+                var manual = await reopened.FetchAsync(options: new(BypassSuccessCache: true, RequestedAt: clock.UtcNow, RecoverAuthentication: true));
+                Require(manual.Status == UsageStatus.RateLimited && manual.RetryAfter == limited.RetryAfter && handler.Calls == 1);
+                Require(manual.Windows.Count == 0 && manual.ObservedAt is null);
+
+                clock.UtcNow = limited.RetryAfter!.Value;
+                reopened.NotifyLoginCompleted();
+                Require((await reopened.FetchAsync()).Status == UsageStatus.Ready && handler.Calls == 2);
+                Require(Directory.GetFiles(directory).Length == 0);
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    foreach (var file in Directory.GetFiles(directory)) File.Delete(file);
+                    Directory.Delete(directory);
+                }
+            }
+        });
+        await Check("a proactive renewal is reported as successful only when a later lookup succeeds after 429", async () =>
+        {
+            var clock = new FakeClaudeClock();
+            var credentials = new MutableCredentials(new UsageCredential { AccessToken = "old-fixture", ExpiresAt = clock.UtcNow.AddSeconds(90) });
+            var refresh = new StubClaudeRefresher(_ =>
+            {
+                credentials.Current = Fresh(clock);
+                return Task.FromResult(ClaudeRefreshOutcome.Completed);
+            });
+            var diagnostics = new RecordingClaudeDiagnostics();
+            var calls = 0;
+            var handler = new StubHandler(request =>
+            {
+                Require(request.Headers.Authorization?.Parameter == "fresh-fixture");
+                return ++calls == 1 ? RateLimitedFor(TimeSpan.FromMinutes(8)) : Json(readyBody);
+            });
+            using var client = new HttpClient(handler);
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, client, refresh, clock, diagnostics);
+
+            var limited = await provider.FetchAsync();
+            Require(limited.Status == UsageStatus.RateLimited && refresh.Calls == 1);
+            Require(diagnostics.Events.Any(entry => entry.Name == ClaudeAuthEvent.ProactiveRenewalStarted));
+            Require(!diagnostics.Events.Any(entry => entry.Name == ClaudeAuthEvent.RecoverySucceeded));
+
+            clock.UtcNow = limited.RetryAfter!.Value;
+            var recovered = await provider.FetchAsync();
+            Require(recovered.Status == UsageStatus.Ready && handler.Calls == 2 && refresh.Calls == 1);
+            Require(diagnostics.Events.Single(entry => entry.Name == ClaudeAuthEvent.RecoverySucceeded)
+                is { CredentialChanged: true, FutureExpiry: true });
+        });
+        await Check("canceling the credential recheck after 429 cannot discard the server deadline", async () =>
+        {
+            var clock = new FakeClaudeClock();
+            var credential = Fresh(clock);
+            var throttleReceived = false;
+            var canceledCredentialRecheck = false;
+            using var cancel = new CancellationTokenSource();
+            var credentials = new FixtureCredentials(token =>
+            {
+                if (throttleReceived && token == cancel.Token)
+                {
+                    canceledCredentialRecheck = true;
+                    cancel.Cancel();
+                    return Task.FromCanceled<UsageCredential?>(token);
+                }
+                return Task.FromResult<UsageCredential?>(credential);
+            });
+            var calls = 0;
+            var handler = new StubHandler(_ =>
+            {
+                if (++calls == 1) return Json(readyBody);
+                throttleReceived = true;
+                return RateLimitedFor(TimeSpan.FromMinutes(45));
+            });
+            using var client = new HttpClient(handler);
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, client, clock: clock);
+
+            Require((await provider.FetchAsync()).Status == UsageStatus.Ready);
+            clock.UtcNow += TimeSpan.FromMinutes(2);
+            try
+            {
+                await provider.FetchAsync(cancel.Token);
+                throw new Exception("Credential recheck cancellation did not propagate");
+            }
+            catch (OperationCanceledException) when (canceledCredentialRecheck) { }
+
+            var manual = await provider.FetchAsync(options: new(BypassSuccessCache: true, RequestedAt: clock.UtcNow, RecoverAuthentication: true));
+            Require(manual.Status == UsageStatus.RateLimited && manual.RetryAfter == clock.UtcNow.AddMinutes(45) && handler.Calls == 2);
+        });
         await Check("429 keeps recent Claude values only until each quota resets or the observation is 30 minutes old", async () =>
         {
             var clock = new FakeClaudeClock();
@@ -407,6 +518,18 @@ internal static class ClaudeRecoveryRegressionSuite
         response.Headers.RetryAfter = new(delay);
         return response;
     }
+    private sealed class FixtureCredentials(Func<CancellationToken, Task<UsageCredential?>> read) : ICredentialReader
+    {
+        public Task<UsageCredential?> ReadAsync(UsageProviderKind provider, CancellationToken cancellationToken = default) => read(cancellationToken);
+    }
+
+    private sealed class RecordingClaudeDiagnostics : IClaudeAuthDiagnostics
+    {
+        public List<(ClaudeAuthEvent Name, bool? CredentialChanged, bool? FutureExpiry)> Events { get; } = new();
+        public void Write(ClaudeAuthEvent name, ClaudeRefreshOutcome? outcome = null, int? exitCode = null, bool? credentialChanged = null, bool? futureExpiry = null)
+            => Events.Add((name, credentialChanged, futureExpiry));
+    }
+
     private sealed class FixtureRunner(Func<string[], Task<ClaudeCliResult?>> version, Task<ClaudeCliResult?> status) : IClaudeCommandRunner
     {
         public List<string> Commands { get; } = new();

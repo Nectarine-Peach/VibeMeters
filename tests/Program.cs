@@ -846,6 +846,7 @@ sealed class RegressionSuite
             });
         var grok = await GrokRegressionSuite.RunAsync(); _passed += grok.Passed; _failed += grok.Failed;
         var recovery = await ClaudeRecoveryRegressionSuite.RunAsync(); _passed += recovery.Passed; _failed += recovery.Failed;
+        var codex = await CodexAppServerRegressionSuite.RunAsync(); _passed += codex.Passed; _failed += codex.Failed;
         Console.WriteLine($"\n{_passed} passed; {_failed} failed.");
         return _failed == 0 ? 0 : 1;
     }

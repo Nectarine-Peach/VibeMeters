@@ -16,5 +16,6 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);runtime\**;dist\**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup><Compile Remove="tests\**" /><Resource Include="Assets\VibeMeters.ico" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="VibeMeters.Tests" /></ItemGroup>
   <ItemGroup><EmbeddedResource Include="Resources\Strings.en.txt" WithCulture="false" LogicalName="VibeMeters.Resources.Strings.en.txt" /></ItemGroup>
 </Project>

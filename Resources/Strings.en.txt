@@ -250,6 +250,10 @@ Claude 다시 로그인|Sign in to Claude again
 저장된 인증 갱신이 거부되었습니다. Claude에 다시 로그인해 주세요.|Renewal of the saved authentication was rejected. Please sign in to Claude again.
 자동 복구에 Claude Code가 필요합니다. 다시 확인하거나 로그인할 수 있습니다.|Claude Code is needed for automatic recovery. Retry or choose sign-in.
 자동 복구에는 Claude Code 2.1.317 이상이 필요합니다. Claude Code를 업데이트해 주세요.|Automatic recovery requires Claude Code 2.1.317 or later. Update Claude Code.
+Codex에서 ChatGPT 구독 계정의 사용량을 확인할 수 없습니다.|Codex could not find a ChatGPT subscription account.
+Codex 조회 중 계정이 변경되었습니다. 현재 계정으로 다시 확인합니다.|The Codex account changed during the lookup. The app will check again.
+Codex CLI에서 ChatGPT 계정으로 다시 로그인해 주세요.|Sign in to your ChatGPT account again in the Codex CLI.
+Codex CLI에서 사용량을 확인할 수 없습니다. 잠시 후 다시 확인합니다.|Could not check usage through the Codex CLI. The app will retry shortly.
 다른 인증 갱신이나 저장을 기다리고 있습니다. 잠시 후 다시 확인합니다.|Waiting for another authentication renewal or save. It will be checked again shortly.
 인증 복구를 아직 확인하지 못했습니다. 잠시 후 다시 확인하거나 로그인을 선택할 수 있습니다.|Authentication recovery is not confirmed yet. Retry shortly or choose sign-in.
 조회 중 로그인이 변경되었습니다. 현재 인증을 다시 확인합니다.|Sign-in changed during the lookup. Current authentication will be checked again.

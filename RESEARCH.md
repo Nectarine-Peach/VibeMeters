@@ -1,5 +1,20 @@
 # 유사 앱 조사와 적용 방향
 
+## 2026-11-08 네 서비스의 조회 복구 비교
+
+| GitHub 프로젝트 | 소스에서 확인한 동작과 적용 |
+| --- | --- |
+| [CodexBar](https://github.com/steipete/CodexBar/blob/7447bc77c2497323d9c41e40164ce705533493c8/Sources/CodexBarCore/Providers/Claude/ClaudeOAuth/ClaudeOAuthUsageRateLimitGate.swift#L18-L69) | Claude의 조회 제한 종료 시각을 디스크에 보관한다. VibeMeters도 종료 시각과 연속 제한 횟수를 보관하고, 수동 새로고침이나 토큰 교체에도 같은 대기를 적용한다. |
+| [RateTray](https://github.com/nowrap/rate-tray/blob/4047b1e93d65a886dec9f199b973f6fbff76809e/src/RateTray/Providers/PollScheduler.cs#L29-L72) | 실제 요청 결과를 기록해 재시도 시각을 관리한다. VibeMeters는 429를 받은 즉시 대기를 기록하고 그 뒤에 이전 수치의 인증 일치 여부를 확인한다. |
+| [AgentUsageMonitor](https://github.com/chocolatechipscookiecrumbles/AgentUsageMonitor/blob/2e6ecfcbfa258b882652e19ed1e50be504df2a30/CodexUsageMonitor/Sources/CodexUsageMonitor/Quota/ClaudeUsageCollector.swift#L93-L159) | Claude의 원격 조회 대기와 이전 수치 표시를 분리한다. VibeMeters는 새 인증이 저장된 뒤 429를 받아도 갱신 검증을 보류하고, 같은 인증으로 사용량을 받으면 완료로 기록한다. |
+| [Claude GPT Usage Tray](https://github.com/kjhbond/claude-gpt-usage-tray/blob/80f148fb6120d451b8cad6b4bf267350c39d3716/quota.py#L21-L52) | 공식 Codex `app-server`의 계정·한도 RPC를 사용한다. VibeMeters는 파일 기반 인증을 읽을 수 없거나 401이 발생할 때 이 경로로 확인한다. |
+| [gusage](https://github.com/a-hariti/gusage/blob/c9478b0262751943dfd08eddcaffedc0cd1eac31/index.ts#L411-L436) | Gemini의 할당량 요청이 실패하면 HTTP 상태를 알려 준다. VibeMeters는 [공식 Code Assist 클라이언트](https://github.com/google-gemini/gemini-cli/blob/v0.65.0/packages/core/src/code_assist/server.ts#L415-L442)가 반환한 429의 `Retry-After`를 재시도 시각으로 전달한다. |
+| [AI Usage Widget](https://github.com/odrasile/ai-usage-widget/blob/e7184a1928afc4a8388badea63ba6d61691692b3/backend/adapters/gemini.js#L11-L40) | Gemini CLI에 프롬프트를 주고 터미널 출력을 해석한다. VibeMeters의 Gemini는 계정 한도 전용 구조화 응답을 사용한다. |
+| [Usage Monitor](https://github.com/sb-git-cs/usage-monitor/blob/9d632e549ee5fd49dedd21c7392b768dcb69d09f/src/adapters/grok.js#L359-L389) | Grok이 조회 도중 새 인증을 저장하면 한 번 더 조회한다. VibeMeters는 새 [공식 ACP 프로세스](https://github.com/xai-org/grok-build/blob/2bdd1d6a6369de0e8c68132ea4539e9abd9e14a8/crates/codegen/xai-grok-shell/src/agent/mvp_agent/acp_agent.rs#L276-L294)가 인증을 읽도록 한 번만 다시 실행한다. |
+| [AI Usage Dashboard](https://github.com/neyham/ai-usage-dashboard/blob/0349801444ce99f0a185c66dbf1aa450fc43b258/src-tauri/src/fetchers/grok.rs#L106-L135) | Grok의 새 인증을 확인한 뒤 한 번 재시도한다. VibeMeters는 두 번째 조회 중 인증이 유지됐을 때만 그 응답을 표시하고, 어느 조회에서든 429를 받으면 대기한다. |
+
+## 2026-10-24 UI 비교
+
 조사일: 2026-10-24. 각 프로젝트의 공식 저장소 README와 UI 문서를 확인했다. 아래는 실제 문서에서 확인한 동작과 VibeMeters의 구현 방향이며, 별도 성능 측정 없이 다른 앱의 메모리 사용량을 비교하지 않았다.
 
 | 앱 | 공식 자료에서 확인한 UI·기능 | VibeMeters에 적용할 방향 |

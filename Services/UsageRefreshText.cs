@@ -21,7 +21,9 @@ public static class UsageRefreshText
                 UsageWaitReason.AuthenticationBackoff => "인증 대기",
                 _ => "오류 후 대기"
             };
-            return Label(reason) + (snapshot.NextQueryAt is { } next ? " · " + Time(next) : " · " + Label("로그인 확인 필요"));
+            var previous = snapshot.Provider == UsageProviderKind.Claude && snapshot.Windows.Count > 0
+                ? Label("이전 값") + " · " : "";
+            return previous + Label(reason) + (snapshot.NextQueryAt is { } next ? " · " + Time(next) : " · " + Label("로그인 확인 필요"));
         }
         var observed = snapshot.ObservedAt ?? (snapshot.Status == UsageStatus.Ready ? snapshot.CheckedAt : (DateTimeOffset?)null);
         var text = observed is { } at ? Label("확인") + " " + Time(at) : Label("아직 조회 전");

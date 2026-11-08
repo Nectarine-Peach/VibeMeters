@@ -29,6 +29,7 @@ public static class UsageProviderFactory
 public sealed class UsageProvider : IUsageProvider
 {
     private static readonly TimeSpan ClaudeRenewalWindow = TimeSpan.FromMinutes(2);
+    private static readonly TimeSpan ClaudeStaleWindow = TimeSpan.FromMinutes(30);
     private static readonly HttpClient SharedClient = new(new SocketsHttpHandler
     {
         AllowAutoRedirect = false,
@@ -48,6 +49,7 @@ public sealed class UsageProvider : IUsageProvider
     private int _rateLimitFailures;
     private string? _credentialFingerprint;
     private string? _claudeProactiveFingerprint;
+    private string? _claudeObservedFingerprint;
     private string? _accountId;
     private int _loginCompleted;
     private int _loginGeneration;
@@ -90,21 +92,28 @@ public sealed class UsageProvider : IUsageProvider
                     Message: "계정이 변경되었습니다. 기존 요청 제한 대기 후 사용량을 확인합니다.", RetryAfter: _nextAttempt) : null;
                 _credentialFingerprint = null;
                 _claudeProactiveFingerprint = null;
+                _claudeObservedFingerprint = null;
                 _accountId = null;
                 _failures = 0;
                 if (!rateLimited) { _nextAttempt = default; _rateLimitFailures = 0; }
             }
             // Server cooldown applies to all refresh triggers, including automatic CLI
             // token renewal and explicit refresh. Claude does not supply a stable account ID.
-            if (_last?.Status == UsageStatus.RateLimited && now < _nextAttempt) return RefreshPolicy.Reuse(_last, _nextAttempt);
+            var inCooldown = _last?.Status == UsageStatus.RateLimited && now < _nextAttempt;
+            if (inCooldown && (Kind != UsageProviderKind.Claude || _last!.Windows.Count == 0))
+                return RefreshPolicy.Reuse(_last!, _nextAttempt);
             UsageCredential? credential;
             try { credential = await _credentials.ReadAsync(Kind, cancellationToken).ConfigureAwait(false); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
             {
+                if (inCooldown) return ReuseClaudeCooldown(now, null);
                 return Kind == UsageProviderKind.Claude
                     ? ClaudeRecoveryDeferred(ClaudeRefreshOutcome.Failed, "로그인 파일을 잠시 읽지 못했습니다. 기존 인증을 다시 확인합니다.")
                     : Save(UsageStatus.NotConnected, "로그인 정보를 읽을 수 없습니다. 해당 CLI에서 다시 로그인해 주세요.");
             }
+            // A local credential check can hide stale values after logout or account switch
+            // without sending any requests during the server's cooldown.
+            if (inCooldown) return ReuseClaudeCooldown(now, credential);
             if (credential is null) return Save(UsageStatus.NotConnected, Kind == UsageProviderKind.Codex ? "Codex CLI에서 ChatGPT 계정으로 로그인해 주세요." : "Claude Code에서 구독 계정으로 로그인해 주세요.");
             // A fresh login can recover authentication errors immediately. Routine token
             // renewal must not bypass the normal polling floor or network/server backoff.
@@ -130,7 +139,12 @@ public sealed class UsageProvider : IUsageProvider
             }
             var retryRecovery = Kind == UsageProviderKind.Claude && options.RecoverAuthentication
                 && (_last?.Status is UsageStatus.AuthenticationRetry or UsageStatus.AuthenticationRequired || _last?.WaitReason == UsageWaitReason.AuthenticationBackoff);
-            if (!retryRecovery && RefreshPolicy.CanReuse(_last, _nextAttempt, now, options, requestedAt)) return RefreshPolicy.Reuse(_last!, _nextAttempt);
+            if (!retryRecovery && RefreshPolicy.CanReuse(_last, _nextAttempt, now, options, requestedAt))
+            {
+                if (Kind == UsageProviderKind.Claude && _last!.Status == UsageStatus.Unavailable)
+                    PruneClaudeQuota(now, CacheFingerprint(credential, now));
+                return RefreshPolicy.Reuse(_last!, _nextAttempt);
+            }
             var refreshed = false;
             ClaudeRefreshOutcome? proactiveOutcome = null;
             if (credential.ExpiresAt is { } expiry)
@@ -208,12 +222,19 @@ public sealed class UsageProvider : IUsageProvider
                         var retryHeader = response.Headers.RetryAfter;
                         var serverRetry = retryHeader?.Date ?? (retryHeader?.Delta is { } delta ? receivedAt.Add(delta) : receivedAt);
                         if (serverRetry > _nextAttempt) _nextAttempt = serverRetry;
-                        var previous = _last?.Windows.Count > 0 ? " · 이전 값 표시" : "";
+                        if (Kind == UsageProviderKind.Claude && _last?.Windows.Count > 0)
+                            PruneClaudeQuota(receivedAt, CacheFingerprint(await ReadClaudeSafelyAsync(cancellationToken).ConfigureAwait(false), receivedAt));
+                        var previous = Kind != UsageProviderKind.Claude && _last?.Windows.Count > 0 ? " · 이전 값 표시" : "";
                         var retryTime = _nextAttempt.ToLocalTime();
                         var timeLabel = retryTime.Date == DateTimeOffset.Now.Date ? retryTime.ToString("HH:mm") : retryTime.ToString("MM/dd HH:mm");
                         return Save(UsageStatus.RateLimited, $"조회 일시 제한{previous} · {timeLabel} 이후 재시도", retryAfter: _nextAttempt);
                     }
-                    if (!response.IsSuccessStatusCode) return Failure("서버에 연결할 수 없습니다. 잠시 후 다시 확인합니다.");
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        const string message = "서버에 연결할 수 없습니다. 잠시 후 다시 확인합니다.";
+                        return (int)response.StatusCode >= 500
+                            ? await TransientFailureAsync(message, cancellationToken).ConfigureAwait(false) : Failure(message);
+                    }
                     await using var body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
                     using var json = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken).ConfigureAwait(false);
                     var observedAt = _clock.UtcNow;
@@ -232,13 +253,18 @@ public sealed class UsageProvider : IUsageProvider
                     _rateLimitFailures = 0;
                     _nextAttempt = _clock.UtcNow.AddSeconds(Kind == UsageProviderKind.Claude ? RefreshPolicy.ClaudeSuccessCacheSeconds : 15);
                     _credentialFingerprint = Fingerprint(credential);
+                    if (Kind == UsageProviderKind.Claude) _claudeObservedFingerprint = _credentialFingerprint;
                     _last = parsed with { ObservedAt = observedAt, NextQueryAt = _nextAttempt };
                     return _last;
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-                { return Failure("연결 시간이 초과되었습니다. 잠시 후 다시 확인합니다."); }
+                { return await TransientFailureAsync("연결 시간이 초과되었습니다. 잠시 후 다시 확인합니다.", cancellationToken).ConfigureAwait(false); }
                 catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or FormatException or ArgumentException or InvalidOperationException)
-                { return Failure("사용량을 가져올 수 없습니다. 네트워크 또는 응답 형식을 확인해 주세요."); }
+                {
+                    const string message = "사용량을 가져올 수 없습니다. 네트워크 또는 응답 형식을 확인해 주세요.";
+                    return ex is HttpRequestException or IOException
+                        ? await TransientFailureAsync(message, cancellationToken).ConfigureAwait(false) : Failure(message);
+                }
             }
         }
         catch (Exception ex) when (ex is FormatException or ArgumentException)
@@ -248,6 +274,30 @@ public sealed class UsageProvider : IUsageProvider
 
     private static string Fingerprint(UsageCredential credential) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
         System.Text.Encoding.UTF8.GetBytes(credential.AccessToken + "\n" + credential.AccountId)));
+
+    private static string? CacheFingerprint(UsageCredential? credential, DateTimeOffset now)
+        => credential is not null && (credential.ExpiresAt is not { } expiry || expiry > now) ? Fingerprint(credential) : null;
+
+    private UsageSnapshot ReuseClaudeCooldown(DateTimeOffset now, UsageCredential? credential)
+    {
+        PruneClaudeQuota(now, CacheFingerprint(credential, now));
+        return RefreshPolicy.Reuse(_last!, _nextAttempt);
+    }
+
+    private void PruneClaudeQuota(DateTimeOffset now, string? fingerprint)
+    {
+        if (_last is not { Windows.Count: > 0 } last) return;
+        var sameCredential = fingerprint is not null && fingerprint == _claudeObservedFingerprint;
+        if (!sameCredential || last.ObservedAt is not { } observed || now < observed || now - observed >= ClaudeStaleWindow)
+        {
+            _last = last with { Windows = [], ObservedAt = null };
+            return;
+        }
+
+        var windows = last.Windows.Where(window => window.ResetsAt is null || window.ResetsAt > now).ToArray();
+        if (windows.Length != last.Windows.Count)
+            _last = last with { Windows = windows, ObservedAt = windows.Length == 0 ? null : observed };
+    }
 
     private async Task<(UsageCredential? Credential, ClaudeRefreshOutcome Outcome)> RefreshClaudeAsync(
         UsageCredential previous, CancellationToken cancellationToken, bool proactive = false)
@@ -318,18 +368,27 @@ public sealed class UsageProvider : IUsageProvider
         return _last = snapshot with { AuthenticationWorkPending = outcome is ClaudeRefreshOutcome.Pending or ClaudeRefreshOutcome.TimedOut };
     }
 
-    private UsageSnapshot Failure(string message)
+    private async Task<UsageSnapshot> TransientFailureAsync(string message, CancellationToken cancellationToken)
+    {
+        var current = Kind == UsageProviderKind.Claude && _last?.Windows.Count > 0
+            ? await ReadClaudeSafelyAsync(cancellationToken).ConfigureAwait(false) : null;
+        return Failure(message, current);
+    }
+
+    private UsageSnapshot Failure(string message, UsageCredential? transientCredential = null)
     {
         _failures = Math.Min(_failures + 1, 6);
         var floor = Kind == UsageProviderKind.Claude ? 120 : 30;
-        _nextAttempt = _clock.UtcNow.AddSeconds(Math.Min(1800, floor * Math.Pow(2, _failures - 1)));
+        var now = _clock.UtcNow;
+        _nextAttempt = now.AddSeconds(Math.Min(1800, floor * Math.Pow(2, _failures - 1)));
+        if (Kind == UsageProviderKind.Claude) PruneClaudeQuota(now, CacheFingerprint(transientCredential, now));
         return Save(UsageStatus.Unavailable, message, retryAfter: _nextAttempt);
     }
 
     private UsageSnapshot Save(UsageStatus status, string message, DateTimeOffset? retryAfter = null)
     {
         var clear = Kind == UsageProviderKind.Claude && status is UsageStatus.AuthenticationRequired or UsageStatus.NotConnected or UsageStatus.AuthenticationRetry or UsageStatus.AuthenticationRecovering;
-        if (!clear && status != UsageStatus.RateLimited && _last?.Windows.Count > 0) message = "이전 조회값 표시 중 · " + message;
+        if (Kind != UsageProviderKind.Claude && status != UsageStatus.RateLimited && _last?.Windows.Count > 0) message = "이전 조회값 표시 중 · " + message;
         _last = new(Kind, status, clear ? [] : _last?.Windows ?? [], _clock.UtcNow, _last?.Plan, message, retryAfter,
             ObservedAt: clear ? null : _last?.ObservedAt,
             NextQueryAt: _nextAttempt > _clock.UtcNow && _nextAttempt != DateTimeOffset.MaxValue ? _nextAttempt : null,
@@ -424,8 +483,8 @@ public static class UsageParser
     }
     private static void AddClaude(JsonElement root, string key, string label, TimeSpan duration, List<UsageWindow> windows)
     {
-        if (!Object(root, key, out var window) || !Number(window, "utilization", out var used)) return;
-        windows.Add(new(label, Math.Clamp(used, 0, 100), Reset(window, "resets_at"), duration));
+        if (!Object(root, key, out var window) || !Number(window, "utilization", out var used) || used is < 0 or > 100) return;
+        windows.Add(new(label, used, Reset(window, "resets_at"), duration));
     }
 
     private static DateTimeOffset? Reset(JsonElement root, string key)

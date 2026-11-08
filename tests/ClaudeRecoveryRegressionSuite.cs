@@ -124,6 +124,79 @@ internal static class ClaudeRecoveryRegressionSuite
             clock.UtcNow = limited.RetryAfter!.Value;
             Require((await provider.FetchAsync()).Status == UsageStatus.Ready && refresh.Calls == 1 && handler.Calls == 2);
         });
+        await Check("429 keeps recent Claude values only until each quota resets or the observation is 30 minutes old", async () =>
+        {
+            var clock = new FakeClaudeClock();
+            var start = clock.UtcNow;
+            var credentials = new MutableCredentials(Fresh(clock));
+            var body = JsonSerializer.Serialize(new
+            {
+                five_hour = new { utilization = 17, resets_at = start.AddMinutes(10) },
+                seven_day = new { utilization = 25, resets_at = start.AddHours(1) }
+            });
+            var calls = 0;
+            var handler = new StubHandler(_ => ++calls == 1 ? Json(body) : RateLimitedFor(TimeSpan.FromMinutes(45)));
+            var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), clock: clock);
+
+            var ready = await provider.FetchAsync();
+            Require(ready.Status == UsageStatus.Ready && ready.Windows.Count == 2 && ready.ObservedAt == start);
+            clock.UtcNow = start.AddMinutes(2);
+            var limited = await provider.FetchAsync();
+            Require(limited.Status == UsageStatus.RateLimited && limited.ObservedAt == start && limited.Windows.SequenceEqual(ready.Windows));
+            Require(limited.RetryAfter == start.AddMinutes(47));
+
+            clock.UtcNow = start.AddMinutes(10);
+            var afterReset = await provider.FetchAsync();
+            Require(afterReset.Status == UsageStatus.RateLimited && afterReset.Windows.SequenceEqual(ready.Windows.Skip(1)));
+            Require(afterReset.ObservedAt == start && afterReset.RetryAfter == limited.RetryAfter);
+            clock.UtcNow = start.AddMinutes(30).AddTicks(-1);
+            Require((await provider.FetchAsync()).Windows.Count == 1);
+
+            clock.UtcNow = start.AddMinutes(30);
+            var tooOld = await provider.FetchAsync();
+            Require(tooOld.Status == UsageStatus.RateLimited && tooOld.Windows.Count == 0 && tooOld.ObservedAt is null);
+            Require(tooOld.RetryAfter == limited.RetryAfter && tooOld.NextQueryAt == limited.RetryAfter && handler.Calls == 2);
+        });
+        foreach (var removeCredential in new[] { false, true })
+            await Check($"429 preserves its deadline when Claude credentials are {(removeCredential ? "removed" : "replaced")}, while dropping old values", async () =>
+            {
+                var clock = new FakeClaudeClock();
+                var credentials = new MutableCredentials(Fresh(clock));
+                var calls = 0;
+                var handler = new StubHandler(_ => ++calls == 1 ? Json(readyBody) : RateLimitedFor(TimeSpan.FromMinutes(45)));
+                var provider = new UsageProvider(UsageProviderKind.Claude, credentials, new HttpClient(handler), clock: clock);
+
+                Require((await provider.FetchAsync()).Status == UsageStatus.Ready);
+                clock.UtcNow += TimeSpan.FromMinutes(2);
+                var limited = await provider.FetchAsync();
+                Require(limited.Status == UsageStatus.RateLimited && limited.Windows.Count == 1 && limited.ObservedAt is not null);
+                clock.UtcNow += TimeSpan.FromMinutes(1);
+                credentials.Current = removeCredential ? null : new UsageCredential { AccessToken = "another-account", ExpiresAt = clock.UtcNow.AddHours(1) };
+                var switched = await provider.FetchAsync(options: new(BypassSuccessCache: true, RequestedAt: clock.UtcNow, RecoverAuthentication: true));
+
+                Require(switched.Status == UsageStatus.RateLimited && switched.Windows.Count == 0 && switched.ObservedAt is null);
+                Require(switched.RetryAfter == limited.RetryAfter && switched.NextQueryAt == limited.RetryAfter && handler.Calls == 2);
+            });
+        await Check("a network failure keeps recent Claude values during backoff only within the 30-minute age limit", async () =>
+        {
+            var clock = new FakeClaudeClock();
+            var start = clock.UtcNow;
+            var calls = 0;
+            var handler = new StubHandler(_ => ++calls == 1 ? Json(readyBody) : throw new HttpRequestException("offline"));
+            var provider = new UsageProvider(UsageProviderKind.Claude, new MutableCredentials(Fresh(clock)), new HttpClient(handler), clock: clock);
+
+            var ready = await provider.FetchAsync();
+            Require(ready.Status == UsageStatus.Ready && ready.ObservedAt == start);
+            clock.UtcNow = start.AddMinutes(29);
+            var offline = await provider.FetchAsync();
+            Require(offline.Status == UsageStatus.Unavailable && offline.Windows.SequenceEqual(ready.Windows) && offline.ObservedAt == start);
+            Require(offline.NextQueryAt > start.AddMinutes(30));
+
+            clock.UtcNow = start.AddMinutes(30);
+            var tooOld = await provider.FetchAsync();
+            Require(tooOld.Status == UsageStatus.Unavailable && tooOld.Windows.Count == 0 && tooOld.ObservedAt is null);
+            Require(tooOld.NextQueryAt == offline.NextQueryAt && handler.Calls == 2);
+        });
         await Check("twelve-hour lock, delayed credential save and visible recovery complete without login", async () =>
         {
             var clock = new FakeClaudeClock();
@@ -328,6 +401,12 @@ internal static class ClaudeRecoveryRegressionSuite
     }
 
     private static HttpResponseMessage Json(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body) };
+    private static HttpResponseMessage RateLimitedFor(TimeSpan delay)
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests);
+        response.Headers.RetryAfter = new(delay);
+        return response;
+    }
     private sealed class FixtureRunner(Func<string[], Task<ClaudeCliResult?>> version, Task<ClaudeCliResult?> status) : IClaudeCommandRunner
     {
         public List<string> Commands { get; } = new();

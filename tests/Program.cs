@@ -67,12 +67,22 @@ sealed class RegressionSuite
             var suffix = kind == UsageProviderKind.Codex ? "}}}" : "}}";
             foreach (var invalid in new[] { "null", "\"25\"", "1e999", "true" })
                 Test($"{kind} rejects invalid percentage {invalid}", () => Equal(0, Parse(kind, "{" + property + invalid + suffix).Windows.Count));
-            Test($"{kind} clamps percentage boundaries", () =>
-            {
-                Equal(100d, Parse(kind, "{" + property + "-20" + suffix).Windows[0].RemainingPercent);
-                Equal(0d, Parse(kind, "{" + property + "120" + suffix).Windows[0].RemainingPercent);
-            });
+            if (kind == UsageProviderKind.Codex)
+                Test("Codex clamps percentage boundaries", () =>
+                {
+                    Equal(100d, Parse(kind, "{" + property + "-20" + suffix).Windows[0].RemainingPercent);
+                    Equal(0d, Parse(kind, "{" + property + "120" + suffix).Windows[0].RemainingPercent);
+                });
         }
+        Test("Claude omits invalid subscription ratios and keeps valid boundary values and monthly extra usage", () =>
+        {
+            var s = Parse(UsageProviderKind.Claude, """{"five_hour":{"utilization":-0.01},"seven_day":{"utilization":0},"seven_day_sonnet":{"utilization":100},"seven_day_opus":{"utilization":100.01},"extra_usage":{"is_enabled":true,"utilization":120}}""");
+            Equal(UsageStatus.Ready, s.Status);
+            Equal(3, s.Windows.Count);
+            Equal("주간", s.Windows[0].Name); Equal(100d, s.Windows[0].RemainingPercent);
+            Equal("sonnet 주간", s.Windows[1].Name); Equal(0d, s.Windows[1].RemainingPercent);
+            Equal("월 추가 사용", s.Windows[2].Name); Equal(100d, s.Windows[2].UsedPercent);
+        });
         Test("Codex invalid reset stays unknown", () => Equal<DateTimeOffset?>(null, Parse(UsageProviderKind.Codex, """{"rate_limit":{"primary_window":{"used_percent":1,"reset_at":9223372036854775807,"reset_after_seconds":-2}}}""").Windows[0].ResetsAt));
         Test("Claude invalid reset stays unknown", () => Equal<DateTimeOffset?>(null, Parse(UsageProviderKind.Claude, """{"five_hour":{"utilization":2,"resets_at":"invalid"}}""").Windows[0].ResetsAt));
         Test("Fallback plan retained", () => Equal("pro", Parse(UsageProviderKind.Claude, "{}", "pro").Plan));

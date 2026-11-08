@@ -155,6 +155,7 @@ VibeMeters · 사용량 확인|VibeMeters · Quota monitor
 초 뒤 재시도| sec until retry
  · 이전 확인값 표시| · Previous values
  · 이전 값 표시| · Previous values
+이전 값|Previous
  · 자동 재시도 대기| · Awaiting retry
 설정 닫기|Close settings
 화면 테마|Theme

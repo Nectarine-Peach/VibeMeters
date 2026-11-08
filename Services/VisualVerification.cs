@@ -338,11 +338,11 @@ internal sealed class VisualVerification
         Capture(_window,"window-refresh-schedule-ko.png");
         var limited=ready with { Status=UsageStatus.RateLimited,CheckedAt=DemoTime.AddMinutes(1),NextQueryAt=DemoTime.AddMinutes(5),NextAutomaticAt=DemoTime.AddMinutes(6),WaitReason=UsageWaitReason.RateLimited,IsCached=true };
         _window.RenderSnapshot(limited);await StableAsync(_window);
-        Check("protection reason is visible on the compact card",Descendants<TextBlock>(Cards()[1]).Any(text=>text.Text.StartsWith("요청 제한 대기",StringComparison.Ordinal)));
+        Check("previous values and the protection reason are visible on the compact card",Descendants<TextBlock>(Cards()[1]).Any(text=>text.Text.StartsWith("이전 값 · 요청 제한 대기",StringComparison.Ordinal)));
         var details=UsageRefreshText.Details(limited);
         Check("protection details preserve observation, attempt and eligibility separately",details.Contains("12:00:00",StringComparison.Ordinal)&&details.Contains("12:01:00",StringComparison.Ordinal)&&details.Contains("12:05:00",StringComparison.Ordinal)&&details.Contains("12:06:00",StringComparison.Ordinal));
         Localizer.SetLanguage(AppLanguage.English);await StableAsync(_window);
-        Check("protection reason translates immediately",Descendants<TextBlock>(Cards()[1]).Any(text=>text.Text.StartsWith("Rate-limit wait",StringComparison.Ordinal)));
+        Check("previous values and the protection reason translate immediately",Descendants<TextBlock>(Cards()[1]).Any(text=>text.Text.StartsWith("Previous · Rate-limit wait",StringComparison.Ordinal)));
         Check("English refresh wait text stays inside minimum card",TextFits(Cards()[1],Cards()[1]));
         Capture(_window,"window-refresh-wait-en.png");
         Localizer.SetLanguage(AppLanguage.Korean);

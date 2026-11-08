@@ -119,7 +119,7 @@ Updates use polling rather than a real-time server stream. Provider cooldowns ca
 | Codex or Claude is not connected | Sign in through the official CLI or Settings, then refresh. Credential-file changes trigger a new check. |
 | Claude authentication is checking or waiting to retry | The app retries with the existing session. If the app reports an outdated CLI, [update Claude Code](https://code.claude.com/docs/en/setup#update-claude-code). The Login action checks usage before opening a browser. |
 | Claude reports a temporary query limit | Wait for the retry time in the tooltip. HTTP 429 restricts the **usage lookup**; it does not by itself mean the subscription quota is exhausted. |
-| A previous percentage remains visible after an error | It is the last successful value. Read the status tooltip before treating it as current. Claude authentication failures and disconnected credentials hide old percentages and show a sign-in action. |
+| A previous percentage remains visible after an error | During a temporary error or rate limit, Claude marks recent values as **Previous**. Each check drops values after 30 minutes, after their quota resets, or when the credentials change. |
 | Gemini has no quota information | Personal accounts require a signed-in Antigravity CLI 1.4.7 or newer; business accounts retain the bundled Code Assist runtime and project access. See [account details](docs/account-usage.md). |
 | Startup stops working after moving the app | Toggle Windows startup off and on in Settings to update the saved path. |
 

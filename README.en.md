@@ -12,9 +12,11 @@ Keep your **Codex, Claude, Gemini, and Grok quotas** visible in a small Windows 
 
 [Download ZIP for Windows](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [Release notes](https://github.com/Nectarine-Peach/VibeMeters/releases/latest)
 
-<img src="docs/screenshots/window-mini-en.png" alt="English mini window with Codex, Claude, Gemini Antigravity and Grok Build" width="274">
+v1.4.11 improves Claude and Codex sign-in recovery, honors Gemini's server retry deadlines, and handles Grok credential changes during a lookup. [What's new in v1.4.11](docs/releases/v1.4.11.md)
 
-*Actual WPF rendering with synthetic data for all four services. Gemini shows a personal Antigravity example; Grok shows Build-only quota. These are not live account values.*
+<img src="docs/screenshots/provider-reliability/window-four-services-grok-en-dark.png" alt="English dark window showing Codex, Claude, Gemini, and Grok Build" width="360">
+
+*The v1.4.11 WPF window with example quotas for all four services.*
 
 ## Supported accounts and quota types
 
@@ -30,7 +32,7 @@ Alongside personal subscription quotas, VibeMeters displays **Codex Business ind
 | **Business Gemini / Code Assist** | Model quota buckets returned for supported accounts and projects |
 | **Grok Build / X subscription** | Build-only or shared subscription percentages and reset information supplied by the official CLI |
 
-Codex Business uses the supplied `spend_control.individual_limit`; Claude Enterprise uses enabled `extra_usage.utilization`. When a recognized connected-account response supplies no percentage, the app reports that state without inventing a value. Service permissions, SSO and corporate network policies can restrict access; support does not guarantee every organization configuration. Actual account reauthentication and SSO approval were not separately exercised for v1.4.4. See [account details](docs/account-usage.md) and [verification scope](VERIFICATION.md).
+Codex Business uses the supplied `spend_control.individual_limit` and Claude Enterprise uses enabled `extra_usage.utilization`. When a recognized connected account supplies no percentage, the app reports that state without inventing a value. Service permissions, SSO and corporate network policies can restrict access. [Account details](docs/account-usage.md) · [Verification scope](VERIFICATION.md)
 
 ## Quick start
 
@@ -39,6 +41,8 @@ Codex Business uses the supplied `spend_control.individual_limit`; Claude Enterp
 3. Resize the window and use the **pin** to keep it on top.
 
 No installer is required. To build it yourself, expand **Build and verification** below.
+
+**To upgrade:** Exit the running VibeMeters from the tray menu, extract the entire new ZIP, then run `VibeMeters.exe` from the new folder. The app reuses your settings and CLI sign-ins. If the path changed and you use automatic startup, toggle **Start with Windows** off and back on in Settings.
 
 ## Detailed guides
 
@@ -52,7 +56,7 @@ No installer is required. To build it yourself, expand **Build and verification*
 | **Gemini** | Personal accounts: sign in to installed Antigravity CLI 1.4.7 or newer. Business accounts: existing Code Assist authentication/project. | Antigravity shared Gemini quotas or business Code Assist quota buckets and reset information. |
 | **Grok** | Install official Grok Build CLI and use **Grok 로그인**, or run `grok login --oauth`. | Included subscription percentages/reset times supplied by the official CLI. Build-only and shared scope remain distinct; API costs and extra credits are excluded. |
 
-Codex and Claude usage polling works without the CLI when a valid credential file already exists. If a CLI is missing when you click sign-in, the app offers installation or cancellation. Only your explicit install choice downloads the official user-scoped installer, with progress, retry and cancellation. It detects the installed CLI before continuing to browser sign-in; no administrator elevation is requested. See [CLI installation scope](docs/cli-installation.md).
+Codex and Claude can read usage with valid credentials already on disk. If the Codex file is missing or unreadable, or the usage endpoint returns 401, the app also checks the account and quota through the installed official Codex CLI. Automatic Claude renewal requires official Claude Code 2.1.317 or newer. If a CLI is missing when you click sign-in, choose whether to run the official user-scoped installer and continue to sign-in. [Account details](docs/account-usage.md) · [CLI installation scope](docs/cli-installation.md)
 
 Codex and Claude login buttons run their installed official CLI in the background. Complete sign-in in the browser it opens; no terminal window is shown. The app checks the login result before refreshing usage and stops waiting after five minutes. Signing in to a provider's website or desktop app alone may not create its CLI credentials. Credential-file changes also trigger a new check. Gemini's personal-account login opens the official Antigravity window; refresh after completing sign-in or switching accounts. Gemini quotas appear **inside VibeMeters**; normal polling does not open a terminal or browser or send model-generation requests. Gemini is off by default.
 
@@ -89,23 +93,13 @@ Refresh options are **30 seconds, 1, 2, 5, or 15 minutes, or manual**; the defau
 <details>
 <summary>More screenshots</summary>
 
-### Standard and light theme
-
-| Dark | Light |
+| Claude lookup limited | Claude authentication retry |
 | :---: | :---: |
-| <img src="docs/screenshots/window-standard-en-dark.png" alt="English standard dark window" width="360"> | <img src="docs/screenshots/window-standard-en-light.png" alt="English standard light window" width="360"> |
+| <img src="docs/screenshots/provider-reliability/window-refresh-wait-en.png" alt="Claude rate-limit wait showing the previous quota" width="220"> | <img src="docs/screenshots/provider-reliability/window-auth-retry-en.png" alt="Claude authentication retry with renewal pending" width="220"> |
 
-### All services and minimum size
+<img src="docs/screenshots/provider-reliability/settings-en-dark.png" alt="English settings including the Language selector" width="410">
 
-| All four services | Compact English window |
-| :---: | :---: |
-| <img src="docs/screenshots/window-standard-en-dark.png" alt="English four-service display" width="360"> | <img src="docs/screenshots/window-mini-en.png" alt="274 by 300 logical pixels with every quota row visible" width="274"> |
-
-### Settings
-
-<img src="docs/screenshots/settings-en.png" alt="English settings including the Language selector" width="400">
-
-These English images render v1.4.7 WPF controls with synthetic data. Standard size is 360×551 and mini is 274×300 logical pixels with every row visible. No real account, credentials or user preferences were accessed. These are not desktop/compositor/tray screenshots or full regression-test results. See the [capture method and scope](docs/screenshots/README.md).
+These WPF screenshots use synthetic data. The screenshot index includes the light theme and minimum-width layout. [Capture method and scope](docs/screenshots/README.md)
 
 </details>
 
@@ -118,25 +112,25 @@ Updates use polling rather than a real-time server stream. Provider cooldowns ca
 | --- | --- |
 | Codex or Claude is not connected | Sign in through the official CLI or Settings, then refresh. Credential-file changes trigger a new check. |
 | Claude authentication is checking or waiting to retry | The app retries with the existing session. If the app reports an outdated CLI, [update Claude Code](https://code.claude.com/docs/en/setup#update-claude-code). The Login action checks usage before opening a browser. |
-| Claude reports a temporary query limit | Wait for the retry time in the tooltip. HTTP 429 restricts the **usage lookup**; it does not by itself mean the subscription quota is exhausted. |
+| Claude reports a temporary query limit | Wait for the retry time in the tooltip. HTTP 429 limits the **usage lookup**. Restarting VibeMeters keeps that retry time in effect. |
 | A previous percentage remains visible after an error | During a temporary error or rate limit, Claude marks recent values as **Previous**. Each check drops values after 30 minutes, after their quota resets, or when the credentials change. |
 | Gemini has no quota information | Personal accounts require a signed-in Antigravity CLI 1.4.7 or newer; business accounts retain the bundled Code Assist runtime and project access. See [account details](docs/account-usage.md). |
 | Startup stops working after moving the app | Toggle Windows startup off and on in Settings to update the saved path. |
 
 The refresh button, F5 and tray action refresh every visible service and bypass successful-result caches. With a 30- or 60-second setting, scheduled Claude polling reuses successful results for two minutes to reduce requests. In-flight manual requests are combined into one pending request; a result completed after that request can satisfy it without a duplicate network call.
 
-Credential-change, activation and resume checks can reuse normal success caches (Claude/Grok: two minutes; Gemini business: five minutes). Manual and scheduled refreshes **keep rate-limit, server Retry-After, authentication and failure backoffs**. Claude waits **5 → 10 → 20 → 30 → 60 minutes** after HTTP 429; Gemini and Grok wait **ten minutes**, with longer server waits respected where supplied. Each card separates the usage observation time from the next automatic lookup, or shows a protection reason and retry eligibility time. Tooltips distinguish observation, lookup attempt, protection expiry and the next scheduled query. During protection, manual refresh returns the saved result without sending a new request. These are app policies, not published provider request allowances. Observed time is when the last successful quota was received; Checked in the tooltip is the last result/error check, retained when cached. Next automatic is the next possible timer tick calculated from the selected interval and protection deadline, not a reserved or guaranteed execution time. An in-flight lookup, Windows lock/sleep or timer delays can defer it.
+Credential changes, activation and resume can reuse a successful result for two minutes on Claude and Grok or five minutes on Gemini Code Assist. Manual and scheduled refreshes **honor rate limits, server Retry-After, authentication and failure backoffs**. Claude waits **5 → 10 → 20 → 30 → 60 minutes** after consecutive HTTP 429 responses. Gemini and Grok wait **ten minutes**. Claude and Gemini Code Assist honor a longer server wait when supplied. **Observed** is the time of the last successful quota, and **Checked** is the time of the latest result or error. Cached results keep these timestamps. **Next automatic** is the next eligible timer tick, which an in-flight lookup or Windows lock/sleep can delay.
 
 </details>
 
 <details>
 <summary>Privacy and compatibility</summary>
 
-Native WPF/.NET 8, with no embedded browser or continuous animation. Codex and Claude use in-process HTTP. Gemini business polling uses a short-lived hidden Node process; personal Gemini and Grok polling use their installed official CLI. The package includes .NET and is not code-signed.
+The Windows app runs on native WPF/.NET 8. Codex and Claude normally use in-process HTTP, with official CLI recovery when needed. Gemini Code Assist uses a short-lived Node process, and personal Gemini and Grok use their installed official CLI. The ZIP includes .NET. Windows may show an unknown publisher prompt for the unsigned executable.
 
 - Codex reads `%USERPROFILE%\.codex\auth.json` (`CODEX_HOME` supported); Claude reads `%USERPROFILE%\.claude\.credentials.json` (`CLAUDE_CONFIG_DIR` supported). VibeMeters never writes credentials or exchanges refresh tokens. When a Claude token is within two minutes of expiry, the app tries to renew it once through `auth status` in official Claude Code 2.1.317 or later. It can still query with the current token if it is valid. The app also tries to recover on expiry or HTTP 401. Recovery requires changed, unexpired credentials and a successful usage lookup. A 401 after renewal remains retryable; an explicit OAuth renewal rejection asks for sign-in. No browser sign-in or model request starts automatically. [Renewal and CLI update details](docs/account-usage.md#claude-인증-자동-갱신과-재로그인-표시).
 - Gemini business accounts use bundled official `@google/gemini-cli-core` **0.65.0**. Unsupported personal accounts use the installed official Antigravity CLI's `/usage` JSON command. The card explicitly shows **Gemini · Antigravity**: these shared Gemini model quotas are separate from Gemini web/app limits. Its Login button opens the official Antigravity client. Each official client manages its own authentication; VibeMeters does not read keyring tokens or forward raw tokens to settings or quota output.
-- Grok uses the installed official Build CLI. The app watches auth-file modification time without reading credentials or tokens. The package does not bundle or automatically install Grok CLI or a browser extension.
+- Grok uses the installed official Build CLI. The app checks the auth file's modification time. If the CLI saves fresh credentials during a lookup, the app makes one more check. It discards the result if credentials change again and keeps any rate-limit wait. [Grok account details](docs/grok-usage.md)
 - Preferences live in `%LOCALAPPDATA%\VibeMeters\settings.json`. `claude-auth-diagnostics.jsonl` records only closed reason enums, exit codes and change/expiry booleans, using current and archive files. The current file rotates before the next append after reaching 64KiB, so it can exceed that size by one row. Files last modified over seven days ago are removed on the next diagnostic write; this is not a seven-day retention guarantee for individual rows. Tokens, accounts and raw CLI output are excluded. Optional startup registration uses the current user's Windows Run key. Credentials are not included in source or release packages.
 - Codex and Claude use account endpoints, Gemini uses Code Assist internals or the official Antigravity usage command, and Grok uses the official Build CLI ACP billing contract. These integrations may change or be restricted by provider policies. VibeMeters is an independent project, unaffiliated with OpenAI, Anthropic, Google, or xAI.
 

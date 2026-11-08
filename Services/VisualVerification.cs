@@ -90,6 +90,12 @@ internal sealed class VisualVerification
                 Check("settings has all service selection and mode controls",new[]{"CodexCheck","ClaudeCheck","GeminiCheck","GrokCheck","CodexModeCombo","ClaudeModeCombo","GeminiModeCombo","GrokModeCombo","ThemeCombo","IntervalCombo"}.All(name=>settings.FindName(name)!=null));
                 Capture(settings,"settings-dark.png");
                 Check("settings labels fit the client",TextFits(Root(settings),Root(settings)));
+                var language = (ComboBox)settings.FindName("LanguageCombo");
+                SelectTag(language, "English");
+                await StableAsync(settings);
+                Capture(settings, "settings-en-dark.png");
+                SelectTag(language, "Korean");
+                await StableAsync(settings);
                 await CheckSettingsInteractionsAsync(settings);
                 settings.Close();
                 await StableAsync(_window);
@@ -247,6 +253,10 @@ internal sealed class VisualVerification
         AssertMainLayout("four services including Grok",new[]{("Codex",1),("Claude",2),("Gemini",2),("Grok",1)});
         Check("Grok Build scope stays explicit without fabricated Bot row",Rows(Cards()[3]).Select(ValueText).SequenceEqual(new[]{"68%"})&&Descendants<TextBlock>(Cards()[3]).Any(t=>t.Text=="Build 주간"));
         Capture(_window,"window-four-services-grok-dark.png");
+        Localizer.SetLanguage(AppLanguage.English);
+        await StableAsync(_window);
+        Capture(_window, "window-four-services-grok-en-dark.png");
+        Localizer.SetLanguage(AppLanguage.Korean);
         _window.Width=220;_window.Height=140;await StableAsync(_window);
         AssertMainLayout("four services minimum readable size",new[]{("Codex",1),("Claude",2),("Gemini",2),("Grok",1)});
         Capture(_window,"window-four-services-grok-minimum-dark.png");

@@ -12,9 +12,11 @@ Codex·Claude·Gemini·Grok의 남은 한도와 사용량을 작은 Windows 창�
 
 [Windows용 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [릴리스 노트](https://github.com/Nectarine-Peach/VibeMeters/releases/latest)
 
-<img src="docs/screenshots/window-mini-dark.png" alt="Codex·Claude·Gemini Antigravity·Grok Build를 함께 표시하는 미니 창" width="274">
+v1.4.11은 Claude와 Codex의 로그인 복구를 개선하고, Gemini의 서버 재시도 시각과 Grok의 조회 중 인증 변경을 처리합니다. [v1.4.11 변경 사항](docs/releases/v1.4.11.md)
 
-네 서비스의 합성 데모를 실제 WPF 화면으로 렌더링했습니다. Gemini는 개인 Antigravity 한도, Grok은 Build 전용 한도 예시이며 실계정 수치가 아닙니다.
+<img src="docs/screenshots/provider-reliability/window-four-services-grok-dark.png" alt="Codex, Claude, Gemini, Grok Build 사용량을 함께 표시하는 다크 창" width="360">
+
+네 서비스의 예시 사용량을 표시한 v1.4.11 WPF 화면입니다.
 
 ## 지원 계정과 표시 항목
 
@@ -30,7 +32,7 @@ Codex·Claude·Gemini·Grok의 남은 한도와 사용량을 작은 Windows 창�
 | **Gemini 회사 계정 / Code Assist** | 지원되는 계정·프로젝트가 반환한 모델별 할당량 |
 | **Grok Build / X 구독** | 공식 Build CLI가 제공한 Build 전용 또는 공유 구독 사용 비율·초기화 정보 |
 
-Codex Business는 `spend_control.individual_limit`, Claude Enterprise는 활성화된 `extra_usage.utilization` 응답을 사용합니다. 비율이 없는 지원 응답에는 **연결됨 · 비율 미제공**을 표시하며 수치를 추정하지 않습니다. 회사의 서비스 권한·SSO·네트워크 정책에 따라 조회나 로그인이 제한될 수 있으며, 모든 회사 계정 구성을 보장하지 않습니다. v1.4.4에서 실제 계정 재로그인·SSO 승인은 별도 검증하지 않았습니다. [개인·회사 계정 상세 안내](docs/account-usage.md) · [검증 범위](VERIFICATION.md).
+Codex Business는 `spend_control.individual_limit`, Claude Enterprise는 활성화된 `extra_usage.utilization` 응답을 사용합니다. 비율이 없는 지원 응답에는 **연결됨 · 비율 미제공**을 표시하며 수치를 추정하지 않습니다. 회사의 서비스 권한·SSO·네트워크 정책에 따라 조회나 로그인이 제한될 수 있습니다. [개인·회사 계정 상세 안내](docs/account-usage.md) · [검증 범위](VERIFICATION.md)
 
 ## 빠른 시작
 
@@ -39,6 +41,8 @@ Codex Business는 `spend_control.individual_limit`, Claude Enterprise는 활성�
 3. 창 크기를 조절하고 핀 아이콘으로 항상 위에 고정하세요.
 
 설치 프로그램 없이 실행합니다. 소스에서 직접 만들려면 아래 **소스에서 빌드·검증**을 펼치세요.
+
+**기존 버전에서 업데이트:** 트레이 메뉴에서 실행 중인 VibeMeters를 종료한 뒤 새 ZIP 전체를 풀고, 새 폴더의 `VibeMeters.exe`를 실행하세요. 기존 설정과 CLI 로그인은 그대로 사용합니다. 실행 경로가 바뀌었고 자동시작을 사용한다면 설정에서 **Windows 시작 시 실행**을 껐다 켜세요.
 
 ## 상세 가이드
 
@@ -52,7 +56,7 @@ Codex Business는 `spend_control.individual_limit`, Claude Enterprise는 활성�
 | **Gemini** | 개인 계정은 설치된 Antigravity CLI 1.4.7 이상에서 로그인, 회사 계정은 기존 Code Assist 인증 | Antigravity의 Gemini 공유 한도 또는 회사 Code Assist 할당량·초기화 정보 |
 | **Grok** | 공식 Grok Build CLI 설치 후 설정의 **Grok 로그인**, 또는 `grok login --oauth` | 공식 CLI의 구독 비율과 초기화 시각. Build 전용·공유 범위 구분, API 비용·추가 금액 제외 |
 
-Codex·Claude는 기존 인증 파일이 있으면 CLI 없이 사용량을 조회합니다. 로그인 버튼을 눌렀을 때 CLI가 없으면 **설치 후 로그인** 또는 취소를 선택할 수 있습니다. 선택한 경우에만 공식 설치 프로그램을 내려받아 현재 사용자 계정에 설치하며 진행·오류·재시도를 안내합니다. 설치 뒤 CLI를 다시 찾고 기존 로그인 흐름으로 연결합니다. 설치에는 인터넷이 필요하며 관리자 권한을 요청하지 않습니다. [CLI 설치 범위](docs/cli-installation.md).
+Codex·Claude는 유효한 기존 인증 파일로 사용량을 조회합니다. Codex는 파일이 없거나 읽을 수 없을 때, 또는 조회가 401을 반환할 때 설치된 공식 Codex CLI의 계정과 한도도 확인합니다. Claude 자동 갱신에는 공식 Claude Code 2.1.317 이상이 필요합니다. 로그인 버튼을 눌렀을 때 CLI가 없으면 **설치 후 로그인** 또는 취소를 선택할 수 있습니다. 설치를 선택하면 공식 설치 프로그램을 내려받아 현재 사용자 계정에 설치하고 로그인으로 이어갑니다. [계정별 안내](docs/account-usage.md) · [CLI 설치 범위](docs/cli-installation.md)
 
 Codex·Claude 로그인은 설치된 공식 CLI를 백그라운드에서 실행합니다. 터미널 창 없이 열린 브라우저에서 인증을 완료하세요. 앱은 로그인 결과를 확인한 뒤 사용량을 다시 조회하며, 5분 안에 완료되지 않으면 대기를 종료합니다. 웹사이트나 데스크톱 앱 로그인만으로는 필요한 CLI 인증 파일이 없을 수 있습니다. 인증 파일 변경도 자동으로 감지합니다. Gemini 개인 경로의 로그인 버튼은 공식 Antigravity 창을 열며 완료 후 새로고침합니다.
 
@@ -88,7 +92,7 @@ Grok도 기본적으로 꺼져 있습니다. 공식 Grok Build CLI의 기존 인
 
 앱과 문서는 한국어·영어를 지원합니다. 기본값 **시스템**은 Windows UI 언어가 한국어이면 한국어, 그 외에는 English를 선택합니다. 설정의 **언어**에서 시스템/한국어/English를 바꾸면 메인 카드·설정·트레이·툴팁·접근성 이름·설치/로그인/오류 안내가 즉시 바뀌고 기존 설정 파일에 저장됩니다. 언어 전환을 위해 계정에 다시 로그인하거나 사용량을 재조회하지 않습니다. 제품명·공식 API 값·내부 한도 식별자는 유지합니다.
 
-<img src="docs/screenshots/settings-en.png" alt="Language에서English를선택한영문설정화면" width="400">
+<img src="docs/screenshots/provider-reliability/settings-en-dark.png" alt="언어와 서비스 연결을 보여 주는 영어 설정 화면" width="410">
 
 </details>
 
@@ -97,15 +101,15 @@ Grok도 기본적으로 꺼져 있습니다. 공식 Grok Build CLI의 기존 인
 
 | 표준 다크 | 표준 라이트 |
 | :---: | :---: |
-| <img src="docs/screenshots/window-standard-dark.png" alt="표준 다크 창" width="360"> | <img src="docs/screenshots/window-standard-light.png" alt="표준 라이트 창" width="360"> |
+| <img src="docs/screenshots/provider-reliability/window-standard-dark.png" alt="표준 다크 창" width="360"> | <img src="docs/screenshots/provider-reliability/window-standard-light.png" alt="표준 라이트 창" width="360"> |
 
-| 네 서비스 함께 표시 | 네 서비스 최소 폭 |
+| 네 서비스 최소 폭 | 조회 시각과 상태 |
 | :---: | :---: |
-| <img src="docs/screenshots/window-all-services-dark.png" alt="Codex·Claude·Gemini Antigravity·Grok Build 네 서비스" width="360"> | <img src="docs/screenshots/window-minimum-dark.png" alt="모든 한도 행을 유지한 220×223 논리 픽셀 창" width="220"> |
+| <img src="docs/screenshots/provider-reliability/window-four-services-grok-minimum-dark.png" alt="최소 폭에서 네 서비스 사용량을 표시한 창" width="220"> | <img src="docs/screenshots/provider-reliability/window-refresh-schedule-ko.png" alt="마지막 관측과 다음 자동 조회 시각" width="360"> |
 
-<img src="docs/screenshots/settings-dark.png" alt="네 서비스 표시·수치 기준·테마·새로고침·계정 연결 설정" width="400">
+<img src="docs/screenshots/provider-reliability/settings-dark.png" alt="네 서비스의 표시 및 계정 연결 설정" width="410">
 
-한국어 네 서비스 이미지는 v1.4.5, 위 영문 언어 설정 예시는 v1.4.7 WPF 컨트롤의 합성 렌더입니다. 실제 계정·인증·사용자 설정에 접근하지 않았습니다. OS 창 테두리·트레이 픽셀을 포함한 데스크톱 캡처나 전체 회귀 검증 결과는 아닙니다. [캡처 방식과 범위](docs/screenshots/README.md).
+화면은 합성 데이터를 사용한 WPF 렌더입니다. [캡처 방식과 범위](docs/screenshots/README.md)
 
 </details>
 
@@ -120,12 +124,12 @@ Grok도 기본적으로 꺼져 있습니다. 공식 Grok Build CLI의 기존 인
 | --- | --- |
 | Codex·Claude가 연결되지 않음 | 공식 CLI 또는 설정에서 로그인한 뒤 새로고침하세요. |
 | Claude 인증 확인/재시도 상태 | 앱이 기존 로그인으로 다시 시도합니다. CLI가 오래됐다는 안내가 표시되면 [Claude Code를 업데이트](https://code.claude.com/docs/en/setup#update-claude-code)하세요. 로그인 버튼도 브라우저 전에 사용량을 확인합니다. |
-| Claude가 조회 일시 제한으로 표시됨 | 툴팁의 재시도 시각까지 기다리세요. HTTP 429는 **사용량 조회 요청**의 제한이며 구독 한도 소진과 다릅니다. |
+| Claude가 조회 일시 제한으로 표시됨 | 툴팁의 재시도 시각까지 기다리세요. HTTP 429는 **사용량 조회 요청**에 대한 제한입니다. 대기 시각은 앱을 다시 실행해도 적용됩니다. |
 | 오류 후 이전 비율이 남아 있음 | Claude는 일시 오류나 요청 제한 때 같은 인증으로 확인한 30분 이내의 비율을 **이전 값**으로 표시합니다. 다음 확인에서 인증이 바뀌었거나 초기화 시각이 지난 항목을 숨깁니다. |
 | Gemini 사용량이 나오지 않음 | 개인 계정은 Antigravity CLI 1.4.7 이상과 로그인을 확인하세요. 회사 계정은 프로젝트 권한과 동봉 runtime을 확인하세요. [계정별 안내](docs/account-usage.md). |
 | 앱 이동 후 자동시작이 안 됨 | 설정에서 Windows 시작 시 실행을 껐다가 다시 켜서 경로를 갱신하세요. |
 
-인증 파일 변경·창 활성화 같은 보조 확인에는 기존 성공 캐시(Claude·Grok 2분, Gemini 회사 5분)를 재사용할 수 있습니다. 수동·자동 조회 모두 **요청 제한·서버 Retry-After·인증/실패 보호 대기**를 지킵니다. Claude 429 뒤에는 **5 → 10 → 20 → 30 → 60분**, Gemini·Grok 요청 제한 뒤에는 **10분** 기다리며 서버의 더 긴 대기를 따릅니다. 카드에 사용량 관측 시각과 다음 자동 조회 시각을 표시하고, 보호 대기에는 이유·재조회 가능 시각을 표시합니다. 툴팁은 관측·조회 확인·재조회 가능·다음 실제 자동 조회 시각을 구분합니다. 대기 중 수동 요청은 새 HTTP 요청 없이 저장된 결과를 돌려줍니다. 이는 앱의 보호 정책이며 공식적인 요청 허용 횟수나 제한 방지를 보장하지 않습니다. `확인`은 마지막 성공 수치의 관측 시각이고, 툴팁의 `조회 확인`은 마지막 결과·오류 확인 시각입니다. 캐시를 재사용하면 이 시각은 유지됩니다. `다음 자동`은 설정 주기와 보호 대기로 계산한 다음 가능한 타이머 시각이며 실행 예약이나 정시 조회를 보장하지 않습니다. 진행 중 조회·Windows 잠금/절전·타이머 지연에 따라 더 늦어질 수 있습니다.
+인증 파일 변경·창 활성화 같은 보조 확인에는 기존 성공 캐시(Claude·Grok 2분, Gemini 회사 5분)를 재사용할 수 있습니다. 수동·자동 조회 모두 **요청 제한·서버 Retry-After·인증/실패 보호 대기**를 지킵니다. Claude 429 뒤에는 **5 → 10 → 20 → 30 → 60분**, Gemini·Grok 요청 제한 뒤에는 **10분** 기다립니다. Claude와 Gemini Code Assist는 서버가 더 긴 대기 시간을 보내면 그 시각을 따릅니다. `확인`은 마지막 성공 수치의 관측 시각이고, 툴팁의 `조회 확인`은 마지막 결과·오류 확인 시각입니다. 캐시를 재사용하면 이 시각은 유지됩니다. `다음 자동`은 설정 주기와 보호 대기로 계산한 다음 가능한 타이머 시각입니다. 진행 중 조회나 Windows 잠금·절전으로 더 늦어질 수 있습니다.
 
 </details>
 
@@ -134,7 +138,7 @@ Grok도 기본적으로 꺼져 있습니다. 공식 Grok Build CLI의 기존 인
 
 - **인증:** Codex는 `%USERPROFILE%\.codex\auth.json`(`CODEX_HOME` 지원), Claude는 `%USERPROFILE%\.claude\.credentials.json`(`CLAUDE_CONFIG_DIR` 지원)에서 읽습니다. 앱은 토큰을 별도 저장하거나 인증 파일에 쓰지 않습니다. Claude는 만료 2분 전부터 토큰당 한 번 갱신을 시도하고, 만료 또는 401 이후에도 **공식 Claude Code 2.1.317 이상**의 `auth status`로 복구를 시도합니다. 만료 전 시도에서 새 토큰이 아직 저장되지 않으면 기존 토큰으로 조회합니다. 새 토큰과 미래 만료를 확인하고 실제 조회가 성공해야 복구가 완료됩니다. 교체 후 401 등 미확정 결과는 재시도 상태로, 명시적인 인증 갱신 거부는 재로그인 필요로 표시합니다. 자동 조회에서 브라우저나 모델 요청은 실행하지 않습니다. [갱신 및 CLI 업데이트 안내](docs/account-usage.md#claude-인증-자동-갱신과-재로그인-표시).
 - **Gemini:** 회사 경로는 동봉한 공식 `@google/gemini-cli-core` **0.65.0**, 개인 경로는 설치된 공식 Antigravity CLI를 사용합니다. 각 공식 클라이언트가 인증을 관리하며 원본 토큰을 .NET 앱의 설정이나 사용량 출력에 전달하지 않습니다.
-- **Grok:** 설치된 공식 Grok Build CLI가 인증을 관리합니다. 앱은 인증 파일의 수정 시각만 감시하며 인증 파일 내용·토큰을 읽거나 저장하지 않습니다. Grok CLI와 브라우저 확장을 배포본에 동봉하거나 자동 설치하지 않습니다.
+- **Grok:** 설치된 공식 Grok Build CLI가 인증을 관리합니다. 앱은 인증 파일의 수정 시각만 확인합니다. 조회 중 CLI가 새 인증을 저장하면 공식 CLI로 한 번 더 조회하고, 그 사이 다시 인증이 바뀌면 결과를 버립니다. 요청 제한을 받은 경우 정해진 대기 시간을 적용합니다. [Grok 연결 범위](docs/grok-usage.md)
 - **로컬 저장:** 앱 설정은 `%LOCALAPPDATA%\VibeMeters\settings.json`에 저장합니다. Claude 인증 진단은 같은 폴더의 `claude-auth-diagnostics.jsonl`에 원인 enum·종료코드·변경/만료 여부만 기록하며 현재/보관 파일 2개를 사용합니다. 현재 파일이 64KiB에 도달하면 다음 기록 전에 회전하므로 한 행만큼 초과할 수 있습니다. 마지막 수정 후 7일 지난 파일은 다음 진단 기록 때 정리하며, 개별 행의 7일 보존 기한을 보장하지 않습니다. 토큰·계정·CLI 원문은 기록하지 않습니다. 자동시작은 현재 사용자의 Windows Run 레지스트리를 사용합니다. 소스와 배포본에는 인증 정보를 포함하지 않습니다.
 - **연동:** Codex·Claude는 계정용 엔드포인트를, Gemini는 Code Assist 코어 또는 공식 Antigravity 사용량 명령을, Grok은 공식 Build CLI의 ACP billing 계약을 사용합니다. 서비스 정책이나 구현 변경으로 연동이 제한될 수 있습니다.
 - **실행 환경:** Windows 10/11 x64용 네이티브 WPF/.NET 8 앱입니다. 배포본에 .NET이 포함되며 내장 브라우저나 지속적인 애니메이션이 없습니다. Gemini 회사 경로는 숨겨진 Node 프로세스를, 개인 경로와 Grok은 설치된 공식 CLI의 짧은 프로세스를 사용합니다. 특정 메모리·CPU 사용량 수치는 보장하지 않습니다.

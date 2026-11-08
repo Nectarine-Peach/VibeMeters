@@ -1,0 +1,118 @@
+{
+  "date": "2026-11-08",
+  "baseCommit": "dc28f3f8f4df671fd3432625d5a9bd9f99acc2b2",
+  "source": "v1.4.11 release preparation tree with English four-provider and settings capture scenarios",
+  "assemblyVersion": "1.4.11.0",
+  "method": "Release win-x64 VibeMeters.exe --smoke-test; WPF RenderTargetBitmap at monitor DPI",
+  "isolation": "Separate smoke-test mutex and in-memory settings; no provider instances or credential watchers",
+  "data": "Synthetic remaining: Codex weekly 61%, Claude 5-hour 100% and weekly 55%, Gemini Pro 83% and Flash 94%, Grok Build weekly 68%",
+  "excludes": "Real accounts, native desktop and compositor, taskbar and tray pixels",
+  "smokeTest": {
+    "file": "smoke-test.txt",
+    "passed": 304,
+    "failed": 0,
+    "sha256": "0a1b63f5b36365b40d3e1dbc2e0b34212510dd80266594d98431ba93a013838f"
+  },
+  "captures": [
+    {
+      "file": "window-four-services-grok-dark.png",
+      "logicalWidth": 360.0,
+      "logicalHeight": 510.4,
+      "pixelWidth": 450,
+      "pixelHeight": 638,
+      "dpiX": 120.0,
+      "dpiY": 120.0,
+      "sha256": "142eec9cae99033e53a7655eafd7c7dca62b138e7b04da7a5fc832713d02f68c"
+    },
+    {
+      "file": "window-four-services-grok-en-dark.png",
+      "logicalWidth": 360.0,
+      "logicalHeight": 510.4,
+      "pixelWidth": 450,
+      "pixelHeight": 638,
+      "dpiX": 120.0,
+      "dpiY": 120.0,
+      "sha256": "f2d42cd6caf1de711438882d8ea47087075b3662eed5e5ca382221b03a289dcf"
+    },
+    {
+      "file": "window-four-services-grok-minimum-dark.png",
+      "logicalWidth": 220.0,
+      "logicalHeight": 239.2,
+      "pixelWidth": 275,
+      "pixelHeight": 299,
+      "dpiX": 120.0,
+      "dpiY": 120.0,
+      "sha256": "9121efa45091bb7cb6a9b703758c32b4418194764604a1a890f0e78402305afa"
+    },
+    {
+      "file": "window-standard-dark.png",
+      "logicalWidth": 360.0,
+      "logicalHeight": 267.2,
+      "pixelWidth": 450,
+      "pixelHeight": 334,
+      "dpiX": 120.0,
+      "dpiY": 120.0,
+      "sha256": "a73124d69262224f039546d8d902639d839aaa537a86e14b6f174f76ddd6285f"
+    },
+    {
+      "file": "window-standard-light.png",
+      "logicalWidth": 360.0,
+      "logicalHeight": 267.2,
+      "pixelWidth": 450,
+      "pixelHeight": 334,
+      "dpiX": 120.0,
+      "dpiY": 120.0,
+      "sha256": "04c230828b9d3e504b7f2e22c2a4622d1a22d8fcca766f3d7e18aec97e11dd5b"
+    },
+    {
+      "file": "settings-dark.png",
+      "logicalWidth": 410.4,
+      "logicalHeight": 750.4,
+      "pixelWidth": 513,
+      "pixelHeight": 938,
+      "dpiX": 120.0,
+      "dpiY": 120.0,
+      "sha256": "1f247427acb1affd91d319222e94b67e3701a1d855d4a3c85d5297d2f1d879ff"
+    },
+    {
+      "file": "settings-en-dark.png",
+      "logicalWidth": 410.4,
+      "logicalHeight": 750.4,
+      "pixelWidth": 513,
+      "pixelHeight": 938,
+      "dpiX": 120.0,
+      "dpiY": 120.0,
+      "sha256": "a453596c8a05fc7a6b562a19347c8ae934b36580aaec30caca2418995ff019a3"
+    },
+    {
+      "file": "window-refresh-schedule-ko.png",
+      "logicalWidth": 220.0,
+      "logicalHeight": 140.0,
+      "pixelWidth": 275,
+      "pixelHeight": 175,
+      "dpiX": 120.0,
+      "dpiY": 120.0,
+      "sha256": "2847a056a930d83abe0421a852d9942443ea911591ea79cfd0431e6fbdb089a8"
+    },
+    {
+      "file": "window-refresh-wait-en.png",
+      "logicalWidth": 220.0,
+      "logicalHeight": 140.0,
+      "pixelWidth": 275,
+      "pixelHeight": 175,
+      "dpiX": 120.0,
+      "dpiY": 120.0,
+      "sha256": "eb8816b719efd3b7d4245d93d0bb22ff36aa5db4bd4d24b913d4df2cdfec35d9"
+    },
+    {
+      "file": "window-auth-retry-en.png",
+      "logicalWidth": 220.0,
+      "logicalHeight": 140.0,
+      "pixelWidth": 275,
+      "pixelHeight": 175,
+      "dpiX": 120.0,
+      "dpiY": 120.0,
+      "sha256": "c425e4491c30a323e68e648725a0213c4571af0b515aa7bfcbad975414272c0b"
+    }
+  ]
+}

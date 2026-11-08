@@ -1,4 +1,21 @@
-# 영문 현지화 이미지 — v1.4.7 · 2026-10-26
+# VibeMeters 화면 캡처
+
+## v1.4.11 배포 준비 캡처 · 2026-11-08
+
+[`provider-reliability/`](provider-reliability/)의 이미지는 `dc28f3f`를 기반으로 영문 화면 캡처를 추가한 v1.4.11 Release 빌드에서 `--smoke-test`로 생성했습니다. WPF가 실제로 표시한 클라이언트 영역을 120 DPI에서 렌더링했으며, 화면별 글자와 한도 행을 확인했습니다.
+
+| 이미지 | 논리 크기 | 표시 내용 |
+| --- | --- | --- |
+| `window-four-services-grok-dark.png`, `window-four-services-grok-en-dark.png` | 360×510.4 | 한국어 및 영문 네 서비스 개요 |
+| `window-four-services-grok-minimum-dark.png` | 220×239.2 | 여섯 한도 행을 표시한 최소 폭 창 |
+| `window-standard-dark.png`, `window-standard-light.png` | 360×267.2 | 한국어 표준 크기의 Codex와 Claude, 다크 및 라이트 테마 |
+| `settings-dark.png`, `settings-en-dark.png` | 410.4×750.4 | 한국어 및 영문 설정 |
+| `window-refresh-schedule-ko.png` | 220×140 | Claude의 마지막 확인 시각과 다음 자동 조회 시각 |
+| `window-refresh-wait-en.png`, `window-auth-retry-en.png` | 220×140 | Claude의 이전 값과 조회 제한 대기, 인증 갱신 대기 |
+
+사용량과 상태는 모두 합성 데이터입니다. 네 서비스 개요에는 Codex 주간 61%, Claude 5시간 100%·주간 55%, Gemini Pro 83%·Flash 94%, Grok Build 주간 68%가 표시됩니다. 스모크 검사는 별도 인스턴스와 메모리 설정을 사용합니다. 검증 범위는 WPF 클라이언트이며 실제 계정, 작업표시줄 및 트레이는 범위 밖입니다. [캡처별 크기와 SHA-256](provider-reliability/capture.json) · [WPF 스모크 검사 304개 통과 기록](provider-reliability/smoke-test.txt)
+
+## 영문 현지화 이미지 · v1.4.7 · 2026-10-26
 
 `window-standard-en-dark.png`, `window-standard-en-light.png`, `window-mini-en.png`, `settings-en.png`, `window-cached-en.png`, `cli-install-en.png`, `cli-install-progress-en.png`는 실제 v1.4.7 WPF 컨트롤의 합성 렌더입니다. 영문 화면과 설치 안내/진행 문구 예시를 직접 열어 가독성을 확인했습니다. 설치 이미지는 대화상자 클라이언트 콘텐츠이며 실제 설치를 실행한 결과가 아닙니다.
 
@@ -6,10 +23,9 @@
 
 전체 회귀/UI 스모크를 실행하지 않았으며 실제 제공자 조회·설치·로그인·사용자 설정 쓰기 없이 메모리 설정과 합성 상태만 사용했습니다. 아래 한국어 v1.4.5 이미지 기록은 당시의 별도 캡처입니다.
 
----
-# 한국어 README 이미지 — 2026-10-26
+## 한국어 README 이전 이미지 · 2026-10-26
 
-현재 README의 대표·표준·라이트·최소 폭·설정 이미지는 v1.4.5 커밋 `a52ee12e580a795a8cf623326634276a4c5b6192`의 실제 WPF 컨트롤을 사용한 **합성 데모 렌더**입니다. `Gemini · Antigravity`와 `Grok / Build 주간`의 출처·범위를 명확하게 표시합니다. 모든 이미지를 실제로 열어 가독성·잘림·표시 범위를 확인했습니다.
+2026-10-26에 README에 사용한 대표·표준·라이트·최소 폭·설정 이미지는 v1.4.5 커밋 `a52ee12e580a795a8cf623326634276a4c5b6192`의 실제 WPF 컨트롤을 사용한 **합성 데모 렌더**입니다. `Gemini · Antigravity`와 `Grok / Build 주간`의 출처·범위를 표시합니다. 모든 이미지를 실제로 열어 가독성·잘림·표시 범위를 확인했습니다.
 
 | 이미지 | 논리 크기 |
 | --- | --- |

@@ -29,9 +29,9 @@
 
 | 이미지 | 논리 크기 |
 | --- | --- |
-| `window-standard-dark.png`, `window-standard-light.png`, `window-all-services-dark.png` | 360×551 |
+| `window-standard-dark.png`, `window-standard-light.png` | 360×551 |
 | `window-mini-dark.png`, `window-mini-light.png` | 274×300 |
-| `window-minimum-dark.png`, `window-all-services-minimum-dark.png` | 220×223 |
+| `window-minimum-dark.png` | 220×223 |
 | `window-wide-dark.png` | 1040×280 |
 | `settings-dark.png` | 410×710 |
 

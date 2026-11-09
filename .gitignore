@@ -1,10 +1,39 @@
+# .NET build and test output
 bin/
 obj/
+TestResults/
+
+# Portable packages and verification output
 dist/
-tests/bin/
-tests/obj/
+artifacts/
+dotnet-publish-*/
+*.gemini-bundle-meta.json
+
+# Local IDE, tooling, and Windows files
+.vs/
 *.user
-runtime/**/node_modules/
-runtime/**/node.exe
-runtime/gemini-quota/bundle/
-runtime/gemini-quota/bundle.meta.json
+*.suo
+*.userosscache
+*.sln.docstates
+*.rsuser
+/.codex/
+Thumbs.db
+Desktop.ini
+
+# Local environment files (keep shareable examples)
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Node dependencies and generated Gemini runtime
+node_modules/
+npm-debug.log*
+/runtime/**/node.exe
+/runtime/gemini-quota/NODE-LICENSE.txt
+/runtime/gemini-quota/bundle/
+/runtime/gemini-quota/bundle.meta.json
+
+# Retired duplicate documentation captures
+/docs/screenshots/window-all-services-dark.png
+/docs/screenshots/window-all-services-minimum-dark.png

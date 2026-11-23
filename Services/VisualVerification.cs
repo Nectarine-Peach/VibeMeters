@@ -285,6 +285,7 @@ internal sealed class VisualVerification
     [DllImport("user32.dll")] private static extern IntPtr SendMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
     [StructLayout(LayoutKind.Sequential)]
     private struct WidgetRect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindowW(string className, string? windowName);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out WidgetRect bounds);
     [DllImport("user32.dll")] private static extern int GetWindowLongW(IntPtr hwnd, int index);
 
@@ -333,6 +334,12 @@ internal sealed class VisualVerification
                     IsWindowVisible(handle) && (style & 0x08000080) == 0x08000080 && (style & 0x00040000) == 0);
                 if (GetWindowRect(handle, out var rect))
                     bounds.Add(new Rect(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top));
+            }
+            if (GetWindowRect(FindWindowW("Shell_TrayWnd", null), out var shell))
+            {
+                var taskbar = new Rect(shell.Left, shell.Top, shell.Right - shell.Left, shell.Bottom - shell.Top);
+                Check("every visible service widget is wholly inside the native taskbar", bounds.All(taskbar.Contains));
+                _report.Add($"GEOMETRY: taskbar {taskbar}, visible widget rectangles {string.Join(" / ", bounds)}");
             }
             if (bounds.Count > 1)
             {
@@ -417,10 +424,10 @@ internal sealed class VisualVerification
                 }
                 var narrow = previews[1];
                 narrow.Update([claude with { Windows = [.. claude.Windows, new("Opus 주간", 60, null)] }], _settings);
-                narrow.SetLayout(true, 138, 160);
+                narrow.SetLayout(true, 126, 160);
                 await StableAsync(narrow);
                 Check("narrow vertical widget shows all three values with its unknown reset",
-                    Math.Abs(narrow.ActualWidth - 138) <= 1 && QuotaRows(Tile(narrow)).Length == 3 && TextFits(Root(narrow), Root(narrow)) &&
+                    Math.Abs(narrow.ActualWidth - 126) <= 1 && QuotaRows(Tile(narrow)).Length == 3 && TextFits(Root(narrow), Root(narrow)) &&
                     Descendants<TextBlock>(narrow).Any(t => t.Text == "40%" && t.IsVisible) &&
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("Opus") &&
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("40% · Reset N/A"));
@@ -470,8 +477,8 @@ internal sealed class VisualVerification
                 views[i].Show();
             }
             foreach (var (layout, vertical, width, height) in new[] {
-                ("horizontal", false, 220d, 180d), ("narrow horizontal", false, 138d, 180d),
-                ("vertical", true, 150d, 180d), ("narrow vertical", true, 138d, 180d) })
+                ("horizontal", false, 220d, 180d), ("narrow horizontal", false, 126d, 180d),
+                ("vertical", true, 150d, 180d), ("narrow vertical", true, 134.4d, 180d) })
             {
                 foreach (var view in views) view.SetLayout(vertical, width, height);
                 await StableAsync(views[0]);
@@ -488,6 +495,7 @@ internal sealed class VisualVerification
                 var resets = new List<Rect>();
                 var resetLabels = new List<TextBlock>();
                 var rightAligned = true;
+                var logoPrecedesRows = true;
                 var readable = true;
                 for (var i = 0; i < views.Length - 1; i++)
                 {
@@ -506,10 +514,13 @@ internal sealed class VisualVerification
                             readable &= text.ActualHeight > 0 && text.FontSize * bounds.Height / text.ActualHeight >= 9;
                         }
                         labels.Add(Bounds(name, roots[i]));
+                        var gutter = labels[^1].Left - logos[i].Right;
+                        logoPrecedesRows &= gutter >= 3 && gutter <= 6;
                         meters.Add(Bounds(row.Children.OfType<ProgressBar>().Single(), roots[i]));
                         percentages.Add(Bounds(value, roots[i]));
                     }
                 }
+                Check(layout + " leaves a small gap between the left logo and every quota row", logoPrecedesRows);
                 Check(layout + " aligns label origins, meter tracks and percentage right edges across providers",
                     labels.Count == 6 && rightAligned && EqualCoordinates(labels.Select(r => r.Left)) &&
                     EqualCoordinates(meters.Select(r => r.Left)) && EqualCoordinates(meters.Select(r => r.Right)) &&

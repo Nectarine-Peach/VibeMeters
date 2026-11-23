@@ -9,12 +9,15 @@ using Forms = System.Windows.Forms;
 
 namespace VibeMeters.Services;
 
-/// <summary>Positions independent, nonactivating windows in screen pixels. Explorer is only queried.</summary>
+/// <summary>Positions independent, nonactivating windows in screen pixels. Each widget owns its rendering and uses the taskbar as its native owner.</summary>
 internal sealed class TaskbarWidgetHost : IDisposable
 {
     private readonly Action _openMain;
     private readonly Dictionary<UsageProviderKind, TaskbarWidgetWindow> _views = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private AppSettings? _settings;
+    private Dictionary<UsageProviderKind, UsageSnapshot> _selected = new();
+    private bool _scanFailed;
     private Layout? _lastLayout;
     private Rectangle _free;
     private bool _scanning;
@@ -24,12 +27,26 @@ internal sealed class TaskbarWidgetHost : IDisposable
     public TaskbarWidgetHost(Action openMain)
     {
         _openMain = openMain;
-        _timer.Tick += (_, _) => Place();
+        _timer.Tick += (_, _) =>
+        {
+            // Windows destroys owned windows when Explorer replaces its taskbar HWND.
+            if (_settings != null && _views.Count < _selected.Count) SyncViews(_settings, _selected);
+            Place();
+        };
     }
 
     public void Update(AppSettings settings, IReadOnlyDictionary<UsageProviderKind, UsageSnapshot> selectedWidgets)
     {
         if (selectedWidgets.Count == 0) { Clear(); return; }
+        _settings = settings;
+        _selected = new(selectedWidgets);
+        SyncViews(settings, _selected);
+        _timer.Start();
+        Place();
+    }
+
+    private void SyncViews(AppSettings settings, IReadOnlyDictionary<UsageProviderKind, UsageSnapshot> selectedWidgets)
+    {
         foreach (var kind in _views.Keys.Except(selectedWidgets.Keys).ToArray())
         {
             _views[kind].Close();
@@ -43,20 +60,19 @@ internal sealed class TaskbarWidgetHost : IDisposable
                 _views.Add(kind, view);
                 view.Closed += (_, _) =>
                 {
-                    _views.Remove(kind);
-                    if (_views.Count == 0) _timer.Stop();
+                    if (_views.TryGetValue(kind, out var current) && current == view) _views.Remove(kind);
                 };
                 NonActivatingWindow(new WindowInteropHelper(view).EnsureHandle());
             }
             view.Update([snapshot], settings);
         }
-        _timer.Start();
-        Place();
     }
 
     public void Clear()
     {
         _timer.Stop();
+        _settings = null;
+        _selected.Clear();
         foreach (var view in _views.Values.ToArray()) view.Close();
         _views.Clear();
         _lastLayout = null;
@@ -79,6 +95,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
         if (layout != _lastLayout)
         {
             _lastLayout = layout;
+            _scanFailed = false;
             _free = Rectangle.Empty;
             _nextScan = default;
             _generation++;
@@ -122,29 +139,28 @@ internal sealed class TaskbarWidgetHost : IDisposable
             var target = vertical
                 ? new Rectangle(area.Left + (area.Width - size.Width) / 2, cursor, size.Width, size.Height)
                 : new Rectangle(cursor, area.Top + (area.Height - size.Height) / 2, size.Width, size.Height);
-            Move(view, target);
+            Move(view, target, layout.Taskbar);
             cursor += (vertical ? size.Height : size.Width) + gap;
         }
     }
 
-    private static void Move(TaskbarWidgetWindow view, Rectangle target)
+    private static void Move(TaskbarWidgetWindow view, Rectangle target, IntPtr taskbar)
     {
-        var hwnd = new WindowInteropHelper(view).Handle;
+        // Owned top-level windows stay above their owner's surface when Explorer takes
+        // focus. Changing only our own HWND's owner avoids repeatedly raising it.
+        var interop = new WindowInteropHelper(view);
+        if (interop.Owner != taskbar) interop.Owner = taskbar;
+        var hwnd = interop.Handle;
         bool show = !view.IsVisible;
-        if (!show && Bounds(hwnd) == target)
-        {
-            // Explorer can raise its topmost taskbar when the user interacts with it.
-            // Only reclaim our position if the taskbar itself now covers this tile.
-            var center = new Point(target.Left + target.Width / 2, target.Top + target.Height / 2);
-            var coveringWindow = GetAncestor(WindowFromPoint(center), 2);
-            if (coveringWindow == hwnd || coveringWindow != FindWindow("Shell_TrayWnd", null)) return;
-        }
-        const uint noActivate = 0x0010;
-        SetWindowPos(hwnd, new IntPtr(-1), target.X, target.Y, target.Width, target.Height, noActivate);
+        if (!show && Bounds(hwnd) == target) return;
+
+        const uint keepZOrderAndFocus = 0x0004 | 0x0010;
+        SetWindowPos(hwnd, IntPtr.Zero, target.X, target.Y, target.Width, target.Height, keepZOrderAndFocus);
         if (show)
         {
             view.Show();
-            SetWindowPos(hwnd, new IntPtr(-1), target.X, target.Y, target.Width, target.Height, noActivate);
+            if (Bounds(hwnd) != target)
+                SetWindowPos(hwnd, IntPtr.Zero, target.X, target.Y, target.Width, target.Height, keepZOrderAndFocus);
         }
     }
 
@@ -188,6 +204,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
         {
             // UI Automation can cross process boundaries. The dashboard must not wait for Explorer.
             var area = await Task.Run(() => ReadFreeArea(layout));
+            if (_generation == generation) _scanFailed = false;
             if (_generation == generation && _views.Count > 0 && area != _free)
             {
                 _free = area;
@@ -195,7 +212,15 @@ internal sealed class TaskbarWidgetHost : IDisposable
             }
         }
         catch (Exception e) when (e is COMException or ElementNotAvailableException or InvalidOperationException or UnauthorizedAccessException)
-        { if (_generation == generation) _free = Rectangle.Empty; }
+        {
+            if (_generation == generation)
+            {
+                // A single stale UIA element during a shell focus change is common.
+                // If Explorer remains unreadable on the next scan, stop using its gap.
+                if (_scanFailed) _free = Rectangle.Empty;
+                _scanFailed = true;
+            }
+        }
         finally { _scanning = false; _nextScan = DateTime.UtcNow.AddSeconds(2); }
     }
 
@@ -220,6 +245,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
         var available = modern ? layout.Bar : Rectangle.Intersect(Bounds(list), layout.Bar);
         var root = AutomationElement.FromHandle(modern ? layout.Taskbar : list);
         var cached = new CacheRequest();
+        cached.Add(AutomationElement.ProcessIdProperty);
         cached.Add(AutomationElement.BoundingRectangleProperty);
         cached.Add(AutomationElement.ControlTypeProperty);
         cached.Add(AutomationElement.ClassNameProperty);
@@ -247,6 +273,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
         bool found = false;
         foreach (AutomationElement node in nodes)
         {
+            if (node.Cached.ProcessId == Environment.ProcessId) continue;
             var control = node.Cached.ControlType;
             var className = node.Cached.ClassName;
             // Layout containers can cover the entire modern taskbar; only their content
@@ -288,8 +315,6 @@ internal sealed class TaskbarWidgetHost : IDisposable
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder name, int count);
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] private static extern IntPtr WindowFromPoint(Point point);
-    [DllImport("user32.dll")] private static extern IntPtr GetAncestor(IntPtr hwnd, uint flags);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);

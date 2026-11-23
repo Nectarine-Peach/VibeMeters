@@ -42,9 +42,9 @@ sealed class RegressionSuite
         {
             var s = new UsageSnapshot(UsageProviderKind.Claude, UsageStatus.Ready,
                 [new("5시간", 60, null), new("주간", 38, null)], Now);
-            Equal("5H 40% / W 62%", TaskbarProviderPresentation.Title(s, UsageDisplayMode.Remaining));
-            Equal("5H 60% / W 38%", TaskbarProviderPresentation.Title(s, UsageDisplayMode.Used));
-            Equal("5H 40% / W 62% +2", TaskbarProviderPresentation.Title(s with
+            Equal("5H40%/W62%", TaskbarProviderPresentation.Title(s, UsageDisplayMode.Remaining));
+            Equal("5H60%/W38%", TaskbarProviderPresentation.Title(s, UsageDisplayMode.Used));
+            Equal("5H40%/W62% +2", TaskbarProviderPresentation.Title(s with
                 { Windows = [..s.Windows, new("sonnet 주간", 15, null), new("월 추가 사용", 5, null)] }, UsageDisplayMode.Remaining));
             Equal("W 62%", TaskbarProviderPresentation.Title(s with { Provider = UsageProviderKind.Codex, Windows = [s.Windows[1]] }, UsageDisplayMode.Remaining));
             Equal("—", TaskbarProviderPresentation.Title(s with { Status = UsageStatus.RateLimited }, UsageDisplayMode.Remaining));
@@ -59,9 +59,9 @@ sealed class RegressionSuite
                 string Display(UsageProviderKind provider, params UsageWindow[] windows) =>
                     TaskbarProviderPresentation.Title(new(provider, UsageStatus.Ready, windows, Now), UsageDisplayMode.Used);
                 Equal("Individual 48%", Display(UsageProviderKind.Codex, new UsageWindow("개인 한도", 48, null)));
-                Equal("sonnet W 40% / Extra M 25%", Display(UsageProviderKind.Claude, new("sonnet 주간", 40, null), new("월 추가 사용", 25, null)));
-                Equal("Build W 41% / Shared M 32%", Display(UsageProviderKind.Grok, new("Build 주간", 41, null), new("공유 월간", 32, null)));
-                Equal("3.1-pro 8% / 4 Argon W 20%", Display(UsageProviderKind.Gemini, new("3.1-pro", 8, null), new("4 Argon 주간", 20, null)));
+                Equal("sonnet W 40%/Extra M 25%", Display(UsageProviderKind.Claude, new("sonnet 주간", 40, null), new("월 추가 사용", 25, null)));
+                Equal("Build W 41%/Shared M 32%", Display(UsageProviderKind.Grok, new("Build 주간", 41, null), new("공유 월간", 32, null)));
+                Equal("3.1-pro 8%/4 Argon W 20%", Display(UsageProviderKind.Gemini, new("3.1-pro", 8, null), new("4 Argon 주간", 20, null)));
             }
             finally { Localizer.SetLanguage(previous); }
         });

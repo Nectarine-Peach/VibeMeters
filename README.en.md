@@ -38,7 +38,7 @@ Codex Business uses the supplied `spend_control.individual_limit` and Claude Ent
 
 The current source build shows a countdown beside each quota. It continues to update in manual refresh mode. Hover over a countdown to see the local reset date and time.
 
-Choose **Settings → Taskbar buttons → One per service** for separate buttons with a provider icon and compact quota labels. For example, Codex can show `W 61%` and Claude can show `5H 40% / W 62%`. The labels use the windows your account reports and your choice of remaining or used percentages. Set Windows’ **Combine taskbar buttons and hide labels** to **Never** to see the numbers. Click a button to open the detailed window.
+Choose **Settings → Taskbar buttons → One per service** for separate buttons with a provider icon and compact quota labels. For example, Codex can show `W 61%` and Claude can show `5H40%/W62%`. The labels use the windows your account reports and your choice of remaining or used percentages. Set Windows’ **Combine taskbar buttons and hide labels** to **Never** to see the numbers. Click a button to open the detailed window.
 
 Choose **One combined button** to keep the summaries together. For numeric icons beside the clock, enable **Show per-service numbers in the notification area** and drag the icons out of the overflow menu.
 

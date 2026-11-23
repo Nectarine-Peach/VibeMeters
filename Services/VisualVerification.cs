@@ -344,7 +344,7 @@ internal sealed class VisualVerification
             var codex = initial.FirstOrDefault(w => Equals(w.Tag, UsageProviderKind.Codex));
             if (codex == null || claude == null) return;
             Check("native taskbar titles and window icons expose each selected service's quota",
-                NativeTitle(codex) == "W 61%" && NativeTitle(claude) == "5H 100% / W 55%" &&
+                NativeTitle(codex) == "W 61%" && NativeTitle(claude) == "5H100%/W55%" &&
                 codex.TaskbarItemInfo.Description.Contains("Codex") && claude.TaskbarItemInfo.Description.Contains("Claude") &&
                 !ReferenceEquals(codex.Icon, claude.Icon) &&
                 initial.All(w => w.Icon != null && SendMessageW(Handle(w), 0x007f /* WM_GETICON */, 1 /* ICON_BIG */, 0) != 0));

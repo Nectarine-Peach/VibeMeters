@@ -17,9 +17,11 @@ internal static class TaskbarProviderPresentation
         var labels = windows.Take(2).Select(window =>
         {
             var percent = mode == UsageDisplayMode.Used ? Math.Clamp(window.UsedPercent, 0, 100) : window.RemainingPercent;
-            return $"{WindowName(window.Name)} {percent.ToString("0", CultureInfo.InvariantCulture)}%";
+            var name = WindowName(window.Name);
+            var gap = windows.Length > 1 && name is "5H" or "W" or "D" or "M" ? "" : " ";
+            return $"{name}{gap}{percent.ToString("0", CultureInfo.InvariantCulture)}%";
         });
-        string title = string.Join(" / ", labels);
+        string title = string.Join("/", labels);
         return windows.Length <= 2 ? title : $"{title} +{windows.Length - 2}";
     }
 

@@ -58,14 +58,25 @@
     <Button x:Name="ProviderButton" Click="OpenMain_Click" ToolTipOpening="RefreshToolTip"
             ToolTipService.ShowDuration="30000">
         <Viewbox StretchDirection="DownOnly">
-            <DockPanel x:Name="Card" Margin="0">
-                <StackPanel x:Name="Brand" VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <Image x:Name="Logo" Width="19" Height="19" RenderOptions.BitmapScalingMode="HighQuality"/>
-                    <TextBlock x:Name="Overflow" TextAlignment="Center" FontSize="9"
-                               Foreground="{DynamicResource SecondaryText}" Visibility="Collapsed"/>
-                </StackPanel>
-                <StackPanel x:Name="QuotaRows" VerticalAlignment="Center"/>
-            </DockPanel>
+            <Border x:Name="ContentFrame">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition x:Name="BrandColumn"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition x:Name="BrandRow"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid x:Name="Brand">
+                        <Image x:Name="Logo" Width="19" Height="19" HorizontalAlignment="Center"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                        <TextBlock x:Name="Overflow" FontSize="9" TextAlignment="Center"
+                                   Foreground="{DynamicResource SecondaryText}" Visibility="Collapsed"/>
+                    </Grid>
+                    <StackPanel x:Name="QuotaRows" Grid.Row="1" Grid.Column="1" VerticalAlignment="Center"/>
+                </Grid>
+            </Border>
         </Viewbox>
     </Button>
 </Window>

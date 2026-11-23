@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Media;
 using VibeMeters.Models;
@@ -104,6 +105,12 @@ public partial class TaskbarWidgetWindow : Window
         Height = Math.Min(_maxHeight, tileHeight);
         AutomationProperties.SetName(ProviderButton, $"{snapshot.Provider} · {basis}");
         UpdateToolTip(snapshot, basis);
+    }
+
+    internal void SetToolTipPlacement(PlacementMode side)
+    {
+        _quotaTip.PlacementTarget = ProviderButton;
+        _quotaTip.Placement = side;
     }
 
     private void RefreshLogo()

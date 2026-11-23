@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Automation;
+using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using VibeMeters.Models;
@@ -119,6 +120,10 @@ internal sealed class TaskbarWidgetHost : IDisposable
                 if (view.IsVisible) view.Hide();
                 continue;
             }
+            var placement = vertical
+                ? (layout.Bar.Left + layout.Bar.Width / 2 < layout.Monitor.Left + layout.Monitor.Width / 2 ? PlacementMode.Right : PlacementMode.Left)
+                : (layout.Bar.Top + layout.Bar.Height / 2 < layout.Monitor.Top + layout.Monitor.Height / 2 ? PlacementMode.Bottom : PlacementMode.Top);
+            view.SetToolTipPlacement(placement);
             view.RefreshCountdowns(now);
             view.SetLayout(vertical, widthBudget, area.Height / scale);
             var size = new Size(Math.Min(area.Width, (int)Math.Ceiling(view.Width * scale)),

@@ -11,6 +11,7 @@ namespace VibeMeters;
 
 public partial class TaskbarWidgetWindow : Window
 {
+    internal const double MinimumReadableWidth = 138;
     private readonly Action _openMain;
     private readonly List<(TextBlock Label, DateTimeOffset? Deadline)> _countdowns = [];
     private UsageSnapshot? _snapshot;
@@ -67,10 +68,9 @@ public partial class TaskbarWidgetWindow : Window
         var visible = windows;
         // Size the tile from the host's available space. Every provider shares the same
         // frame and columns, even when a lookup fails or the number of windows changes.
-        double tileWidth = Math.Clamp(_maxWidth, 96, 176);
-        bool stacked = tileWidth < 124;
-        bool compact = tileWidth < 150;
-        double rowHeight = compact ? 21 : 15;
+        double tileWidth = Math.Clamp(_maxWidth, MinimumReadableWidth, 176);
+        bool stacked = tileWidth < 150;
+        const double rowHeight = 15;
         double tileHeight = (stacked ? 26 : 6) + Math.Max(stacked ? 0 : 19, Math.Max(1, visible.Length) * rowHeight);
         ContentFrame.Width = tileWidth - 2;
         ContentFrame.Height = tileHeight - 2;
@@ -85,7 +85,7 @@ public partial class TaskbarWidgetWindow : Window
         Logo.Margin = new Thickness(0);
         for (int i = 0; i < visible.Length; i++)
         {
-            var row = QuotaRow(snapshot.Provider, visible[i], compact);
+            var row = QuotaRow(snapshot.Provider, visible[i]);
             AutomationProperties.SetAutomationId(row, $"WidgetQuota{i}");
             QuotaRows.Children.Add(row);
         }
@@ -103,20 +103,13 @@ public partial class TaskbarWidgetWindow : Window
         ProviderButton.ToolTip = new ToolTip { Content = new TextBlock { Text = details, TextWrapping = TextWrapping.Wrap } };
     }
 
-    private Grid QuotaRow(UsageProviderKind kind, UsageWindow window, bool compact)
+    private Grid QuotaRow(UsageProviderKind kind, UsageWindow window)
     {
-        var row = new Grid { Height = compact ? 21 : 15 };
-        if (!compact)
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+        var row = new Grid { Height = 15 };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
         row.ColumnDefinitions.Add(new ColumnDefinition());
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(29) });
-        if (compact)
-        {
-            row.RowDefinitions.Add(new RowDefinition());
-            row.RowDefinitions.Add(new RowDefinition { Height = new GridLength(5) });
-        }
-
         var label = TaskbarProviderPresentation.WindowName(window.Name);
         if (label == "5H") label = "H";
         if (kind == UsageProviderKind.Gemini && label.Contains("Argon", StringComparison.OrdinalIgnoreCase)) label = "Argon";
@@ -125,16 +118,15 @@ public partial class TaskbarWidgetWindow : Window
         row.Children.Add(name);
         double amount = _mode == UsageDisplayMode.Used ? Math.Clamp(window.UsedPercent, 0, 100) : window.RemainingPercent;
         var meter = new ProgressBar { Minimum = 0, Maximum = 100, Value = amount, VerticalAlignment = VerticalAlignment.Center,
-            Margin = compact ? new Thickness(0,0,0,1) : new Thickness(2,0,3,0) };
+            Margin = new Thickness(2,0,3,0) };
         meter.SetResourceReference(ProgressBar.ForegroundProperty, window.RemainingPercent <= 10 ? "CriticalText" : kind + "Accent");
-        if (compact) { Grid.SetRow(meter,1); Grid.SetColumnSpan(meter,3); }
-        else Grid.SetColumn(meter,1);
+        Grid.SetColumn(meter,1);
         row.Children.Add(meter);
         var value = new TextBlock { Text = $"{amount.ToString("0", CultureInfo.InvariantCulture)}%", FontSize = 10.5,
             FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         value.SetResourceReference(TextBlock.ForegroundProperty, window.RemainingPercent <= 10 ? "CriticalText" : "PrimaryText");
         Typography.SetNumeralAlignment(value, FontNumeralAlignment.Tabular);
-        Grid.SetColumn(value, compact ? 1 : 2);
+        Grid.SetColumn(value, 2);
         row.Children.Add(value);
         var reset = new TextBlock { FontSize = 9.5, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
             Text = UsageResetText.Compact(window.ResetsAt, DateTimeOffset.Now) };
@@ -142,7 +134,7 @@ public partial class TaskbarWidgetWindow : Window
         Typography.SetNumeralAlignment(reset, FontNumeralAlignment.Tabular);
         AutomationProperties.SetAutomationId(reset, "WidgetReset");
         AutomationProperties.SetName(reset, UsageResetText.Countdown(window.ResetsAt, DateTimeOffset.Now));
-        Grid.SetColumn(reset, compact ? 2 : 3);
+        Grid.SetColumn(reset, 3);
         row.Children.Add(reset);
         _countdowns.Add((reset, window.ResetsAt));
         return row;

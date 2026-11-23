@@ -2,7 +2,7 @@
 
 Release 구성·.NET self-contained·단일 .NET EXE는 유지합니다. Gemini는 공식 core 0.65.0의 인증·프로젝트 탐지·할당량 코드를 그대로 사용하되, esbuild 0.25.12로 필요한 모듈 그래프를 하나의 `quota.mjs`에 묶습니다. 기존 v1.4.3과 같은 Node 24.22.0 Windows x64를 동봉하므로 사용자 PC의 Node/npm은 필요하지 않습니다. 앱 설정·CLI 인증 위치와 로그인 동작은 바꾸지 않습니다.
 
-`scripts/publish.ps1`은 잠금 파일을 매번 복원하고 새 출력 경로만 사용합니다. 빌드용 node_modules는 배포 폴더로 복사하지 않습니다. Node 버전이 다르거나 출력 경로가 이미 있으면 실패하며 `-Node`와 `-OutputDirectory`로 경로를 지정할 수 있습니다. Node를 갱신할 때는 package.json의 고정 버전과 실제 빌드 Node를 함께 갱신하고 오프라인 검증을 다시 수행하세요.
+`scripts/publish.ps1`은 잠금 파일을 매번 복원하고 임시 폴더에서 빌드합니다. 저장소의 `dist`에서는 새 패키지가 완성되면 이전 배포 폴더·ZIP·번들 메타데이터와 빌드 임시 폴더를 정리합니다. 빌드에 실패하면 직전 배포본을 유지합니다. 빌드용 node_modules는 ZIP에서 제외합니다. `-Node`로 고정 버전의 Node 실행 파일을, `-OutputDirectory`로 출력 위치를 지정할 수 있습니다.
 
 npm은 PATH의 설치 도구를 사용하며 npm 자체의 버전은 고정하지 않습니다. 번들링·오프라인 검사·배포에는 `-Node`로 선택한 고정 버전을 사용합니다. npm lifecycle scripts는 실행하지 않으며 의존성 그래프는 package-lock.json으로 고정합니다.
 

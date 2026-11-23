@@ -152,7 +152,7 @@ sealed class RegressionSuite
             Equal("개인 한도", s.Windows[0].Name); Equal(48d, s.Windows[0].RemainingPercent); Equal(52d, s.Windows[0].UsedPercent);
             Equal(DateTimeOffset.FromUnixTimeSeconds(1793491200), s.Windows[0].ResetsAt); Equal<TimeSpan?>(null, s.Windows[0].Duration);
             var window = typeof(LoginService).Assembly.GetType("VibeMeters.MainWindow", true)!;
-            Equal("개인", (string)window.GetMethod("ShortQuotaName", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [s.Windows[0].Name])!);
+            Equal("개인", (string)window.GetMethod("ShortQuotaName", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [UsageProviderKind.Codex, s.Windows[0].Name])!);
         });
         Test("Codex individual remaining percentage wins over used percentage", () =>
         {

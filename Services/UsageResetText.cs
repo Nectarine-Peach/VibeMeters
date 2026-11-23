@@ -21,7 +21,6 @@ public static class UsageResetText
         if (remaining <= TimeSpan.Zero) return "0:00";
         long minutes = (remaining.Ticks - 1) / TimeSpan.TicksPerMinute + 1;
         return remaining.TotalDays > 1 ? $"{remaining.Days}d"
-            : remaining.TotalHours > 5 ? $"{(int)remaining.TotalHours}h"
             : $"{minutes / 60}:{minutes % 60:00}";
     }
 }

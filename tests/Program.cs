@@ -86,8 +86,8 @@ sealed class RegressionSuite
                 Equal("Reset 1:05", UsageResetText.Countdown(Now.AddMinutes(65).ToOffset(TimeSpan.FromHours(9)), Now));
                 Equal("Reset 5:00", UsageResetText.Countdown(Now.AddHours(5), Now));
                 Equal("Reset 4:31", UsageResetText.Countdown(Now.AddMinutes(271), Now));
-                Equal("Reset 5h", UsageResetText.Countdown(Now.AddHours(5).AddSeconds(1), Now));
-                Equal("Reset 24h", UsageResetText.Countdown(Now.AddDays(1), Now));
+                Equal("Reset 5:01", UsageResetText.Countdown(Now.AddHours(5).AddSeconds(1), Now));
+                Equal("Reset 24:00", UsageResetText.Countdown(Now.AddDays(1), Now));
                 Equal("Reset 1d", UsageResetText.Countdown(Now.AddDays(1).AddSeconds(1), Now));
                 Equal("Reset 1d", UsageResetText.Countdown(Now.AddHours(26), Now));
                 Localizer.SetLanguage(AppLanguage.Korean);

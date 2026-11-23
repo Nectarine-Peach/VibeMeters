@@ -430,6 +430,7 @@ internal sealed class VisualVerification
                         IsTwoLine(Tile(previews[0]), "73%", "61%") && IsTwoLine(Tile(previews[1]), "100%", "55%") &&
                         previews.All(w => TextFits(Root(w), Root(w))));
                     CaptureWidgetPreview(previews, filename);
+                    await CheckWidgetTooltipAsync(previews[1], claude, theme);
                 }
                 var narrow = previews[1];
                 narrow.Update([claude with { Windows = [.. claude.Windows, new("Opus 주간", 60, null)] }], _settings);
@@ -456,6 +457,78 @@ internal sealed class VisualVerification
             _render(claude);
             if (!_window.IsVisible) _restoreWindow();
         }
+    }
+
+    private async Task CheckWidgetTooltipAsync(TaskbarWidgetWindow widget, UsageSnapshot sample, AppTheme theme)
+    {
+        var now = DateTimeOffset.Now;
+        const string model = "Claude Sonnet weekly quota";
+        var ready = sample with { Plan = "Enterprise", Message = null, CheckedAt = now, ObservedAt = now,
+            Windows = [new(model, 41, now.AddMinutes(271)), new("Opus", 72, null)] };
+        var button = (Button)widget.FindName("ProviderButton");
+        foreach (var snapshot in new[] { ready, ready with { Status = UsageStatus.RateLimited,
+            WaitReason = UsageWaitReason.RateLimited, NextQueryAt = now.AddMinutes(10), Message = "Retry after 10 minutes" } })
+        {
+            widget.Update([snapshot], _settings);
+            var tip = (ToolTip)button.ToolTip;
+            tip.PlacementTarget = button;
+            tip.Placement = PlacementMode.Top;
+            tip.IsOpen = true;
+            try
+            {
+                await StableAsync(widget);
+                tip.UpdateLayout();
+                var texts = Descendants<TextBlock>(tip).Where(t => t.IsVisible).ToArray();
+                var details = AutomationProperties.GetHelpText(button);
+                bool Contains(string text) => texts.Any(t => t.Text.Contains(text, StringComparison.Ordinal));
+                Check(theme + " opens a rendered widget tooltip inside its popup",
+                    PresentationSource.FromVisual(tip) != null && tip.ActualWidth > 0 && tip.ActualHeight > 0 && TextFits(tip, tip));
+                var background = ((SolidColorBrush)tip.Background).Color;
+                Check(theme + " tooltip uses the active surface and legible foreground colors",
+                    background == ((SolidColorBrush)Application.Current.FindResource("SurfaceBackground")).Color &&
+                    texts.All(t => t.Foreground is SolidColorBrush brush && ContrastRatio(background, brush.Color) >= 4.5));
+                if (snapshot.Status == UsageStatus.Ready)
+                {
+                    var deadline = ready.Windows[0].ResetsAt!.Value.ToLocalTime().ToString("g", Localizer.Culture);
+                    Check(theme + " tooltip shows full names, percentages, reset countdown and local date",
+                        Contains(model) && Contains("Opus") && Contains("59%") && Contains("28%") && Contains("4:31") &&
+                        Contains(deadline) && details.Contains(model) && details.Contains("59%") && details.Contains(deadline));
+                    Check(theme + " tooltip lays out quota names on separate readable rows",
+                        texts.Any(t => t.Text == model && t.FontSize >= 11) && texts.Any(t => t.Text == "Opus" && t.FontSize >= 11) &&
+                        Bounds(texts.First(t => t.Text == model), tip).Bottom <= Bounds(texts.First(t => t.Text == "Opus"), tip).Top);
+                    CaptureTooltip(tip, theme == AppTheme.Dark ? "widget-tooltip-dark-ko.png" : "widget-tooltip-light-en.png");
+                }
+                else
+                {
+                    var status = Localizer.T("요청 제한 대기");
+                    Check(theme + " rate-limited tooltip explains the status without drawing stale quota rows",
+                        Contains(status) && Contains(snapshot.Message!) && details.Contains(status) && !Contains("59%") && !Contains(model));
+                }
+            }
+            finally { tip.IsOpen = false; }
+        }
+        widget.Update([sample], _settings);
+    }
+
+    private static double ContrastRatio(Color a, Color b)
+    {
+        static double Luminance(Color color) => 0.2126 * color.ScR + 0.7152 * color.ScG + 0.0722 * color.ScB;
+        var first = Luminance(a);
+        var second = Luminance(b);
+        return (Math.Max(first, second) + 0.05) / (Math.Min(first, second) + 0.05);
+    }
+
+    private void CaptureTooltip(ToolTip tip, string filename)
+    {
+        var dpi = VisualTreeHelper.GetDpi(tip);
+        var bitmap = new RenderTargetBitmap((int)Math.Ceiling(tip.ActualWidth * dpi.DpiScaleX),
+            (int)Math.Ceiling(tip.ActualHeight * dpi.DpiScaleY), dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+        bitmap.Render(tip);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var file = File.Create(Path.Combine(_output, filename));
+        encoder.Save(file);
+        _report.Add($"CAPTURE: {filename} · opened widget tooltip with synthetic quota data · {bitmap.PixelWidth}×{bitmap.PixelHeight} px");
     }
 
     private static (int Extent, bool ClearCorners, double Brightness) MeasureWidgetIcon(Window widget)

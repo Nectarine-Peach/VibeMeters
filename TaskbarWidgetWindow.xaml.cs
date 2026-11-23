@@ -70,16 +70,16 @@ public partial class TaskbarWidgetWindow : Window
         // frame and columns, even when a lookup fails or the number of windows changes.
         double tileWidth = Math.Clamp(_maxWidth, MinimumReadableWidth, 176);
         bool compact = tileWidth < 150;
-        double tileHeight = 6 + Math.Max(19, Math.Max(1, visible.Length) * 15);
+        double tileHeight = 4 + Math.Max(17, Math.Max(1, visible.Length) * 14);
         ContentFrame.Width = tileWidth - 2;
         ContentFrame.Height = tileHeight - 2;
-        ContentFrame.Padding = new Thickness(compact ? 2 : 5, 2, compact ? 2 : 5, 2);
-        BrandColumn.Width = new GridLength(compact ? 15 : 22);
+        ContentFrame.Padding = new Thickness(compact ? 2 : 3, 1, compact ? 2 : 3, 1);
+        BrandColumn.Width = new GridLength(compact ? 15 : 18);
         BrandRow.Height = new GridLength(0);
         Grid.SetColumn(Brand, 0);
         Grid.SetRow(Brand, 1);
-        QuotaRows.Margin = new Thickness(compact ? 2 : 5, 0, 0, 0);
-        Logo.Width = Logo.Height = compact ? 15 : 19;
+        QuotaRows.Margin = new Thickness(compact ? 1 : 2, 0, 0, 0);
+        Logo.Width = Logo.Height = compact ? 15 : 17;
         Logo.VerticalAlignment = VerticalAlignment.Center;
         Logo.Margin = new Thickness(0);
         for (int i = 0; i < visible.Length; i++)
@@ -104,7 +104,7 @@ public partial class TaskbarWidgetWindow : Window
 
     private Grid QuotaRow(UsageProviderKind kind, UsageWindow window)
     {
-        var row = new Grid { Height = 15 };
+        var row = new Grid { Height = 14 };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
         row.ColumnDefinitions.Add(new ColumnDefinition());
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
@@ -117,7 +117,7 @@ public partial class TaskbarWidgetWindow : Window
         row.Children.Add(name);
         double amount = _mode == UsageDisplayMode.Used ? Math.Clamp(window.UsedPercent, 0, 100) : window.RemainingPercent;
         var meter = new ProgressBar { Minimum = 0, Maximum = 100, Value = amount, VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(2,0,3,0) };
+            Margin = new Thickness(1,0,2,0) };
         meter.SetResourceReference(ProgressBar.ForegroundProperty, window.RemainingPercent <= 10 ? "CriticalText" : kind + "Accent");
         Grid.SetColumn(meter,1);
         row.Children.Add(meter);

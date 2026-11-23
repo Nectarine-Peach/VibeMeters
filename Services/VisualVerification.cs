@@ -500,6 +500,7 @@ internal sealed class VisualVerification
                 var rightAligned = true;
                 var logoPrecedesRows = true;
                 var readable = true;
+                var titlesFaceGraph = true;
                 for (var i = 0; i < views.Length - 1; i++)
                 {
                     var rows = Descendants<Grid>(roots[i]).Where(row => AutomationProperties.GetAutomationId(row).StartsWith("WidgetQuota", StringComparison.Ordinal));
@@ -516,14 +517,17 @@ internal sealed class VisualVerification
                             var bounds = Bounds(text, roots[i]);
                             readable &= text.ActualHeight > 0 && text.FontSize * bounds.Height / text.ActualHeight >= 9;
                         }
+                        titlesFaceGraph &= name.TextAlignment == TextAlignment.Right;
                         labels.Add(Bounds(name, roots[i]));
                         var gutter = labels[^1].Left - logos[i].Right;
-                        logoPrecedesRows &= gutter >= 3 && gutter <= 6;
+                        logoPrecedesRows &= gutter >= 5 && gutter <= 8;
                         meters.Add(Bounds(row.Children.OfType<ProgressBar>().Single(), roots[i]));
                         percentages.Add(Bounds(value, roots[i]));
                     }
                 }
                 Check(layout + " leaves a small gap between the left logo and every quota row", logoPrecedesRows);
+                Check(layout + " keeps the graph close to its quota title", titlesFaceGraph && Enumerable.Range(0, labels.Count).All(i =>
+                    meters[i].Left - labels[i].Left <= 21 && meters[i].Left - labels[i].Right is >= -1 and <= 3));
                 Check(layout + " aligns label origins, meter tracks and percentage right edges across providers",
                     labels.Count == 6 && rightAligned && EqualCoordinates(labels.Select(r => r.Left)) &&
                     EqualCoordinates(meters.Select(r => r.Left)) && EqualCoordinates(meters.Select(r => r.Right)) &&

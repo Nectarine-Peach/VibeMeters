@@ -165,8 +165,9 @@ internal sealed class VisualVerification
         Check("pin control enables always on top",_window.Topmost&&_settings.AlwaysOnTop);
         Click((Button)_window.FindName("PinButton"));
         Check("pin control disables always on top",!_window.Topmost&&!_settings.AlwaysOnTop);
-        Check("taskbar label and meter use the tightest visible limit",
-            _window.Title.Contains("Claude") && _window.Title.Contains("55%") &&
+        Check("taskbar title shows each selected provider and progress tracks the tightest limit",
+            _window.Title.Contains("Codex 61% 남음") && _window.Title.Contains("Claude 55% 남음") &&
+            !_window.Title.Contains("Gemini") && !_window.Title.Contains("Grok") &&
             _window.TaskbarItemInfo is { ProgressState: System.Windows.Shell.TaskbarItemProgressState.Normal } quota &&
             Math.Abs(quota.ProgressValue - .45) < .001 && quota.Description.Contains("Codex") &&
             quota.Description.Contains("초기화") && !quota.Description.Contains("Gemini"));
@@ -177,12 +178,34 @@ internal sealed class VisualVerification
         Check("taskbar warns at 5% remaining",_window.TaskbarItemInfo.ProgressState == System.Windows.Shell.TaskbarItemProgressState.Error);
         _render(claude with { Status = UsageStatus.RateLimited });
         Check("taskbar excludes retained quotas from failed lookups",
-            !_window.Title.Contains("Claude") && _window.TaskbarItemInfo.Description.Contains("Claude · 확인 필요"));
+            _window.Title.Contains("Claude —") && !_window.Title.Contains("55%") &&
+            _window.Title.Contains("Codex 61% 남음") && Math.Abs(_window.TaskbarItemInfo.ProgressValue - .39) < .001 &&
+            _window.TaskbarItemInfo.Description.Contains("Claude · 확인 필요"));
         _render(claude);
+        _settings.ClaudeDisplayMode=UsageDisplayMode.Used;
+        _settings.ShowGemini=true;_settings.ShowGrok=true;
+        _settings.Language=AppLanguage.English;
+        _applySettings();
+        Check("taskbar title shows four independent percentages in the selected language and display modes",
+            new[]{"Codex 61% Left","Claude 45% Used","Gemini 83% Left","Grok 68% Left"}.All(_window.Title.Contains));
+        _settings.ShowClaude=false;_settings.ShowGrok=false;
+        _applySettings();
+        Check("hiding providers removes their text and recalculates the tightest displayed quota",
+            !_window.Title.Contains("Claude") && !_window.Title.Contains("Grok") &&
+            !_window.TaskbarItemInfo.Description.Contains("Claude") && !_window.TaskbarItemInfo.Description.Contains("Grok") &&
+            _window.Title.Contains("Codex 61% Left") && _window.Title.Contains("Gemini 83% Left") &&
+            Math.Abs(_window.TaskbarItemInfo.ProgressValue - .39) < .001);
+        _settings.ShowCodex=false;_settings.ShowGemini=false;
+        _applySettings();
+        Check("hiding all providers clears taskbar percentages and progress",_window.Title == "VibeMeters" &&
+            _window.TaskbarItemInfo is { ProgressState: System.Windows.Shell.TaskbarItemProgressState.None, ProgressValue: 0 });
+        _settings.ShowCodex=true;_settings.ShowClaude=true;
+        _settings.ClaudeDisplayMode=UsageDisplayMode.Remaining;_settings.Language=AppLanguage.Korean;
         _settings.ShowInTaskbar=false;_applySettings();
         Check("taskbar preference disabled",!_window.ShowInTaskbar && _window.TaskbarItemInfo == null && _window.Title == "VibeMeters");
         _settings.ShowInTaskbar=true;_applySettings();
-        Check("taskbar preference restored",_window.ShowInTaskbar);
+        Check("taskbar preference restores both selected percentages",_window.ShowInTaskbar &&
+            _window.Title.Contains("Codex 61% 남음") && _window.Title.Contains("Claude 55% 남음"));
         _window.WindowState=WindowState.Minimized;
         await StableAsync(_window);
         Check("taskbar minimize retains shown window",_window.WindowState==WindowState.Minimized&&_window.IsVisible);

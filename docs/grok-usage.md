@@ -2,9 +2,15 @@
 
 VibeMeters는 설치된 공식 **Grok Build CLI**로 구독 사용 비율과 초기화 시각을 읽습니다. 브라우저 확장, Native Messaging 등록, 브라우저 프로필 변경은 필요하지 않습니다. API 비용·추가 사용 금액·로컬 토큰 사용 통계는 표시하지 않습니다.
 
-설정에서 Grok 표시를 켜고 **Grok 로그인**을 선택하면 공식 `grok login --oauth`를 실행합니다. 필요한 브라우저 로그인은 사용자가 직접 완료합니다. CLI에서 직접 `grok login --oauth` 또는 `grok login --device-auth`를 실행해도 됩니다. 이 PC의 기존 Grok Build 1.0.40을 재사용하며 새로 설치하거나 업데이트하지 않았습니다.
+## 계정 연결
+
+설정에서 Grok 표시를 켜고 **Grok 로그인**을 선택하면 공식 `grok login --oauth`를 실행합니다. 필요한 브라우저 로그인은 사용자가 직접 완료합니다. CLI에서 직접 `grok login --oauth` 또는 `grok login --device-auth`를 실행해도 됩니다. 로그인 후 사용량 창에서 **F5**를 누르세요.
+
+## 공유 한도와 Build 한도
 
 한도 범위는 공식 응답을 그대로 따릅니다. `isUnifiedBillingUser=true`이면 **공유 주간/월간** 등으로 표시합니다. false이거나 제공되지 않으면 **Build 주간/월간/한도**로 표시하며 Grok 웹 전체 한도라고 간주하지 않습니다. 별도 Grok Bot 한도는 이 응답에서 제공하지 않으므로 행을 만들지 않습니다. 비율·초기화 시각·기간이 없으면 금액으로 추정하지 않습니다.
+
+## CLI 조회와 계정 전환
 
 일반 조회는 사용자 홈을 작업 폴더로 숨겨진 `grok agent --no-leader stdio`를 실행하고 ACP `initialize`와 `_x.ai/billing` 두 요청만 전송합니다. `session/new`, `session/prompt`, `authenticate`, 토큰 갱신, 브라우저 로그인은 전송하지 않습니다. 사용자의 기존 leader/모델 세션을 재사용하거나 중단하지 않습니다. 앱은 Grok 인증 파일 내용을 읽지 않으며 공식 CLI가 자체 인증을 관리합니다.
 

@@ -594,7 +594,8 @@ sealed class RegressionSuite
                 credentials.Current = ExpiredClaude();
                 ExpireCache(provider);
                 var failed = await provider.FetchAsync();
-                Equal(outcome == ClaudeRefreshOutcome.AuthenticationRejected ? UsageStatus.AuthenticationRequired : UsageStatus.AuthenticationRetry, failed.Status); Equal(0, failed.Windows.Count);
+                Equal(outcome is ClaudeRefreshOutcome.AuthenticationRejected or ClaudeRefreshOutcome.LoginExpired
+                    ? UsageStatus.AuthenticationRequired : UsageStatus.AuthenticationRetry, failed.Status); Equal(0, failed.Windows.Count);
                 True(!failed.Message!.Contains("이전"));
                 EqualCached(failed, await provider.FetchAsync()); Equal(1, refresher.Calls); Equal(1, handler.Calls);
             });

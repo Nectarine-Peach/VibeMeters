@@ -8,10 +8,11 @@ using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using VibeMeters.Models;
 
 namespace VibeMeters.Services;
 
-public enum ClaudeRefreshOutcome { Completed, CliMissing, CliOutdated, Failed, Pending, TimedOut, AuthenticationRejected }
+public enum ClaudeRefreshOutcome { Completed, CliMissing, CliOutdated, Failed, Pending, TimedOut, AuthenticationRejected, LoginExpired }
 
 public sealed class ClaudeCliResult(int exitCode, string output = "", string error = "")
 {
@@ -106,7 +107,21 @@ public sealed class ClaudeCredentialRefresher : IClaudeCredentialRefresher
 
                 // 2.1.317 fixed status exiting before a slow OAuth refresh was saved.
                 // Run status through the candidate whose version we just verified.
+                var credentials = new CredentialReader(claudeHome: _configDirectory);
+                var before = await credentials.ReadAsync(UsageProviderKind.Claude).ConfigureAwait(false);
                 var status = await runner.RunAsync(["auth", "status"]).ConfigureAwait(false);
+                if (before is not null && status is { ExitCode: 0 } && IsSubscriptionLogin(status.Output, out var loginEnds))
+                {
+                    var after = await credentials.ReadAsync(UsageProviderKind.Claude).ConfigureAwait(false);
+                    if (after is not null && before.AccessToken == after.AccessToken)
+                    {
+                        if (loginEnds <= _clock.UtcNow) return ClaudeRefreshOutcome.LoginExpired;
+                        // auth status can report loggedIn:true without refreshing an expired access
+                        // token. Starting the CLI's built-in /status exercises session renewal.
+                        status = await runner.RunAsync(["-p", "/status", "--max-turns", "0", "--safe-mode", "--strict-mcp-config",
+                            "--no-session-persistence", "--permission-mode", "dontAsk", "--output-format", "json"]).ConfigureAwait(false);
+                    }
+                }
                 var outcome = status is null ? ClaudeRefreshOutcome.CliMissing
                     : IsExplicitRejection(status.Error) ? ClaudeRefreshOutcome.AuthenticationRejected
                     : status.ExitCode == 0 ? ClaudeRefreshOutcome.Completed : ClaudeRefreshOutcome.Failed;
@@ -115,8 +130,27 @@ public sealed class ClaudeCredentialRefresher : IClaudeCredentialRefresher
             }
             return unavailable;
         }
-        catch (Exception ex) when (IsProcessFailure(ex))
+        catch (TimeoutException) { return ClaudeRefreshOutcome.Failed; }
+        catch (Exception ex) when (IsProcessFailure(ex) || ex is JsonException or InvalidDataException)
         { return ClaudeRefreshOutcome.Failed; }
+    }
+
+    private static bool IsSubscriptionLogin(string output, out DateTimeOffset? loginEnds)
+    {
+        loginEnds = null;
+        try
+        {
+            using var document = JsonDocument.Parse(output);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("loggedIn", out var loggedIn) || loggedIn.ValueKind != JsonValueKind.True
+                || !root.TryGetProperty("authMethod", out var method) || method.ValueKind != JsonValueKind.String
+                || method.GetString() != "claude.ai") return false;
+            if (root.TryGetProperty("loginExpiresAt", out var ends) && ends.ValueKind == JsonValueKind.String
+                && ends.TryGetDateTimeOffset(out var date)) loginEnds = date;
+            return true;
+        }
+        catch (JsonException) { return false; }
     }
 
     private static bool IsProcessFailure(Exception ex) => ex is System.ComponentModel.Win32Exception or InvalidOperationException
@@ -158,14 +192,17 @@ public sealed class ClaudeCredentialRefresher : IClaudeCredentialRefresher
         {
             var start = OfficialCliProcess.CreateStartInfoForExecutable(executable, arguments);
             ConfigureEnvironment(start, directory);
+            if (arguments[0] == "-p")
+                start.WorkingDirectory = Directory.CreateDirectory(Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VibeMeters", "ClaudeStatus")).FullName;
             using var process = new Process { StartInfo = start };
             if (!process.Start()) return null;
             process.StandardInput.Close();
 
-            // A broken version probe must not prevent finding a usable CLI. Once status
-            // starts, only the caller's wait is bounded so the CLI can persist its tokens.
-            using var probeTimeout = arguments is ["--version"] ? new CancellationTokenSource(TimeSpan.FromSeconds(3)) : null;
-            var cancellationToken = probeTimeout?.Token ?? CancellationToken.None;
+            // The caller gives up much sooner; allow time for rotation and an atomic file
+            // save, while ensuring a hung process cannot occupy the shared slot forever.
+            using var probeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(arguments is ["--version"] ? 3 : 90));
+            var cancellationToken = probeTimeout.Token;
             var output = DrainAsync(process.StandardOutput, cancellationToken);
             var error = DrainAsync(process.StandardError, cancellationToken);
             try

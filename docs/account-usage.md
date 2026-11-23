@@ -52,11 +52,15 @@ Codex의 `CODEX_HOME/auth.json`과 Claude의 `CLAUDE_CONFIG_DIR/.credentials.jso
 
 만료 2분 이내의 사용량 조회, 만료 또는 HTTP 401 때 설치된 **공식 Claude Code 2.1.317 이상**의 비대화형 `claude auth status`로 갱신을 시도합니다. [2.1.317](https://github.com/anthropics/claude-code/releases/tag/v2.1.317)에는 이 명령이 느린 갱신을 저장하기 전에 종료되어 다음 실행에서 로그아웃되던 문제의 수정이 포함되어 있습니다. 여러 설치가 있으면 첫 설치가 오래됐거나 실행되지 않을 때 다음 후보의 버전을 확인합니다. 이 버전보다 오래된 CLI만 있으면 [공식 업데이트 방법](https://code.claude.com/docs/en/setup#update-claude-code)을 따르세요. npm으로 설치했다면 `npm install -g @anthropic-ai/claude-code@latest`를 사용합니다.
 
+2026-11-23 Windows의 Claude Code 2.1.319에서 개인 Pro의 액세스 토큰이 만료된 뒤에도 `auth status`가 계속 성공을 반환하는 현상을 확인했습니다. 같은 claude.ai 인증이 여전히 저장되어 있으면 앱은 공식 CLI의 내장 `/status` 명령을 한 번 실행합니다. 전용 작업 디렉터리에서 모델 대화 턴을 0으로 제한하고, safe mode를 켜고 세션 기록을 끕니다. 이 PC에서 브라우저 로그인 없이 액세스 토큰이 교체되었고, 내장 명령은 모델 입출력 0토큰과 비용 0을 보고했습니다. CLI에 적용되는 조직 관리 정책은 계속 적용됩니다. [Claude Code 명령](https://code.claude.com/docs/en/commands), [CLI 옵션](https://code.claude.com/docs/en/cli-reference), [CodexBar의 Claude 인증 처리](https://github.com/steipete/CodexBar/blob/main/docs/claude.md)
+
+개인 구독과 Claude Enterprise의 claude.ai 좌석에 같은 갱신 절차를 사용합니다. 계정이 5시간·주간 한도를 명시적으로 비워 두면 연결 상태를 유지하고, 월 추가 사용 비율이 있으면 해당 행을 표시합니다. CLI가 보고한 브라우저 로그인 최종 만료 시각까지 지나면 설정에서 재로그인을 안내합니다. [Claude Code 로그인 만료 안내](https://code.claude.com/docs/en/authentication#check-when-a-stored-login-ends)
+
 만료 전 시도는 토큰당 한 번이며, 새 인증이 아직 저장되지 않았더라도 같은 토큰이 유효하면 현재 인증으로 조회를 이어갑니다. 만료 또는 401이 발생하면 기존 복구 경로가 동작합니다. [공식 CLI 명령](https://code.claude.com/docs/en/cli-reference)의 성공 종료는 상태 확인을 의미합니다. 같은 설정 경로에서 새 토큰과 미래 만료 시각을 읽고 사용량 조회까지 성공해야 갱신 완료로 판단합니다. 이 흐름은 [Claude GPT Usage Tray의 CLI 갱신 방식](https://github.com/kjhbond/claude-gpt-usage-tray/blob/80f148fb6120d451b8cad6b4bf267350c39d3716/claude_quota.py#L19-L51)을 참고했습니다.
 
 앱은 refresh token을 직접 읽거나 교환하지 않고, 인증 파일·잠금·회전 토큰 저장은 공식 CLI가 관리합니다. 원본의 미지 필드를 덮어쓰거나 별도 토큰 복사본을 만들지 않습니다. 조회 중 다른 CLI/로그인이 토큰을 바꾼 경우 현재 파일 값을 다시 읽습니다. 자동 갱신용 CLI에는 같은 `CLAUDE_CONFIG_DIR`를 전달하고 별도 API 키·OAuth 환경 토큰·gateway 인증은 사용하지 않습니다. 프록시·회사 CA 설정은 유지합니다.
 
-2026-10-28부터 **인증 갱신 확인 중 / 인증 재시도 대기 / 재로그인 필요**를 구분합니다. 최초 CLI 대기는 최대12초, 이미 진행 중인 같은 설정 경로의 CLI는 최대2초 공유 대기합니다. 그 뒤500ms 간격으로 최대16회(8초) 파일 반영을 확인합니다. 인증 확인 단계의 최대 대기는 약20초이며 기존 usage HTTP 요청의 15초 제한은 별도입니다. 저장 중인 CLI를 강제 종료하거나 같은 갱신 명령을 중복 실행하지 않습니다. 명령이 끝나지 않으면 파일은 재확인하되 CLI 자체 상태 확인이 필요할 수 있습니다.
+2026-10-28부터 **인증 갱신 확인 중 / 인증 재시도 대기 / 재로그인 필요**를 구분합니다. 최초 CLI 대기는 최대12초, 이미 진행 중인 같은 설정 경로의 CLI는 최대2초 공유 대기합니다. 그 뒤500ms 간격으로 최대16회(8초) 파일 반영을 확인합니다. 인증 확인 단계의 최대 대기는 약20초이며 기존 usage HTTP 요청의 15초 제한은 별도입니다. 조회 대기가 끝난 뒤에도 같은 설정 경로의 진행 중인 프로세스를 공유합니다. 개별 CLI 상태 명령이 90초 동안 종료되지 않으면 해당 프로세스를 종료해 다음 자동 조회가 복구를 다시 시도할 수 있게 합니다.
 
 시간 초과·진행 중 작업·CLI 실패·파일 미교체와 같은 미확정 결과는 **30초 재시도 대기**로 처리합니다. 교체된 토큰의 사용량 조회가 401인 경우에도 갱신 인증 자체의 만료를 단정하지 않고 다시 확인합니다. 완전한 구조화 OAuth `error: invalid_grant`가 확인되면 재로그인을 안내합니다. 403은 권한·SSO 안내로 구분합니다. 만료 후 복구 중이거나 인증이 확인되지 않으면 이전 비율과 관측 시각을 숨깁니다.
 

@@ -355,6 +355,55 @@ internal static class ClaudeRecoveryRegressionSuite
             Require(supported.Commands.SequenceEqual(new[] { "--version", "auth status" }));
             Require(later.Calls == 0);
         });
+        foreach (var plan in new[] { "pro", "enterprise" })
+            await Check($"unrotated {plan} login recovers through the official local /status command", async () =>
+            {
+                var dir = Directory.CreateTempSubdirectory("VibeMeters-subscription-");
+                var path = Path.Combine(dir.FullName, ".credentials.json");
+                void WriteLogin(string token, DateTimeOffset expiry) => File.WriteAllText(path,
+                    JsonSerializer.Serialize(new { claudeAiOauth = new { accessToken = token, expiresAt = expiry.ToUnixTimeMilliseconds(), subscriptionType = plan } }));
+                try
+                {
+                    WriteLogin("old", DateTimeOffset.UtcNow.AddDays(-5));
+                    var runner = new SubscriptionRunner(args =>
+                    {
+                        Require(args.SequenceEqual(new[] { "-p", "/status", "--max-turns", "0", "--safe-mode", "--strict-mcp-config",
+                            "--no-session-persistence", "--permission-mode", "dontAsk", "--output-format", "json" }));
+                        WriteLogin("new", DateTimeOffset.UtcNow.AddHours(8));
+                    });
+                    var handler = new StubHandler(request =>
+                    {
+                        Require(request.Headers.Authorization?.Parameter == "new");
+                        return Json(plan == "pro" ? readyBody : """{"five_hour":null,"seven_day":null,"extra_usage":{"is_enabled":true,"utilization":31}}""");
+                    });
+                    var provider = new UsageProvider(UsageProviderKind.Claude, new CredentialReader(claudeHome: dir.FullName),
+                        new HttpClient(handler), new ClaudeCredentialRefresher(dir.FullName, runner), diagnostics: new RecordingClaudeDiagnostics());
+                    var result = await provider.FetchAsync();
+                    Require(result.Status == UsageStatus.Ready && result.Plan == plan && result.Windows.Count == 1);
+                    Require(runner.SessionCalls == 1 && handler.Calls == 1);
+                }
+                finally { File.Delete(path); dir.Delete(); }
+            });
+        await Check("CLI absolute login expiry leads to interactive reauthentication without a session probe", async () =>
+        {
+            var dir = Directory.CreateTempSubdirectory("VibeMeters-ended-login-");
+            var path = Path.Combine(dir.FullName, ".credentials.json");
+            try
+            {
+                File.WriteAllText(path, """{"claudeAiOauth":{"accessToken":"expired-fixture","expiresAt":1}}""");
+                var runner = new SubscriptionRunner(_ => throw new Exception("Expired login triggered a session"), DateTimeOffset.UtcNow.AddDays(-1));
+                Require(await new ClaudeCredentialRefresher(dir.FullName, runner).RefreshAsync() == ClaudeRefreshOutcome.LoginExpired);
+                Require(runner.SessionCalls == 0);
+            }
+            finally { File.Delete(path); dir.Delete(); }
+        });
+        await Check("explicitly absent subscription windows stay connected without inventing quotas", () =>
+        {
+            using var document = JsonDocument.Parse("""{"five_hour":null,"seven_day":null}""");
+            var result = UsageParser.Parse(UsageProviderKind.Claude, document.RootElement, DateTimeOffset.UtcNow, "enterprise");
+            Require(result.Status == UsageStatus.Ready && result.Windows.Count == 0);
+            return Task.CompletedTask;
+        });
         await Check("shared CLI timeout never starts a second refresh command", async () =>
         {
             var clock = new FakeClaudeClock(); var status = new TaskCompletionSource<ClaudeCliResult?>();
@@ -528,6 +577,20 @@ internal static class ClaudeRecoveryRegressionSuite
         public List<(ClaudeAuthEvent Name, bool? CredentialChanged, bool? FutureExpiry)> Events { get; } = new();
         public void Write(ClaudeAuthEvent name, ClaudeRefreshOutcome? outcome = null, int? exitCode = null, bool? credentialChanged = null, bool? futureExpiry = null)
             => Events.Add((name, credentialChanged, futureExpiry));
+    }
+
+    private sealed class SubscriptionRunner(Action<string[]> session, DateTimeOffset? loginEnds = null) : IClaudeCommandRunner
+    {
+        public int SessionCalls { get; private set; }
+        public Task<ClaudeCliResult?> RunAsync(string[] arguments)
+        {
+            if (arguments is ["--version"]) return Task.FromResult<ClaudeCliResult?>(new(0, "2.1.319 (Claude Code)"));
+            if (arguments is ["auth", "status"]) return Task.FromResult<ClaudeCliResult?>(new(0,
+                JsonSerializer.Serialize(new { loggedIn = true, authMethod = "claude.ai", loginExpiresAt = loginEnds })));
+            SessionCalls++;
+            session(arguments);
+            return Task.FromResult<ClaudeCliResult?>(new(0));
+        }
     }
 
     private sealed class FixtureRunner(Func<string[], Task<ClaudeCliResult?>> version, Task<ClaudeCliResult?> status) : IClaudeCommandRunner

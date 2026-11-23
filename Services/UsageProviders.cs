@@ -426,7 +426,8 @@ public sealed class UsageProvider : IUsageProvider
                 // A still-valid credential can serve this query while the CLI saves a renewal.
                 if (proactive && current?.ExpiresAt > _clock.UtcNow && current.AccessToken == previous.AccessToken)
                     return (current, outcome);
-                if (attempt == 16 || outcome is ClaudeRefreshOutcome.CliMissing or ClaudeRefreshOutcome.CliOutdated or ClaudeRefreshOutcome.AuthenticationRejected) break;
+                if (attempt == 16 || outcome is ClaudeRefreshOutcome.CliMissing or ClaudeRefreshOutcome.CliOutdated
+                    or ClaudeRefreshOutcome.AuthenticationRejected or ClaudeRefreshOutcome.LoginExpired) break;
                 await _clock.DelayAsync(TimeSpan.FromMilliseconds(500), cancellationToken).ConfigureAwait(false);
             }
             _diagnostics?.Write(ClaudeAuthEvent.FileObserved, outcome, credentialChanged: current is not null && current.AccessToken != previous.AccessToken,
@@ -450,12 +451,13 @@ public sealed class UsageProvider : IUsageProvider
 
     private UsageSnapshot ClaudeRecoveryDeferred(ClaudeRefreshOutcome outcome, string? message = null)
     {
-        var rejected = outcome == ClaudeRefreshOutcome.AuthenticationRejected;
+        var rejected = outcome is ClaudeRefreshOutcome.AuthenticationRejected or ClaudeRefreshOutcome.LoginExpired;
         _nextAttempt = _clock.UtcNow.AddSeconds(rejected ? 300 : 30);
         _diagnostics?.Write(ClaudeAuthEvent.RecoveryDeferred, outcome);
         var snapshot = Save(rejected ? UsageStatus.AuthenticationRequired : UsageStatus.AuthenticationRetry, message ?? (outcome switch
         {
             ClaudeRefreshOutcome.AuthenticationRejected => "저장된 인증 갱신이 거부되었습니다. Claude에 다시 로그인해 주세요.",
+            ClaudeRefreshOutcome.LoginExpired => "인증이 만료되었습니다. 설정에서 다시 로그인해 주세요.",
             ClaudeRefreshOutcome.CliMissing => "자동 복구에 Claude Code가 필요합니다. 다시 확인하거나 로그인할 수 있습니다.",
             ClaudeRefreshOutcome.CliOutdated => "자동 복구에는 Claude Code 2.1.317 이상이 필요합니다. Claude Code를 업데이트해 주세요.",
             ClaudeRefreshOutcome.Pending or ClaudeRefreshOutcome.TimedOut => "다른 인증 갱신이나 저장을 기다리고 있습니다. 잠시 후 다시 확인합니다.",
@@ -567,6 +569,15 @@ public static class UsageParser
                     connectedWithoutQuota = true;
                     message = "연결됨 · 추가 사용이 활성화되어 있으나 계정에서 사용량 비율을 제공하지 않습니다.";
                 }
+            }
+            // Subscription seats can explicitly return null for both quota windows.
+            // A recognized, authenticated response should keep the normal refresh cadence.
+            if (windows.Count == 0 && !connectedWithoutQuota
+                && root.TryGetProperty("five_hour", out var session) && session.ValueKind == JsonValueKind.Null
+                && root.TryGetProperty("seven_day", out var week) && week.ValueKind == JsonValueKind.Null)
+            {
+                connectedWithoutQuota = true;
+                message = "계정에서 사용량 창을 제공하지 않습니다. 구독 상태를 확인해 주세요.";
             }
         }
         return new(kind, windows.Count > 0 || connectedWithoutQuota ? UsageStatus.Ready : UsageStatus.Unavailable, windows, now, plan,

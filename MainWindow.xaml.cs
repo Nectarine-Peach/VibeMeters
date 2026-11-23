@@ -46,7 +46,7 @@ public partial class MainWindow : Window
         Width = _normalWidth = Math.Clamp(double.IsFinite(settings.WindowWidth) ? settings.WindowWidth : 360, MinWidth, SystemParameters.VirtualScreenWidth);
         Height = _normalHeight = Math.Clamp(double.IsFinite(settings.WindowHeight) ? settings.WindowHeight : 360, MinHeight, SystemParameters.VirtualScreenHeight);
         Topmost = settings.AlwaysOnTop;
-        ShowInTaskbar = settings.ShowMainTaskbarButton;
+        ShowInTaskbar = false;
         if (settings.Left is double left && settings.Top is double top && double.IsFinite(left) && double.IsFinite(top))
         {
             WindowStartupLocation = WindowStartupLocation.Manual; Left = left; Top = top;

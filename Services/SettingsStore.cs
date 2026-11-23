@@ -14,10 +14,26 @@ public static class SettingsStore
     {
         try
         {
-            var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath)) ?? new();
-            return Normalize(settings);
+            return Deserialize(File.ReadAllText(FilePath));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { return new(); }
+    }
+    public static AppSettings Deserialize(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var settings = document.RootElement.Deserialize<AppSettings>() ?? new();
+        if (document.RootElement.ValueKind == JsonValueKind.Object &&
+            document.RootElement.TryGetProperty("ShowInTaskbar", out var legacy))
+        {
+            if (legacy.ValueKind == JsonValueKind.False) settings.WidgetProviders = TaskbarWidgetProviders.None;
+            else if (!document.RootElement.TryGetProperty("ShowTaskbarWidget", out var widget) || widget.ValueKind != JsonValueKind.True)
+            {
+                settings.WidgetProviders = TaskbarWidgetProviders.None;
+                foreach (var kind in Enum.GetValues<UsageProviderKind>())
+                    if (settings.IsProviderVisible(kind)) settings.WidgetProviders |= AppSettings.WidgetFlag(kind);
+            }
+        }
+        return Normalize(settings);
     }
     public static AppSettings Normalize(AppSettings settings)
     {

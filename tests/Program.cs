@@ -867,30 +867,16 @@ sealed class RegressionSuite
                 Equal(UsageStatus.RateLimited, switched.Status); Equal(limited.RetryAfter, switched.RetryAfter); Equal(0, switched.Windows.Count); Equal(2, handler.Calls);
             });
         }
-        Test("Widget-only providers participate in the normal fetch cycle while the widget mode is active", () =>
+        Test("Legacy taskbar modes migrate to independent widget toggles", () =>
         {
-            var settings = new AppSettings { ShowCodex = true, ShowClaude = false,
-                WidgetProviders = TaskbarWidgetProviders.Claude | TaskbarWidgetProviders.Gemini };
-            foreach (var mode in Enum.GetValues<TaskbarMode>())
-            {
-                settings.TaskbarDisplay = mode;
-                True(settings.ShouldFetch(UsageProviderKind.Codex));
-                Equal(mode == TaskbarMode.Widget, settings.ShouldFetch(UsageProviderKind.Claude));
-                Equal(mode == TaskbarMode.Widget, settings.ShouldFetch(UsageProviderKind.Gemini));
-                True(!settings.ShouldFetch(UsageProviderKind.Grok));
-            }
-            settings.WidgetProviders = TaskbarWidgetProviders.None;
-            var saved = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(settings))!;
-            Equal(TaskbarMode.Widget, saved.TaskbarDisplay);
-            Equal(TaskbarWidgetProviders.None, SettingsStore.Normalize(saved).WidgetProviders);
+            Equal(TaskbarWidgetProviders.None, SettingsStore.Deserialize("""{"ShowInTaskbar":false}""").WidgetProviders);
+            Equal(TaskbarWidgetProviders.Codex | TaskbarWidgetProviders.Claude, SettingsStore.Deserialize("""{"ShowInTaskbar":true,"SeparateTaskbarButtons":true}""").WidgetProviders);
+            var migrated = SettingsStore.Deserialize("""{"ShowInTaskbar":true,"ShowTaskbarWidget":true,"WidgetProviders":4}""");
+            True(migrated.ShouldFetch(UsageProviderKind.Gemini));
+            True(!migrated.ShowGemini);
+            migrated.WidgetProviders = TaskbarWidgetProviders.None;
+            Equal(TaskbarWidgetProviders.None, SettingsStore.Deserialize(JsonSerializer.Serialize(migrated)).WidgetProviders);
         });
-        Test("Previously saved taskbar preferences retain their original mode", () =>
-        {
-            Equal(TaskbarMode.Combined, JsonSerializer.Deserialize<AppSettings>("{}")!.TaskbarDisplay);
-            Equal(TaskbarMode.Separate, JsonSerializer.Deserialize<AppSettings>("""{"SeparateTaskbarButtons":true}""")!.TaskbarDisplay);
-            Equal(TaskbarMode.Off, JsonSerializer.Deserialize<AppSettings>("""{"ShowInTaskbar":false}""")!.TaskbarDisplay);
-        });
-        Test("Settings defaults are resource-friendly", () => { var s = new AppSettings(); Equal(120, s.RefreshIntervalSeconds); True(s.ShowInTaskbar); True(!s.AlwaysOnTop); True(!s.StartWithWindows); });
         Test("Language defaults and invalid settings retain system selection", () =>
         {
             Equal(AppLanguage.System,new AppSettings().Language);

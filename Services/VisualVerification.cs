@@ -62,7 +62,7 @@ internal sealed class VisualVerification
             _settings.CodexDisplayMode=UsageDisplayMode.Remaining;
             _settings.ClaudeDisplayMode=UsageDisplayMode.Remaining;
             _settings.GeminiDisplayMode=UsageDisplayMode.Remaining;
-            _settings.Theme=AppTheme.Dark;_settings.AlwaysOnTop=false;_settings.ShowInTaskbar=true;
+            _settings.Theme=AppTheme.Dark;_settings.AlwaysOnTop=false;_settings.WidgetProviders=TaskbarWidgetProviders.None;
             _applySettings();
             foreach(var kind in Enum.GetValues<UsageProviderKind>()) _render(Demo(kind));
             _window.Show();
@@ -115,7 +115,6 @@ internal sealed class VisualVerification
                 await CheckSettingsInteractionsAsync(settings);
                 settings.Close();
                 await StableAsync(_window);
-                await CheckProviderTaskbarButtonsAsync();
                 await CheckTaskbarWidgetAsync();
             }
 
@@ -182,51 +181,7 @@ internal sealed class VisualVerification
         Check("pin control enables always on top",_window.Topmost&&_settings.AlwaysOnTop);
         Click((Button)_window.FindName("PinButton"));
         Check("pin control disables always on top",!_window.Topmost&&!_settings.AlwaysOnTop);
-        Check("taskbar title shows each selected provider and progress tracks the tightest limit",
-            _window.Title.Contains("Codex 61% 남음") && _window.Title.Contains("Claude 55% 남음") &&
-            !_window.Title.Contains("Gemini") && !_window.Title.Contains("Grok") &&
-            _window.TaskbarItemInfo is { ProgressState: System.Windows.Shell.TaskbarItemProgressState.Normal } quota &&
-            Math.Abs(quota.ProgressValue - .45) < .001 && quota.Description.Contains("Codex") &&
-            quota.Description.Contains("초기화") && !quota.Description.Contains("Gemini"));
-        var claude = Demo(UsageProviderKind.Claude);
-        _render(claude with { Windows = new[] { new UsageWindow("주간", 80, null) } });
-        Check("taskbar warns at 20% remaining",_window.TaskbarItemInfo.ProgressState == System.Windows.Shell.TaskbarItemProgressState.Paused);
-        _render(claude with { Windows = new[] { new UsageWindow("주간", 95, null) } });
-        Check("taskbar warns at 5% remaining",_window.TaskbarItemInfo.ProgressState == System.Windows.Shell.TaskbarItemProgressState.Error);
-        _render(claude with { Status = UsageStatus.RateLimited });
-        Check("taskbar excludes retained quotas from failed lookups",
-            _window.Title.Contains("Claude —") && !_window.Title.Contains("55%") &&
-            _window.Title.Contains("Codex 61% 남음") && Math.Abs(_window.TaskbarItemInfo.ProgressValue - .39) < .001 &&
-            _window.TaskbarItemInfo.Description.Contains("Claude · 확인 필요"));
-        _render(claude);
-        _settings.ClaudeDisplayMode=UsageDisplayMode.Used;
-        _settings.ShowGemini=true;_settings.ShowGrok=true;
-        _settings.Language=AppLanguage.English;
-        _applySettings();
-        Check("taskbar title shows four independent percentages in the selected language and display modes",
-            new[]{"Codex 61% Left","Claude 45% Used","Gemini 83% Left","Grok 68% Left"}.All(_window.Title.Contains));
-        _settings.ShowClaude=false;_settings.ShowGrok=false;
-        _applySettings();
-        Check("hiding providers removes their text and recalculates the tightest displayed quota",
-            !_window.Title.Contains("Claude") && !_window.Title.Contains("Grok") &&
-            !_window.TaskbarItemInfo.Description.Contains("Claude") && !_window.TaskbarItemInfo.Description.Contains("Grok") &&
-            _window.Title.Contains("Codex 61% Left") && _window.Title.Contains("Gemini 83% Left") &&
-            Math.Abs(_window.TaskbarItemInfo.ProgressValue - .39) < .001);
-        _settings.ShowCodex=false;_settings.ShowGemini=false;
-        _applySettings();
-        Check("hiding all providers clears taskbar percentages and progress",_window.Title == "VibeMeters" &&
-            _window.TaskbarItemInfo is { ProgressState: System.Windows.Shell.TaskbarItemProgressState.None, ProgressValue: 0 });
-        _settings.ShowCodex=true;_settings.ShowClaude=true;
-        _settings.ClaudeDisplayMode=UsageDisplayMode.Remaining;_settings.Language=AppLanguage.Korean;
-        _settings.ShowInTaskbar=false;_applySettings();
-        Check("taskbar preference disabled",!_window.ShowInTaskbar && _window.TaskbarItemInfo == null && _window.Title == "VibeMeters");
-        _settings.ShowInTaskbar=true;_applySettings();
-        Check("taskbar preference restores both selected percentages",_window.ShowInTaskbar &&
-            _window.Title.Contains("Codex 61% 남음") && _window.Title.Contains("Claude 55% 남음"));
-        _window.WindowState=WindowState.Minimized;
-        await StableAsync(_window);
-        Check("taskbar minimize retains shown window",_window.WindowState==WindowState.Minimized&&_window.IsVisible);
-        _window.WindowState=WindowState.Normal;
+        Check("dashboard opens without an Explorer button", !_window.ShowInTaskbar && _window.TaskbarItemInfo == null);
         Click((Button)_window.FindName("HideButton"));
         Check("header close hides to tray",!_window.IsVisible);
         Check("tray hide records hidden startup preference",!_settings.WindowVisible);
@@ -309,101 +264,18 @@ internal sealed class VisualVerification
         SelectTag(mode,"Used");await StableAsync(_window);
         Check("settings Claude mode selection updates preference",_settings.ClaudeDisplayMode==UsageDisplayMode.Used);
         SelectTag(mode,"Remaining");await StableAsync(_window);
-        CheckProviderTrayIcons(settings, mode);
         var interval=(ComboBox)settings.FindName("IntervalCombo");
         SelectTag(interval,"0");
         Check("settings manual interval retained",_settings.RefreshIntervalSeconds==0);
-        var taskbarMode = (ComboBox)settings.FindName("TaskbarModeCombo");
-        SelectTag(taskbarMode, "Off");
-        Check("taskbar off removes the main window button", !_settings.ShowInTaskbar && !_window.ShowInTaskbar);
-        SelectTag(taskbarMode, "Widget");
-        var widgetSettings = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings))!;
-        Check("taskbar widget selection persists and suppresses the dashboard button",
-            widgetSettings.ShowInTaskbar && widgetSettings.ShowTaskbarWidget && !widgetSettings.SeparateTaskbarButtons && !_window.ShowInTaskbar);
-        var chooser = (Button)settings.FindName("WidgetServicesButton");
-        Click(chooser);
-        var menu = chooser.ContextMenu!;
-        var items = menu.Items.OfType<MenuItem>().ToDictionary(item => item.Tag!.ToString()!);
-        Check("widget chooser distinguishes enabled services from dashboard selection",
-            items.Count == 4 && items["Codex"].IsChecked && items["Claude"].IsChecked && !items["Grok"].IsChecked);
-        items["Grok"].IsChecked = true;
-        items["Grok"].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-        Check("widget chooser adds a service without enabling its dashboard card",
-            _settings.IsWidgetSelected(UsageProviderKind.Grok) && !_settings.ShowGrok &&
-            JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings))!.IsWidgetSelected(UsageProviderKind.Grok));
-        menu.IsOpen = false;
-        SelectTag(taskbarMode, "Separate");
-        var saved = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings))!;
-        Check("separate taskbar mode persists and removes the combined button",
-            saved.ShowInTaskbar && saved.SeparateTaskbarButtons && !_window.ShowInTaskbar);
-    }
-
-    private async Task CheckProviderTaskbarButtonsAsync()
-    {
-        static Window[] Buttons() => Application.Current.Windows.OfType<Window>()
-            .Where(w => w.Tag is UsageProviderKind).ToArray();
-        static IntPtr Handle(Window window) => new WindowInteropHelper(window).Handle;
-        static string NativeTitle(Window window)
+        foreach (var kind in new[]{UsageProviderKind.Codex, UsageProviderKind.Claude, UsageProviderKind.Grok})
         {
-            var title = new StringBuilder(512);
-            GetWindowTextW(Handle(window), title, title.Capacity);
-            return title.ToString();
+            var toggle = (CheckBox)settings.FindName(kind + "Widget");
+            toggle.IsChecked = true;
+            toggle.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
         }
-        static bool ShownMinimized(Window window) => window.ShowInTaskbar && window.IsVisible && window.Owner == null
-            && IsWindowVisible(Handle(window)) && IsIconic(Handle(window));
-        try
-        {
-            var initial = Buttons();
-            Check("separate taskbar mode exposes just the two enabled providers as minimized native windows",
-                !_window.ShowInTaskbar && initial.Length == 2 && initial.All(ShownMinimized) &&
-                initial.Select(w => w.Tag).Distinct().Count() == 2);
-            var claude = initial.FirstOrDefault(w => Equals(w.Tag, UsageProviderKind.Claude));
-            var codex = initial.FirstOrDefault(w => Equals(w.Tag, UsageProviderKind.Codex));
-            if (codex == null || claude == null) return;
-            Check("native taskbar titles and window icons expose each selected service's quota",
-                NativeTitle(codex) == "W 61%" && NativeTitle(claude) == "5H100%/W55%" &&
-                codex.TaskbarItemInfo.Description.Contains("Codex") && claude.TaskbarItemInfo.Description.Contains("Claude") &&
-                !ReferenceEquals(codex.Icon, claude.Icon) &&
-                initial.All(w => w.Icon != null && SendMessageW(Handle(w), 0x007f /* WM_GETICON */, 1 /* ICON_BIG */, 0) != 0));
-            _settings.ClaudeDisplayMode = UsageDisplayMode.Used;
-            _applySettings();
-            _render(Demo(UsageProviderKind.Claude));
-            Check("independent native titles change in place without duplicate buttons",
-                Buttons().Length == 2 && NativeTitle(claude).Contains("45%") && NativeTitle(codex).Contains("61%"));
-            _render(Demo(UsageProviderKind.Claude) with { Status = UsageStatus.RateLimited });
-            Check("unavailable native taskbar button drops its previous percentage",
-                NativeTitle(claude).Contains("—") && !NativeTitle(claude).Contains('%'));
-            _render(Demo(UsageProviderKind.Claude));
-            _settings.ShowGemini = _settings.ShowGrok = true;
-            _applySettings();
-            var all = Buttons();
-            Check("four enabled providers have four distinct native taskbar handles",
-                all.Length == 4 && all.All(ShownMinimized) && all.Select(Handle).Distinct().Count() == 4);
-            Click((Button)_window.FindName("HideButton"));
-            Check("provider buttons remain accessible with dashboard hidden", !_window.IsVisible && all.All(ShownMinimized));
-            SendMessageW(Handle(claude), 0x0112 /* WM_SYSCOMMAND */, 0xf120 /* SC_RESTORE */, 0);
-            await StableAsync(_window);
-            Check("native taskbar restore brings back dashboard and leaves provider buttons minimized",
-                _window.IsVisible && _window.WindowState == WindowState.Normal && !_window.ShowInTaskbar &&
-                Buttons().Length == 4 && all.All(ShownMinimized));
-            var removed = all.Where(w => w != codex && w != claude).Select(Handle).ToArray();
-            _settings.ShowGemini = _settings.ShowGrok = false;
-            _applySettings();
-            Check("disabling providers destroys their native handles only",
-                Buttons().Length == 2 && removed.All(hwnd => !IsWindow(hwnd)) && initial.All(ShownMinimized));
-            var remaining = initial.Select(Handle).ToArray();
-            _settings.SeparateTaskbarButtons = false;
-            _applySettings();
-            Check("switching back to combined restores one button and destroys all provider windows",
-                _window.ShowInTaskbar && Buttons().Length == 0 && remaining.All(hwnd => !IsWindow(hwnd)));
-        }
-        finally
-        {
-            _settings.ShowGemini = _settings.ShowGrok = _settings.SeparateTaskbarButtons = false;
-            _settings.ClaudeDisplayMode = UsageDisplayMode.Remaining;
-            _applySettings();
-            if (!_window.IsVisible) _restoreWindow();
-        }
+        Check("service row widget toggle persists without enabling its dashboard card",
+            !_settings.ShowGrok && !_window.ShowInTaskbar && JsonSerializer.Deserialize<AppSettings>(
+                JsonSerializer.Serialize(_settings))!.IsWidgetSelected(UsageProviderKind.Grok));
     }
 
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
@@ -435,7 +307,6 @@ internal sealed class VisualVerification
         var claude = Demo(UsageProviderKind.Claude);
         try
         {
-            _settings.ShowTaskbarWidget = true;
             _settings.Language = AppLanguage.Korean;
             _settings.Theme = AppTheme.Dark;
             _applySettings();
@@ -505,10 +376,10 @@ internal sealed class VisualVerification
             _settings.WidgetProviders = TaskbarWidgetProviders.Codex | TaskbarWidgetProviders.Claude;
             _applySettings();
             Check("restoring selection recreates exactly two widgets", Widgets().Length == 2);
-            _settings.ShowTaskbarWidget = false;
+            _settings.WidgetProviders = TaskbarWidgetProviders.None;
             _applySettings();
-            Check("combined taskbar mode removes the widget and restores the dashboard button",
-                !Widgets().Any(w => w.IsVisible) && _window.ShowInTaskbar);
+            Check("disabling widgets clears the taskbar",
+                !Widgets().Any(w => w.IsVisible) && !_window.ShowInTaskbar);
 
             // Capture the widget content at a reproducible two-line size even when the user's
             // Explorer taskbar has no free space or is configured to auto-hide.
@@ -554,8 +425,7 @@ internal sealed class VisualVerification
             _settings.Language = initialLanguage;
             _settings.ClaudeDisplayMode = UsageDisplayMode.Remaining;
             _settings.ShowCodex = _settings.ShowClaude = true;
-            _settings.WidgetProviders = TaskbarWidgetProviders.Codex | TaskbarWidgetProviders.Claude;
-            _settings.ShowTaskbarWidget = false;
+            _settings.WidgetProviders = TaskbarWidgetProviders.None;
             _applySettings();
             _render(Demo(UsageProviderKind.Codex));
             _render(claude);
@@ -648,49 +518,6 @@ internal sealed class VisualVerification
             }
         }
         finally { foreach (var view in views) view.Close(); }
-    }
-
-    private void CheckProviderTrayIcons(SettingsWindow settings, ComboBox claudeMode)
-    {
-        var app = (App)Application.Current;
-        var option = (CheckBox)settings.FindName("ProviderTrayCheck");
-        var claudeCheck = (CheckBox)settings.FindName("ClaudeCheck");
-        static void Toggle(CheckBox check, bool selected)
-        {
-            check.IsChecked = selected;
-            check.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-        }
-        bool SavedPreference() => JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings))!.ShowProviderTrayIcons;
-        var enabledKinds = Enum.GetValues<UsageProviderKind>();
-        Check("provider tray icons default to disabled", option.IsChecked == false && enabledKinds.All(kind => app.GetVisibleProviderTrayIcon(kind) is null));
-        Toggle(option, true);
-        var codex = app.GetVisibleProviderTrayIcon(UsageProviderKind.Codex);
-        var claude = app.GetVisibleProviderTrayIcon(UsageProviderKind.Claude);
-        Check("enabling provider icons persists and creates selected services with their current quotas", SavedPreference() &&
-            codex is { Visible: true, Icon: not null } && codex.Text.Contains("61%") &&
-            claude is { Visible: true, Icon: not null } && claude.Text.Contains("55%") &&
-            codex.ContextMenuStrip != null && ReferenceEquals(codex.ContextMenuStrip, claude.ContextMenuStrip) &&
-            app.GetVisibleProviderTrayIcon(UsageProviderKind.Gemini) == null && app.GetVisibleProviderTrayIcon(UsageProviderKind.Grok) == null);
-        SelectTag(claudeMode, "Used");
-        Check("provider tray icon follows its own used display mode",
-            app.GetVisibleProviderTrayIcon(UsageProviderKind.Claude)?.Text.Contains("45%") == true &&
-            app.GetVisibleProviderTrayIcon(UsageProviderKind.Codex)?.Text.Contains("61%") == true);
-        _render(Demo(UsageProviderKind.Claude) with { Status = UsageStatus.RateLimited });
-        var unavailable = app.GetVisibleProviderTrayIcon(UsageProviderKind.Claude);
-        Check("provider tray icon clears the previous percentage when the lookup is unavailable",
-            unavailable is { Visible: true, Icon: not null } && unavailable.Text.Contains("—") && !unavailable.Text.Contains("45%"));
-        _render(Demo(UsageProviderKind.Claude));
-        SelectTag(claudeMode, "Remaining");
-        Toggle(claudeCheck, false);
-        Check("hiding one provider removes only its tray icon", claude?.Visible == false &&
-            app.GetVisibleProviderTrayIcon(UsageProviderKind.Claude) == null && app.GetVisibleProviderTrayIcon(UsageProviderKind.Codex)?.Visible == true);
-        Toggle(claudeCheck, true);
-        Check("reenabling a provider preserves its tray icon identity and current percentage",
-            claude is { Visible: true } && ReferenceEquals(claude, app.GetVisibleProviderTrayIcon(UsageProviderKind.Claude)) && claude.Text.Contains("55%"));
-        Toggle(option, false);
-        Check("disabling provider icons persists and removes active shell entries", !SavedPreference() &&
-            claude?.Visible == false && codex?.Visible == false &&
-            enabledKinds.All(kind => app.GetVisibleProviderTrayIcon(kind) == null));
     }
 
     private async Task CheckSelectionsAsync()

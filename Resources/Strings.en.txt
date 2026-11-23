@@ -274,3 +274,5 @@ Claude 인증 다시 확인|Check Claude authentication again
 Gemini 로그인을 완료하지 못했습니다.|Gemini sign-in did not complete.
 기본 CLI 계정|Default CLI account
 Gemini 계정|Gemini account
+
+위젯|Widget

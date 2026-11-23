@@ -65,6 +65,13 @@ sealed class RegressionSuite
             }
             finally { Localizer.SetLanguage(previous); }
         });
+        Test("All provider window icons load from embedded resources and can be reused across windows", () =>
+        {
+            var icons = Enum.GetValues<UsageProviderKind>().Select(TaskbarProviderPresentation.Icon).ToArray();
+            Equal(4, icons.Distinct().Count());
+            Equal(true, icons.All(icon => icon.IsFrozen && icon.Width > 0 && icon.Height > 0));
+            Equal(true, ReferenceEquals(icons[0], TaskbarProviderPresentation.Icon(UsageProviderKind.Codex)));
+        });
         Test("Reset countdown uses observation deadlines and handles missing, elapsed and offset times", () =>
         {
             var previous = Localizer.Language;

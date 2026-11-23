@@ -2,6 +2,8 @@
 
 ## 작업표시줄에 여러 한도 표시
 
+CodeZeno의 Classic v1 위젯은 알림 영역 옆에 5시간·주간 한도를 두 줄로 놓고, 주간 한도만 제공하는 계정에서는 한 줄을 가운데 배치한다. VibeMeters의 **두 줄 위젯**은 이 배치에 본체의 서비스 아이콘과 사용량 막대, 테마를 적용한다. 본체 카드와 위젯은 따로 선택할 수 있고 같은 서비스의 조회 결과를 공유한다. [CodeZeno Classic v1 테마 정의](https://github.com/CodeZeno/Claude-Code-Usage-Monitor/blob/fca0498d2898f17fe285e01bbf781b5c04642f4b/src/themes/classic-usage-widget.json)
+
 - Zrnik의 Windows 위젯은 서비스 아이콘 아래에 5시간·7일 막대를 두고, 계정마다 열을 추가한다. 리셋 시각은 마우스를 올렸을 때 보여준다. [Zrnik 위젯의 표시 방식](https://github.com/Zrnik/claude-usage-windows-taskbar-widget#how-it-works)
 - gcampton의 위젯은 5시간·7일을 두 행으로 고정하고 각 행에 파란색 Codex와 주황색 Claude 수치를 나란히 표시한다. [Codex-Claude-Windows-Taskbar](https://github.com/gcampton/Codex-Claude-Windows-Taskbar#what-you-get)
 - VibeMeters의 **서비스별 버튼**은 한 프로세스에서 Windows 작업표시줄 버튼을 서비스마다 등록한다. 버튼에는 서비스 아이콘, 짧은 기간 표기와 백분율을 두고, 상세 창을 열 때는 같은 앱의 기존 창을 사용한다. Windows는 창별 AppUserModelID를 이용해 작업표시줄 그룹을 구분한다. [Microsoft의 창별 작업표시줄 그룹 예제](https://learn.microsoft.com/en-us/windows/win32/shell/samples-appusermodelidwindowproperty)

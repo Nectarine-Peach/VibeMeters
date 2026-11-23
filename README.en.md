@@ -38,7 +38,11 @@ Codex Business uses the supplied `spend_control.individual_limit` and Claude Ent
 
 The current source build shows a countdown beside each quota. It continues to update in manual refresh mode. Hover over a countdown to see the local reset date and time.
 
-Choose **Settings → Taskbar buttons → One per service** for separate buttons with a provider icon and compact quota labels. For example, Codex can show `W 61%` and Claude can show `5H40%/W62%`. The labels use the windows your account reports and your choice of remaining or used percentages. Set Windows’ **Combine taskbar buttons and hide labels** to **Never** to see the numbers. Click a button to open the detailed window.
+Choose **Settings → Taskbar display → Two-row widgets**, then **Services** to add or remove an individual Codex, Claude, Gemini or Grok widget. Codex and Claude are initially selected. Widget selection is independent of the dashboard. Each widget uses the dashboard theme and percentage preference and displays up to two reported quota windows. Click a widget to open the dashboard. Widgets use free space on the primary taskbar and move beside it when space is limited.
+
+![Two-row Codex and Claude widgets with example quotas](docs/screenshots/taskbar-widget-light-en.png)
+
+Choose **Settings → Taskbar display → One per service** for separate buttons with a provider icon and compact quota labels. For example, Codex can show `W 61%` and Claude can show `5H40%/W62%`. The labels use the windows your account reports and your choice of remaining or used percentages. Set Windows’ **Combine taskbar buttons and hide labels** to **Never** to see the numbers. Click a button to open the detailed window.
 
 Choose **One combined button** to keep the summaries together. For numeric icons beside the clock, enable **Show per-service numbers in the notification area** and drag the icons out of the overflow menu.
 

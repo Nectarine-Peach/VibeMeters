@@ -417,10 +417,10 @@ internal sealed class VisualVerification
                 }
                 var narrow = previews[1];
                 narrow.Update([claude with { Windows = [.. claude.Windows, new("Opus 주간", 60, null)] }], _settings);
-                narrow.SetLayout(true, 96, 160);
+                narrow.SetLayout(true, 138, 160);
                 await StableAsync(narrow);
                 Check("narrow vertical widget shows all three values with its unknown reset",
-                    narrow.ActualWidth <= 96 && QuotaRows(Tile(narrow)).Length == 3 && TextFits(Root(narrow), Root(narrow)) &&
+                    Math.Abs(narrow.ActualWidth - 138) <= 1 && QuotaRows(Tile(narrow)).Length == 3 && TextFits(Root(narrow), Root(narrow)) &&
                     Descendants<TextBlock>(narrow).Any(t => t.Text == "40%" && t.IsVisible) &&
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("Opus") &&
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("40% · Reset N/A"));
@@ -470,8 +470,8 @@ internal sealed class VisualVerification
                 views[i].Show();
             }
             foreach (var (layout, vertical, width, height) in new[] {
-                ("horizontal", false, 220d, 180d), ("narrow horizontal", false, 96d, 180d),
-                ("vertical", true, 128d, 180d), ("narrow vertical", true, 96d, 180d) })
+                ("horizontal", false, 220d, 180d), ("narrow horizontal", false, 138d, 180d),
+                ("vertical", true, 150d, 180d), ("narrow vertical", true, 138d, 180d) })
             {
                 foreach (var view in views) view.SetLayout(vertical, width, height);
                 await StableAsync(views[0]);
@@ -522,8 +522,8 @@ internal sealed class VisualVerification
                 Check(layout + " shows each reset countdown directly on its quota row",
                     resetLabels.All(t => t.IsVisible && t.ActualWidth > 0) && resetLabels[2].Text == "—" &&
                     new[] { "4:31", "3d", "10h", "0:30", "2d" }.All(time => resetLabels.Any(t => t.Text.Contains(time))));
-                Check(layout + " keeps quota label, percentage and reset on one readable line", readable &&
-                    Enumerable.Range(0, labels.Count).All(i => EqualCoordinates(new[] { CenterY(labels[i]),
+                Check(layout + " keeps label, graph, percentage and reset on one readable line", readable && meters.All(r => r.Width >= 15) &&
+                    Enumerable.Range(0, labels.Count).All(i => EqualCoordinates(new[] { CenterY(labels[i]), CenterY(meters[i]),
                         CenterY(percentages[i]), CenterY(resets[i]) })));
                 var overlapRows = Enumerable.Range(0, labels.Count).Where(i => !(Separate(labels[i], meters[i])
                         && Separate(meters[i], percentages[i]) && Separate(labels[i], percentages[i])

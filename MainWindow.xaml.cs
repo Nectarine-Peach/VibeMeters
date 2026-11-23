@@ -270,6 +270,11 @@ public partial class MainWindow : Window
     {
         var heading=new StackPanel { Height=metrics.HeadingHeight,Orientation=Orientation.Horizontal,VerticalAlignment=VerticalAlignment.Center,ToolTip=WrappedTip(ProviderTooltip(snapshot)) };
         var providerName=snapshot.Provider==UsageProviderKind.Gemini&&snapshot.Plan=="Antigravity"?"Gemini · Antigravity":snapshot.Provider.ToString();
+        if (snapshot.Provider == UsageProviderKind.Gemini && Settings.GeminiProfile != GeminiProfile.Default)
+            providerName = Settings.GeminiProfile switch {
+                GeminiProfile.CodeAssist1 => "Gemini · Code Assist 1",
+                GeminiProfile.CodeAssist2 => "Gemini · Code Assist 2",
+                _ => "Gemini · Antigravity" };
         heading.Children.Add(new TextBlock { Text=providerName,Foreground=Palette("PrimaryText"),FontWeight=FontWeights.SemiBold,FontSize=metrics.HeadingFont,VerticalAlignment=VerticalAlignment.Center });
         heading.Children.Add(new TextBlock { Text=DisplayBasis(snapshot.Provider),Foreground=Palette("SecondaryText"),FontSize=metrics.BasisFont,Margin=new Thickness(metrics.Size(5,11),0,0,0),VerticalAlignment=VerticalAlignment.Center });
         if(snapshot.Status!=UsageStatus.Ready)

@@ -9,14 +9,15 @@ using VibeMeters.Models;
 
 namespace VibeMeters.Services;
 
-internal static class GeminiCliBridge
+internal sealed class GeminiCliBridge(GeminiProfile profile)
 {
-    private static volatile bool _usesAntigravity;
-    internal static void ResetRoute() => _usesAntigravity = false;
+    private volatile bool _usesAntigravity;
+    internal void ResetRoute() => _usesAntigravity = false;
+    private bool UseAntigravity => profile == GeminiProfile.Antigravity || _usesAntigravity;
 
-    public static LoginResult StartLogin()
+    public async Task<LoginResult> LoginAsync(CancellationToken cancellationToken)
     {
-        if (_usesAntigravity) return AntigravityUsageBridge.StartLogin();
+        if (UseAntigravity) return AntigravityUsageBridge.StartLogin();
         var (runtime, script) = ResolveRuntime();
         var node = FindNode(runtime);
         if (node is null || !File.Exists(script))
@@ -25,22 +26,32 @@ internal static class GeminiCliBridge
         {
             var start = CreateStartInfo(node, script, runtime);
             start.ArgumentList.Add("--login");
-            // The adapter suppresses all SDK logs, and only a small sanitized JSON result is emitted.
-            // No pipes remain open in this detached user-initiated browser login flow.
-            start.RedirectStandardInput = false;
-            start.RedirectStandardOutput = false;
-            start.RedirectStandardError = false;
-            using var process = Process.Start(start);
-            return process is null ? new(false, "Gemini 로그인을 시작할 수 없습니다.")
-                : new(true, "브라우저에서 Gemini 로그인을 완료하면 사용량이 자동으로 갱신됩니다.");
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromMinutes(3));
+            using var process = new Process { StartInfo = start };
+            if (!process.Start()) return new(false, "Gemini 로그인을 시작할 수 없습니다.");
+            try
+            {
+                process.StandardInput.Close();
+                var output = ReadBoundedAsync(process.StandardOutput, deadline.Token);
+                var errors = process.StandardError.BaseStream.CopyToAsync(Stream.Null, deadline.Token);
+                await Task.WhenAll(output, errors, process.WaitForExitAsync(deadline.Token)).ConfigureAwait(false);
+                using var json = JsonDocument.Parse(await output.ConfigureAwait(false));
+                return process.ExitCode == 0 && Text(json.RootElement, "status") == "Authenticated"
+                    ? new(true, "로그인했습니다. 사용량을 다시 확인합니다.")
+                    : new(false, "Gemini 로그인을 완료하지 못했습니다.");
+            }
+            finally { OfficialCliProcess.Stop(process); }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception or InvalidOperationException)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        { return new(false, "로그인 대기 시간이 지났습니다. 다시 로그인해 주세요."); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or System.ComponentModel.Win32Exception or InvalidOperationException)
         { return new(false, "Gemini 로그인을 시작할 수 없습니다. 잠시 후 다시 시도해 주세요."); }
     }
 
-    public static async Task<UsageSnapshot> ReadAsync(CancellationToken cancellationToken)
+    public async Task<UsageSnapshot> ReadAsync(CancellationToken cancellationToken)
     {
-        if (_usesAntigravity) return await AntigravityUsageBridge.ReadAsync(cancellationToken).ConfigureAwait(false);
+        if (UseAntigravity) return await AntigravityUsageBridge.ReadAsync(cancellationToken).ConfigureAwait(false);
         var (runtime, script) = ResolveRuntime();
         var node = FindNode(runtime);
         if (node is null || !File.Exists(script))
@@ -60,7 +71,7 @@ internal static class GeminiCliBridge
             await errorTask.ConfigureAwait(false);
             if (process.ExitCode != 0) return Error(UsageStatus.Unavailable, "Gemini 조회가 완료되지 않았습니다. 잠시 후 다시 확인합니다.");
             using var json = JsonDocument.Parse(output);
-            if (Text(json.RootElement, "reason") == "UNSUPPORTED_CLIENT")
+            if (profile == GeminiProfile.Default && Text(json.RootElement, "reason") == "UNSUPPORTED_CLIENT")
             {
                 _usesAntigravity = true;
                 return await AntigravityUsageBridge.ReadAsync(cancellationToken).ConfigureAwait(false);
@@ -87,7 +98,7 @@ internal static class GeminiCliBridge
         return (runtime, script);
     }
 
-    private static ProcessStartInfo CreateStartInfo(string node, string script, string runtime)
+    internal ProcessStartInfo CreateStartInfo(string node, string script, string runtime)
     {
         var start = new ProcessStartInfo(node)
         {
@@ -100,8 +111,20 @@ internal static class GeminiCliBridge
         start.Environment.Remove("NODE_PATH");
         start.Environment.Remove("CODE_ASSIST_ENDPOINT");
         start.Environment["NO_COLOR"] = "1";
+        if (profile is GeminiProfile.CodeAssist1 or GeminiProfile.CodeAssist2)
+        {
+            start.Environment["GEMINI_CLI_HOME"] = HomeDirectory;
+            start.Environment["GEMINI_FORCE_ENCRYPTED_FILE_STORAGE"] = "true";
+            start.Environment["GEMINI_FORCE_FILE_STORAGE"] = "true";
+            start.Environment.Remove("GOOGLE_APPLICATION_CREDENTIALS");
+            start.Environment.Remove("GOOGLE_CLOUD_ACCESS_TOKEN");
+        }
         return start;
     }
+
+    internal string HomeDirectory => profile is GeminiProfile.CodeAssist1 or GeminiProfile.CodeAssist2
+        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VibeMeters", "Gemini", profile.ToString())
+        : Environment.GetEnvironmentVariable("GEMINI_CLI_HOME") ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     private static UsageSnapshot Parse(JsonElement root)
     {
@@ -112,6 +135,7 @@ internal static class GeminiCliBridge
                 "RATE_LIMITED" => Error(UsageStatus.RateLimited, "Gemini 요청 제한 · 잠시 후 자동으로 다시 확인합니다.")
                     with { RetryAfter = ReadRetryAfter(root) },
                 "PROJECT_REQUIRED" => Error(UsageStatus.Unavailable, "Gemini 계정에 Google Cloud 프로젝트 설정이 필요합니다."),
+                "ACCESS_DENIED" => Error(UsageStatus.Unavailable, "조회 권한이 없습니다. 회사 계정의 서비스 권한·SSO 및 네트워크 정책을 확인해 주세요."),
                 "UNSUPPORTED_CLIENT" => Error(UsageStatus.Unavailable, "Gemini CLI 개인 계정 지원이 종료되었습니다. Antigravity에서 사용량을 확인해 주세요."),
                 "RUNTIME_REQUIRED" => Error(UsageStatus.Unavailable, "Gemini 조회 런타임이 누락되었습니다. 앱을 다시 설치해 주세요."),
                 "NO_QUOTA" => Error(UsageStatus.Unavailable, "Gemini 계정에서 남은 한도 정보를 제공하지 않습니다."),

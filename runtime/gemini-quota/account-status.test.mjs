@@ -1,8 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { accountFailure } from './account-status.mjs';
+import { accountFailure, requestFailure } from './account-status.mjs';
 
 const rejected = [{ tierId: 'free-tier', reasonCode: 'UNSUPPORTED_CLIENT' }];
+test('quota requests distinguish expired authorization, project access denial and throttling', () => {
+  assert.equal(requestFailure({ response: { status: 400, data: { error: 'invalid_grant' } } }), 'AUTH_REQUIRED');
+  assert.equal(requestFailure({ code: 'AUTH_REQUIRED' }), 'AUTH_REQUIRED');
+  assert.equal(requestFailure({ response: { status: 401 } }), 'AUTH_REQUIRED');
+  assert.equal(requestFailure({ response: { status: 403 } }), 'ACCESS_DENIED');
+  assert.equal(requestFailure({ response: { status: 429 } }), 'RATE_LIMITED');
+  assert.equal(requestFailure({ response: { status: 503 } }), 'NETWORK');
+});
 test('unsupported personal client selects Antigravity', () => {
   assert.equal(accountFailure({ ineligibleTiers: rejected }), 'UNSUPPORTED_CLIENT');
 });

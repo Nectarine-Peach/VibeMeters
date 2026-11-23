@@ -26,6 +26,7 @@ public static class SettingsStore
         if (!Enum.IsDefined(settings.CodexDisplayMode)) settings.CodexDisplayMode = UsageDisplayMode.Remaining;
         if (!Enum.IsDefined(settings.ClaudeDisplayMode)) settings.ClaudeDisplayMode = UsageDisplayMode.Remaining;
         if (!Enum.IsDefined(settings.GeminiDisplayMode)) settings.GeminiDisplayMode = UsageDisplayMode.Remaining;
+        if (!Enum.IsDefined(settings.GeminiProfile)) settings.GeminiProfile = GeminiProfile.Default;
         if (!Enum.IsDefined(settings.GrokDisplayMode)) settings.GrokDisplayMode = UsageDisplayMode.Remaining;
         if (settings.RefreshIntervalSeconds != 0 && settings.RefreshIntervalSeconds is < 30 or > 86400) settings.RefreshIntervalSeconds = 120;
         if (settings.Left.HasValue && !double.IsFinite(settings.Left.Value)) settings.Left = null;

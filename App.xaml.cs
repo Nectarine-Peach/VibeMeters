@@ -30,6 +30,7 @@ public partial class App : Application
     private readonly HashSet<UsageProviderKind> _loginsInProgress = new();
     private readonly List<FileSystemWatcher> _credentialWatchers = new();
     private IReadOnlyList<IUsageProvider> _providers = Array.Empty<IUsageProvider>();
+    private readonly Dictionary<GeminiProfile, GeminiUsageProvider> _geminiAccounts = new();
     private readonly Dictionary<UsageProviderKind, UsageSnapshot> _latest = new();
     private readonly RefreshRequestGate _refreshRequests = new();
     private bool _refreshing => _refreshRequests.IsRunning;
@@ -74,6 +75,8 @@ public partial class App : Application
         CreateTray();
         OnThemeChanged();
         _providers = _smokeTest ? Array.Empty<IUsageProvider>() : UsageProviderFactory.CreateDefault();
+        if (_providers.OfType<GeminiUsageProvider>().FirstOrDefault() is { } defaultGemini)
+            _geminiAccounts.Add(defaultGemini.Profile, defaultGemini);
         foreach (var provider in _providers.OfType<UsageProvider>())
             provider.AuthenticationProgress += snapshot =>
             {
@@ -119,6 +122,7 @@ public partial class App : Application
     {
         if (_demo) { _window!.UpdateStatus("데모에서는 로그인을 실행하지 않습니다."); return; }
         if (!_loginsInProgress.Add(provider)) return;
+        var loginProfile = _settings.GeminiProfile;
         _window!.SetLoginStatus(provider, true, "백그라운드에서 로그인을 준비합니다. 브라우저에서 인증을 완료해 주세요.");
         try
         {
@@ -146,8 +150,16 @@ public partial class App : Application
                     return;
                 }
             }
+            else if (provider == UsageProviderKind.Gemini && _geminiAccounts.TryGetValue(loginProfile, out var gemini))
+                result = await gemini.LoginAsync(_lifetime.Token);
             else result = await PrepareAndLoginAsync(provider, _lifetime.Token, progress);
             if (_exiting) return;
+            if (provider == UsageProviderKind.Gemini && loginProfile != _settings.GeminiProfile)
+            {
+                if (result.Success) _geminiAccounts[loginProfile].NotifyLoginCompleted();
+                _window.SetLoginStatus(provider, false, "선택한 Gemini 계정의 사용량을 확인합니다.");
+                return;
+            }
             _window.SetLoginStatus(provider, false, result.Message);
             if (result.Success)
             {
@@ -245,6 +257,17 @@ public partial class App : Application
                 if (item.Tag is string source) item.Text = Localizer.T(source);
         var visible = Enum.GetValues<UsageProviderKind>().Where(_settings.IsProviderVisible).ToHashSet();
         var enabledNewProvider = visible.Except(_activeProviders).Any();
+        if (_providers.OfType<GeminiUsageProvider>().FirstOrDefault() is { } previous && previous.Profile != _settings.GeminiProfile)
+        {
+            if (!_geminiAccounts.TryGetValue(_settings.GeminiProfile, out var selected))
+                _geminiAccounts.Add(_settings.GeminiProfile, selected = new GeminiUsageProvider(_settings.GeminiProfile));
+            _providers = _providers.Select(provider => ReferenceEquals(provider, previous) ? selected : provider).ToArray();
+            Render(new UsageSnapshot(UsageProviderKind.Gemini, UsageStatus.Unavailable, [], DateTimeOffset.Now,
+                Message: "선택한 Gemini 계정의 사용량을 확인합니다."));
+            foreach (var key in _alertLevels.Keys.Where(key => key.StartsWith("Gemini", StringComparison.Ordinal)).ToArray())
+                _alertLevels.Remove(key);
+            enabledNewProvider |= _settings.ShowGemini;
+        }
         _activeProviders = visible;
         _window!.Topmost = _settings.AlwaysOnTop;
         _window.ShowInTaskbar = _settings.ShowInTaskbar;
@@ -306,7 +329,7 @@ public partial class App : Application
                     new UsageFetchOptions(RefreshPolicy.BypassSuccessCache(trigger, provider.Kind, _settings.RefreshIntervalSeconds), requestedAt)); }
                 catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
                 catch { snapshot = new UsageSnapshot(provider.Kind, UsageStatus.Unavailable, Array.Empty<UsageWindow>(), DateTimeOffset.UtcNow, Message: "조회 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."); }
-                if (!_exiting) Render(snapshot);
+                if (!_exiting && _providers.Contains(provider)) Render(snapshot);
             }));
             if (!_exiting)
             {

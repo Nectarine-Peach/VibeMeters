@@ -3,6 +3,7 @@ namespace VibeMeters.Models;
 public enum AppTheme { System, Dark, Light }
 public enum UsageDisplayMode { Remaining, Used }
 public enum AppLanguage { System, Korean, English }
+public enum GeminiProfile { Default, Antigravity, CodeAssist1, CodeAssist2 }
 
 public sealed class AppSettings
 {
@@ -11,6 +12,7 @@ public sealed class AppSettings
     public UsageDisplayMode CodexDisplayMode { get; set; }
     public UsageDisplayMode ClaudeDisplayMode { get; set; }
     public UsageDisplayMode GeminiDisplayMode { get; set; }
+    public GeminiProfile GeminiProfile { get; set; }
     public UsageDisplayMode GrokDisplayMode { get; set; }
     public int RefreshIntervalSeconds { get; set; } = 120;
     public bool AlwaysOnTop { get; set; }

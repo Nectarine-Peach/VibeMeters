@@ -253,6 +253,11 @@ internal sealed class VisualVerification
 
     private async Task CheckSettingsInteractionsAsync(SettingsWindow settings)
     {
+        var account = (ComboBox)settings.FindName("GeminiProfileCombo");
+        SelectTag(account, "CodeAssist2");
+        Check("Gemini profile selection persists across settings windows", _settings.GeminiProfile == GeminiProfile.CodeAssist2 &&
+            JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings))?.GeminiProfile == GeminiProfile.CodeAssist2);
+        SelectTag(account, "Default");
         var theme=(ComboBox)settings.FindName("ThemeCombo");
         SelectTag(theme,"Light");await StableAsync(_window);
         Check("settings light selection updates application",_settings.Theme==AppTheme.Light&&!ThemeService.IsDark);

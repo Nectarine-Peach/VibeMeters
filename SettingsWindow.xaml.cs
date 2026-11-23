@@ -25,6 +25,8 @@ public partial class SettingsWindow : Window
         CodexCheck.IsChecked=settings.ShowCodex;
         ClaudeCheck.IsChecked=settings.ShowClaude;
         GeminiCheck.IsChecked=settings.ShowGemini;
+        foreach (ComboBoxItem item in GeminiProfileCombo.Items)
+            if (item.Tag?.ToString() == settings.GeminiProfile.ToString()) GeminiProfileCombo.SelectedItem = item;
         GrokCheck.IsChecked=settings.ShowGrok;
         TopCheck.IsChecked=settings.AlwaysOnTop;
         TaskbarCheck.IsChecked=settings.ShowInTaskbar;
@@ -116,6 +118,13 @@ public partial class SettingsWindow : Window
     private void CodexLogin_Click(object sender,RoutedEventArgs e)=>LoginRequested?.Invoke(UsageProviderKind.Codex);
     private void ClaudeLogin_Click(object sender,RoutedEventArgs e)=>LoginRequested?.Invoke(UsageProviderKind.Claude);
     private void GeminiLogin_Click(object sender,RoutedEventArgs e)=>LoginRequested?.Invoke(UsageProviderKind.Gemini);
+    private void GeminiProfile_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_initialized || GeminiProfileCombo.SelectedItem is not ComboBoxItem item ||
+            !Enum.TryParse<GeminiProfile>(item.Tag?.ToString(), out var profile)) return;
+        _settings.GeminiProfile = profile;
+        SettingsChanged?.Invoke();
+    }
     private void GrokLogin_Click(object sender,RoutedEventArgs e)=>LoginRequested?.Invoke(UsageProviderKind.Grok);
     private void Close_Click(object sender,RoutedEventArgs e)=>Close();
     private void Header_MouseLeftButtonDown(object sender,MouseButtonEventArgs e)

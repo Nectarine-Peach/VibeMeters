@@ -33,7 +33,8 @@ public static class LoginService
             return new(false, "이미 로그인 중입니다. 브라우저에서 로그인을 완료해 주세요.");
         try
         {
-            if (provider == UsageProviderKind.Gemini) return GeminiCliBridge.StartLogin();
+            if (provider == UsageProviderKind.Gemini)
+                return await new GeminiCliBridge(GeminiProfile.Default).LoginAsync(cancellationToken).ConfigureAwait(false);
             var name = provider switch { UsageProviderKind.Codex => "codex", UsageProviderKind.Grok => "grok", _ => "claude" };
             var arguments = provider == UsageProviderKind.Grok ? new[] { "login", "--oauth" }
                 : provider == UsageProviderKind.Codex ? new[] { "login" } : new[] { "auth", "login", "--claudeai" };

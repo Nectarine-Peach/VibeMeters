@@ -1,7 +1,7 @@
 // Short-lived adapter using the official, app-private Gemini CLI core.
 // Official code owns authentication and token renewal; credentials never leave it.
 import { writeSync } from 'node:fs';
-import { accountFailure } from './account-status.mjs';
+import { accountFailure, requestFailure } from './account-status.mjs';
 import { quotaRequestOptions, retryAfterDeadline } from './rate-limit.mjs';
 const suppressWrite = (chunk, encoding, callback) => {
   const done = typeof encoding === 'function' ? encoding : callback;
@@ -11,7 +11,7 @@ const suppressWrite = (chunk, encoding, callback) => {
 process.stdout.write = suppressWrite;
 process.stderr.write = suppressWrite;
 const finish = value => {
-  if (!interactiveLogin) writeSync(1, JSON.stringify(value));
+  writeSync(1, JSON.stringify(value));
   // Graceful completion lets the official client's pending token-storage writes finish.
   process.exitCode = 0;
   // Do not retain this one-shot process if SDK background timers keep the event loop alive.
@@ -57,6 +57,7 @@ try {
     getAcpMode: () => interactiveLogin,
   };
   const client = await getOauthClient(AuthType.LOGIN_WITH_GOOGLE, config);
+  if (interactiveLogin) return finish({ status: 'Authenticated' });
   const configuredProject = process.env.GOOGLE_CLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT_ID || undefined;
   const server = new CodeAssistServer({ request: options => client.request(quotaRequestOptions(options)) }, configuredProject);
   const account = await server.loadCodeAssist({
@@ -86,12 +87,11 @@ try {
       error?.name === 'ReferenceError' ? String(error.message).replace(/[^a-zA-Z0-9 _]/g, '').slice(0, 100)
       : String(error?.code || error?.name || 'RUNTIME_LOAD_FAILED').slice(0, 100) });
   // Never return SDK messages, raw headers, response bodies, OAuth URLs, or account identifiers.
-  const statusCode = Number(error?.response?.status || error?.status || error?.code);
-  if (error?.code === 'AUTH_REQUIRED' || statusCode === 401 || statusCode === 403)
-    return finish({ status: 'AuthenticationRequired', reason: 'AUTH_REQUIRED' });
-  if (statusCode === 429)
-    return finish({ status: 'RateLimited', reason: 'RATE_LIMITED', retryAfterUnixMs: retryAfterDeadline(error?.response?.headers) });
-  return finish({ status: 'Unavailable', reason: error?.code === 'ERR_MODULE_NOT_FOUND' ? 'RUNTIME_REQUIRED' : 'NETWORK' });
+  const reason = requestFailure(error);
+  if (reason === 'AUTH_REQUIRED') return finish({ status: 'AuthenticationRequired', reason });
+  if (reason === 'RATE_LIMITED')
+    return finish({ status: 'RateLimited', reason, retryAfterUnixMs: retryAfterDeadline(error?.response?.headers) });
+  return finish({ status: 'Unavailable', reason });
 }
 }
 await main();

@@ -261,3 +261,7 @@ Codex CLI에서 사용량을 확인할 수 없습니다. 잠시 후 다시 확�
 갱신 진행 중 · 다시 확인|Renewal pending · Check again
 Claude 인증 갱신 확인 중|Checking Claude authentication renewal
 Claude 인증 다시 확인|Check Claude authentication again
+선택한 Gemini 계정의 사용량을 확인합니다.|Checking usage for the selected Gemini account.
+Gemini 로그인을 완료하지 못했습니다.|Gemini sign-in did not complete.
+기본 CLI 계정|Default CLI account
+Gemini 계정|Gemini account

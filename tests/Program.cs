@@ -221,6 +221,22 @@ sealed class RegressionSuite
             Equal(UsageStatus.AuthenticationRequired, s.Status); True(s.Message!.Contains("권한", StringComparison.Ordinal)); True(!s.Message.Contains("만료", StringComparison.Ordinal));
         });
         Test("Credential string redacts token", () => True(!Credential().ToString().Contains("test-secret", StringComparison.Ordinal)));
+        Test("Code Assist profiles have independent credentials and keep ambient identities out of their child process", () =>
+        {
+            var first = new GeminiCliBridge(GeminiProfile.CodeAssist1);
+            var second = new GeminiCliBridge(GeminiProfile.CodeAssist2);
+            True(!string.Equals(first.HomeDirectory, second.HomeDirectory, StringComparison.OrdinalIgnoreCase));
+            foreach (var bridge in new[] { first, second })
+            {
+                var start = bridge.CreateStartInfo("node.exe", "quota.mjs", ".");
+                Equal(bridge.HomeDirectory, start.Environment["GEMINI_CLI_HOME"]);
+                Equal("true", start.Environment["GEMINI_FORCE_ENCRYPTED_FILE_STORAGE"]);
+                Equal("true", start.Environment["GEMINI_FORCE_FILE_STORAGE"]);
+                True(!start.Environment.ContainsKey("GOOGLE_APPLICATION_CREDENTIALS"));
+                True(!start.Environment.ContainsKey("GOOGLE_CLOUD_ACCESS_TOKEN"));
+            }
+            Equal(GeminiProfile.Default, SettingsStore.Normalize(new AppSettings { GeminiProfile = (GeminiProfile)999 }).GeminiProfile);
+        });
         Test("Gemini official bridge parses model quotas, plan and reset", () =>
         {
             var s = ParseGemini("""{"status":"Ready","plan":"Google AI Pro","windows":[{"name":"2.5-pro","remainingPercent":62.5,"resetsAt":"2026-10-24T12:00:00Z"},{"name":"2.5-flash","remainingPercent":0},{"name":"3-pro","remainingPercent":100}]}""");
@@ -344,6 +360,67 @@ sealed class RegressionSuite
                 : ParseAntigravity(agyQuota)), () => 0);
             Equal(UsageStatus.AuthenticationRequired, (await provider.FetchAsync()).Status);
             Equal(UsageStatus.Ready, (await provider.FetchAsync()).Status); Equal(2, calls);
+        });
+        await TestAsync("Gemini retries a changed credential once and publishes only the new account", async () =>
+        {
+            var calls = 0; long stamp = 1;
+            var provider = new GeminiUsageProvider(_ =>
+            {
+                if (++calls == 1) stamp++;
+                return Task.FromResult(new UsageSnapshot(UsageProviderKind.Gemini, UsageStatus.Ready,
+                    [new(calls == 1 ? "first" : "replacement", 12, null)], Now));
+            }, () => stamp);
+            var snapshot = await provider.FetchAsync();
+            Equal(2, calls); Equal("replacement", snapshot.Windows.Single().Name);
+        });
+        foreach (var status in new[] { UsageStatus.Ready, UsageStatus.RateLimited })
+            await TestAsync($"Gemini drops unstable {status} results and bounds repeated lookups", async () =>
+            {
+                var calls = 0; long stamp = 1;
+                var provider = new GeminiUsageProvider(_ =>
+                {
+                    stamp++; calls++;
+                    return Task.FromResult(new UsageSnapshot(UsageProviderKind.Gemini, status,
+                        [new("old", 12, null)], Now, "old-plan", ObservedAt: Now));
+                }, () => stamp);
+                var snapshot = await provider.FetchAsync();
+                Equal(status == UsageStatus.RateLimited ? 1 : 2, calls);
+                Equal(0, snapshot.Windows.Count); Equal<string?>(null, snapshot.Plan);
+                Equal<DateTimeOffset?>(null, snapshot.ObservedAt);
+                if (status == UsageStatus.RateLimited) True(snapshot.RetryAfter > DateTimeOffset.UtcNow);
+            });
+        await TestAsync("Gemini success cache ends at reset, and later sign-in failure clears old quotas", async () =>
+        {
+            var reset = DateTimeOffset.UtcNow.AddMinutes(2);
+            var calls = 0;
+            var provider = new GeminiUsageProvider(_ => Task.FromResult(++calls == 1
+                ? new UsageSnapshot(UsageProviderKind.Gemini, UsageStatus.Ready, [new("company", 75, reset)], Now)
+                : new UsageSnapshot(UsageProviderKind.Gemini, UsageStatus.AuthenticationRequired, [], Now)), () => 1);
+            var first = await provider.FetchAsync();
+            Equal(reset, first.NextQueryAt);
+            var next = await provider.FetchAsync(default, new(true, first.CheckedAt.AddTicks(1)));
+            Equal(0, next.Windows.Count); Equal<DateTimeOffset?>(null, next.ObservedAt);
+            Equal(next.CheckedAt.AddMinutes(5), next.NextQueryAt);
+        });
+        await TestAsync("Gemini transient failures are eligible for retry in thirty seconds", async () =>
+        {
+            var provider = new GeminiUsageProvider(_ => Task.FromResult(
+                new UsageSnapshot(UsageProviderKind.Gemini, UsageStatus.Unavailable, [], Now)), () => 1);
+            var snapshot = await provider.FetchAsync();
+            Equal(snapshot.CheckedAt.AddSeconds(30), snapshot.NextQueryAt);
+        });
+        await TestAsync("Gemini cooldown retains only quotas whose reset is still pending", async () =>
+        {
+            var now = DateTimeOffset.UtcNow;
+            var calls = 0;
+            var provider = new GeminiUsageProvider(_ => Task.FromResult(++calls == 1
+                ? new UsageSnapshot(UsageProviderKind.Gemini, UsageStatus.Ready,
+                    [new("expired", 95, now.AddHours(-1)), new("weekly", 35, now.AddDays(3))], now)
+                : new UsageSnapshot(UsageProviderKind.Gemini, UsageStatus.RateLimited, [], now)), () => 1);
+            var first = await provider.FetchAsync();
+            Equal("weekly", first.Windows.Single().Name);
+            var limited = await provider.FetchAsync(default, new(true, first.CheckedAt.AddTicks(1)));
+            Equal("weekly", limited.Windows.Single().Name); Equal(first.ObservedAt, limited.ObservedAt);
         });
         await TestAsync("Gemini provider propagates caller cancellation", async () =>
         {

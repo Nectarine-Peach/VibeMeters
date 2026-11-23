@@ -11,7 +11,7 @@ namespace VibeMeters;
 
 public partial class TaskbarWidgetWindow : Window
 {
-    internal const double MinimumReadableWidth = 126;
+    internal const double MinimumReadableWidth = 132;
     private readonly Action _openMain;
     private readonly List<(TextBlock Label, DateTimeOffset? Deadline)> _countdowns = [];
     private UsageSnapshot? _snapshot;
@@ -69,11 +69,11 @@ public partial class TaskbarWidgetWindow : Window
         // Size the tile from the host's available space. Every provider shares the same
         // frame and columns, even when a lookup fails or the number of windows changes.
         double tileWidth = Math.Clamp(_maxWidth, MinimumReadableWidth, 176);
-        bool compact = tileWidth < 150;
+        bool compact = tileWidth < 156;
         double tileHeight = 4 + Math.Max(17, Math.Max(1, visible.Length) * 14);
         ContentFrame.Width = tileWidth - 2;
         ContentFrame.Height = tileHeight - 2;
-        ContentFrame.Padding = new Thickness(compact ? 3 : 4, 1, compact ? 3 : 4, 1);
+        ContentFrame.Padding = new Thickness(compact ? 6 : 7, 1, compact ? 6 : 7, 1);
         BrandColumn.Width = new GridLength(compact ? 15 : 18);
         BrandRow.Height = new GridLength(0);
         Grid.SetColumn(Brand, 0);

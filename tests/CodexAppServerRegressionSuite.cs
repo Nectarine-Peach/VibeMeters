@@ -138,6 +138,30 @@ internal static class CodexAppServerRegressionSuite
             Require(throttledHttp.Calls == 1 && throttledCli.Calls.Count == 0);
         });
 
+        await Check("tries the CLI on HTTP 403 without rotating credentials", async () =>
+        {
+            var clock = new FakeClaudeClock();
+            var credentials = new MutableCredentials(new() { AccessToken = "token", AccountId = "workspace" });
+            var cli = new StubAppServer(Ready(clock.UtcNow));
+            var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Forbidden));
+            var provider = new UsageProvider(UsageProviderKind.Codex, credentials, cli, new HttpClient(handler), clock: clock);
+            Require((await provider.FetchAsync()).Status == UsageStatus.Ready);
+            Require(cli.Calls.SequenceEqual(new[] { (false, (string?)"workspace") }));
+        });
+
+        await Check("discards an HTTP response if the workspace changed during lookup", async () =>
+        {
+            var credentials = new MutableCredentials(new() { AccessToken = "old", AccountId = "first" });
+            var handler = new StubHandler(_ =>
+            {
+                credentials.Current = new() { AccessToken = "new", AccountId = "second" };
+                return new HttpResponseMessage(HttpStatusCode.OK) {
+                    Content = new StringContent("""{"rate_limit":{"primary_window":{"used_percent":25}}}""") };
+            });
+            var provider = new UsageProvider(UsageProviderKind.Codex, credentials, new HttpClient(handler));
+            var result = await provider.FetchAsync();
+            Require(result.Status == UsageStatus.Unavailable && result.Windows.Count == 0);
+        });
         return (passed, failed);
     }
 

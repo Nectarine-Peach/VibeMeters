@@ -250,10 +250,12 @@ public sealed class UsageProvider : IUsageProvider
                             refreshed = true;
                             continue; // At most one retry, using only the newly read token.
                         }
-                        if (Kind == UsageProviderKind.Codex && response.StatusCode == HttpStatusCode.Unauthorized)
+                        if (Kind == UsageProviderKind.Codex)
                         {
-                            var fromCli = await TryCodexAppServerAsync(credential, generation, cancellationToken).ConfigureAwait(false);
+                            var fromCli = await TryCodexAppServerAsync(credential, generation, cancellationToken,
+                                refreshToken: response.StatusCode == HttpStatusCode.Unauthorized).ConfigureAwait(false);
                             if (fromCli is not null) return fromCli;
+                            _last = null;
                         }
                         _nextAttempt = _clock.UtcNow.AddMinutes(5);
                         if (Kind == UsageProviderKind.Claude && response.StatusCode == HttpStatusCode.Forbidden)
@@ -288,6 +290,17 @@ public sealed class UsageProvider : IUsageProvider
                     using var json = await JsonDocument.ParseAsync(body, cancellationToken: cancellationToken).ConfigureAwait(false);
                     var observedAt = _clock.UtcNow;
                     var parsed = UsageParser.Parse(Kind, json.RootElement, observedAt, credential.Plan);
+                    if (Kind == UsageProviderKind.Codex)
+                    {
+                        var current = await _credentials.ReadAsync(Kind, cancellationToken).ConfigureAwait(false);
+                        if (generation != Volatile.Read(ref _loginGeneration) || current is null ||
+                            (Fingerprint(current) != Fingerprint(credential) &&
+                             (string.IsNullOrWhiteSpace(current.AccountId) || current.AccountId != credential.AccountId)))
+                        {
+                            _last = null;
+                            return Save(UsageStatus.Unavailable, "Codex 조회 중 계정이 변경되었습니다. 현재 계정으로 다시 확인합니다.");
+                        }
+                    }
                     if (parsed.Status != UsageStatus.Ready)
                         return Failure(parsed.Message ?? "사용량 정보를 확인할 수 없습니다. 잠시 후 다시 확인합니다.");
                     if (Kind == UsageProviderKind.Claude)
@@ -327,10 +340,10 @@ public sealed class UsageProvider : IUsageProvider
     private static string Fingerprint(UsageCredential credential) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
         System.Text.Encoding.UTF8.GetBytes(credential.AccessToken + "\n" + credential.AccountId)));
 
-    private async Task<UsageSnapshot?> TryCodexAppServerAsync(UsageCredential? rejected, int generation, CancellationToken cancellationToken)
+    private async Task<UsageSnapshot?> TryCodexAppServerAsync(UsageCredential? rejected, int generation, CancellationToken cancellationToken, bool refreshToken = false)
     {
         if (_codexAppServer is null) return null;
-        var result = await _codexAppServer.FetchAsync(rejected is not null, rejected?.AccountId, cancellationToken).ConfigureAwait(false);
+        var result = await _codexAppServer.FetchAsync(refreshToken, rejected?.AccountId, cancellationToken).ConfigureAwait(false);
         var now = _clock.UtcNow;
         if (result?.Status == UsageStatus.RateLimited)
         {

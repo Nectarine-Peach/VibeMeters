@@ -2,7 +2,7 @@
 
 [한국어](README.md) · **English**
 
-See how much of your Codex, Claude, Gemini and Grok quotas remains and when each limit resets. VibeMeters runs on Windows 10 and 11 (x64) and offers a resizable dashboard and optional taskbar widgets.
+Track your remaining Codex, Claude, Gemini and Grok quotas and see when each limit resets. VibeMeters runs on Windows 10 and 11 (x64) and offers a resizable dashboard and optional taskbar widgets.
 
 [Download the Windows x64 ZIP](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [Release notes](https://github.com/Nectarine-Peach/VibeMeters/releases/latest)
 

@@ -6,7 +6,7 @@ Codex, Claude, Gemini, Grok의 구독 한도가 얼마나 남았는지, 언제 �
 
 **[Windows용 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip)** · [v1.4.13 변경 사항](docs/releases/v1.4.13.md)
 
-<img src="docs/screenshots/v1.4.13/dashboard-quota-names-ko-dark.png" alt="Codex와 Claude의 5시간·주간 한도, Gemini의 Pro·Flash·Argon 한도, Grok의 Build 주간 한도가 표시된 대시보드" width="360">
+<img src="docs/screenshots/v1.4.13/dashboard-quota-names-ko-dark.png" alt="Codex와 Claude의 5시간·주간 한도, Gemini의 Pro·Flash·Argon 한도, Grok의 Build 주간 한도가 표시된 사용량 창" width="360">
 
 그래프 오른쪽에는 선택한 기준에 따른 백분율과 리셋까지 남은 시간이 표시됩니다. 위 예시에서 Claude의 5시간 한도는 25%가 남았고 3시간 2분 뒤에 리셋됩니다. 남은 시간이 24시간 이하면 `3:02`, `24:00`처럼 시간과 분으로, 24시간을 넘으면 `2d`처럼 일 단위로 표시됩니다.
 
@@ -15,13 +15,13 @@ Codex, Claude, Gemini, Grok의 구독 한도가 얼마나 남았는지, 언제 �
 1. Windows 10 또는 11의 64비트 PC에서 ZIP **전체를** 원하는 폴더에 풉니다. `runtime` 폴더는 `VibeMeters.exe`와 같은 위치에 두세요. 실행에 필요한 .NET과 Node.js는 ZIP에 포함되어 있습니다.
 2. `VibeMeters.exe`를 실행한 뒤 오른쪽 위 톱니바퀴를 누릅니다. **표시할 서비스 · 수치 기준**에서 서비스 이름 옆의 체크박스를 켜고, 서비스마다 **남은 양** 또는 **사용한 양**을 고릅니다.
 3. **계정 연결**에서 사용할 서비스에 로그인합니다. Codex와 Claude는 공식 CLI에 이미 로그인했다면 기존 인증을 사용할 수 있습니다. CLI 설치 안내가 나오면 **설치 후 로그인**을 선택하고 브라우저에서 인증을 마치세요.
-4. 대시보드에서 **F5**를 눌러 사용량을 확인합니다. 핀 아이콘을 누르면 다른 창 위에 고정됩니다.
+4. 사용량 창에서 **F5**를 눌러 사용량을 확인합니다. 핀 아이콘을 누르면 다른 창 위에 고정됩니다.
 
 **업데이트할 때**는 알림 영역의 VibeMeters 아이콘을 오른쪽 클릭해 **종료**한 뒤, 새 ZIP 전체를 풀고 새 폴더에서 실행하세요. 설정과 기존 로그인은 다시 사용할 수 있습니다. 실행 경로가 바뀌었다면 **Windows 시작 시 실행**을 껐다 켜서 자동시작 경로를 갱신하세요.
 
 ## 작업표시줄 위젯
 
-**설정 → 표시할 서비스 · 수치 기준**에서 원하는 서비스의 **위젯**을 켜세요. 대시보드에는 네 서비스를 모두 표시하면서 작업표시줄에는 Claude만 띄우는 식으로 따로 선택할 수 있습니다. 위젯은 기본 모니터의 작업표시줄 안에서 빈 공간을 사용하며, 클릭하면 대시보드가 열립니다.
+**설정 → 표시할 서비스 · 수치 기준**에서 원하는 서비스의 **위젯**을 켜세요. 사용량 창에는 네 서비스를 모두 표시하면서 작업표시줄에는 Claude만 띄우는 식으로 따로 선택할 수 있습니다. 위젯은 기본 모니터의 작업표시줄 안에서 빈 공간을 사용하며, 클릭하면 사용량 창이 열립니다.
 
 ![Codex·Claude·Gemini·Grok의 작업표시줄 위젯. 각 행에 한도 이름, 그래프, 백분율, 남은 시간이 표시됩니다.](docs/screenshots/taskbar-widget-four-services.png)
 
@@ -47,7 +47,7 @@ Codex, Claude, Gemini, Grok의 구독 한도가 얼마나 남았는지, 언제 �
 **설정 → 계정 연결 → Gemini 계정**에서 한 번에 표시할 계정을 선택합니다.
 
 - **기본 CLI 계정**은 기존 CLI 연결을 사용합니다.
-- **Antigravity**는 설치된 공식 Antigravity CLI 1.4.7 이상에 로그인한 개인 계정의 사용량을 보여 줍니다. 대시보드에서 **Gemini · Antigravity**로 구분할 수 있습니다.
+- **Antigravity**는 설치된 공식 Antigravity CLI 1.4.7 이상에 로그인한 개인 계정의 사용량을 보여 줍니다. 사용량 창에서 **Gemini · Antigravity**로 구분할 수 있습니다.
 - **Code Assist 1**, **Code Assist 2**에는 회사 계정을 각각 연결할 수 있습니다. 하나를 선택하고 **Gemini 로그인**을 눌러 인증한 다음 다른 계정도 같은 방법으로 연결하세요. 로그인 세션이 유효한 동안은 목록에서 계정만 바꾸면 됩니다.
 
 ## 창과 새로고침 설정

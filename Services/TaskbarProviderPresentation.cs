@@ -57,17 +57,27 @@ internal static class TaskbarProviderPresentation
     private static bool IsNumber(string text) => double.TryParse(text, NumberStyles.AllowDecimalPoint,
         CultureInfo.InvariantCulture, out var number) && double.IsFinite(number);
 
-    public static ImageSource Icon(UsageProviderKind provider) => Icons.ByProvider[provider];
+    public static ImageSource Icon(UsageProviderKind provider)
+    {
+        if (provider is UsageProviderKind.Codex or UsageProviderKind.Grok)
+        {
+            bool white = SystemParameters.HighContrast ? SystemColors.WindowColor.ScR < 0.5f : ThemeService.IsDark;
+            if (white) return Icons.WhiteMarks[provider];
+        }
+        return Icons.ByProvider[provider];
+    }
 
     private static class Icons
     {
         internal static readonly Dictionary<UsageProviderKind, ImageSource> ByProvider =
-            Enum.GetValues<UsageProviderKind>().ToDictionary(provider => provider, Load);
+            Enum.GetValues<UsageProviderKind>().ToDictionary(provider => provider, provider => Load(provider.ToString()));
+        internal static readonly Dictionary<UsageProviderKind, ImageSource> WhiteMarks =
+            new[] { UsageProviderKind.Codex, UsageProviderKind.Grok }.ToDictionary(provider => provider, provider => Load(provider + "-white"));
 
-        private static ImageSource Load(UsageProviderKind provider)
+        private static ImageSource Load(string asset)
         {
-            using var stream = typeof(TaskbarProviderPresentation).Assembly.GetManifestResourceStream($"VibeMeters.Taskbar.{provider}.png")
-                ?? throw new InvalidOperationException($"Missing {provider} taskbar icon.");
+            using var stream = typeof(TaskbarProviderPresentation).Assembly.GetManifestResourceStream($"VibeMeters.Taskbar.{asset}.png")
+                ?? throw new InvalidOperationException($"Missing {asset} taskbar icon.");
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
@@ -75,18 +85,7 @@ internal static class TaskbarProviderPresentation
             bitmap.StreamSource = stream;
             bitmap.EndInit();
             bitmap.Freeze();
-            if (provider != UsageProviderKind.Grok) return bitmap;
-
-            // The monochrome Grok symbol needs a contrasting tile on light Windows taskbars.
-            var tile = new DrawingGroup();
-            using (var drawing = tile.Open())
-            {
-                drawing.DrawRoundedRectangle(Brushes.Black, null, new Rect(0, 0, 96, 96), 18, 18);
-                drawing.DrawImage(bitmap, new Rect(10, 10, 76, 76));
-            }
-            var icon = new DrawingImage(tile);
-            icon.Freeze();
-            return icon;
+            return bitmap;
         }
     }
 }

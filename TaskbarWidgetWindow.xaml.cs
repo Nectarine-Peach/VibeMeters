@@ -23,6 +23,8 @@ public partial class TaskbarWidgetWindow : Window
     {
         _openMain = openMain;
         InitializeComponent();
+        ThemeService.ThemeChanged += RefreshLogo;
+        Closed += (_, _) => ThemeService.ThemeChanged -= RefreshLogo;
         Width = 1;
         Height = 1;
     }
@@ -57,7 +59,7 @@ public partial class TaskbarWidgetWindow : Window
             return;
         }
         ProviderButton.Visibility = Visibility.Visible;
-        Logo.Source = TaskbarProviderPresentation.Icon(snapshot.Provider);
+        RefreshLogo();
         AutomationProperties.SetAutomationId(ProviderButton, $"Widget{snapshot.Provider}");
         string basis = Localizer.T(_mode == UsageDisplayMode.Used ? "사용" : "남음");
         Title = $"{snapshot.Provider} · {basis} · VibeMeters";
@@ -100,6 +102,11 @@ public partial class TaskbarWidgetWindow : Window
         AutomationProperties.SetName(ProviderButton, $"{snapshot.Provider} · {basis}");
         AutomationProperties.SetHelpText(ProviderButton, details);
         ProviderButton.ToolTip = new ToolTip { Content = new TextBlock { Text = details, TextWrapping = TextWrapping.Wrap } };
+    }
+
+    private void RefreshLogo()
+    {
+        if (_snapshot is { } snapshot) Logo.Source = TaskbarProviderPresentation.Icon(snapshot.Provider);
     }
 
     private Grid QuotaRow(UsageProviderKind kind, UsageWindow window, bool compact)

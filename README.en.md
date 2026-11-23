@@ -36,6 +36,12 @@ Codex Business uses the supplied `spend_control.individual_limit` and Claude Ent
 
 ## Quick start
 
+The current source build shows a countdown beside each quota. It continues to update in manual refresh mode. Hover over a countdown to see the local reset date and time.
+
+Enable **Show in taskbar** to see a progress bar for the most heavily used quota. Hover over the button for each service’s limiting quota and reset time. To see the percentage in the button label, set Windows’ taskbar button combining preference to **Never**.
+
+Under **Settings → Accounts → Gemini account**, choose the account to display. **Default CLI account** uses your existing connection. **Antigravity** uses the personal account currently signed in to the official CLI. **Code Assist 1** and **Code Assist 2** are independent company account slots. Select each slot and use **Gemini sign-in** to connect its Google account. You can then switch between them without signing in again while their sessions are valid.
+
 1. Extract the **entire package**, keeping its `runtime` folder, and run `VibeMeters.exe`.
 2. Open **Settings (gear)**, choose your services, and sign in.
 3. Resize the window and use the **pin** to keep it on top.

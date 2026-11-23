@@ -1,5 +1,12 @@
 # 유사 앱 조사와 적용 방향
 
+## 2026-11-23 계정 복구와 Windows 작업표시줄
+
+- Claude Code 2.1.319의 개인 구독에서 액세스 토큰 만료 후 `auth status`는 성공했지만 인증 파일은 갱신되지 않았다. 내장 `/status`를 호출한 뒤 토큰 교체를 확인했다. 내장 명령 검증에서 모델 턴, 입출력 토큰, 비용은 모두 0이었다. 토큰 갱신 후 사용량 서버의 429와 장기 로그인 만료는 각각 별도 상태로 처리한다. [Claude Code 인증](https://code.claude.com/docs/en/authentication) · [CodexBar의 Claude 데이터 소스](https://github.com/steipete/CodexBar/blob/main/docs/claude.md)
+- Codex의 직접 조회가 403을 받으면 CLI가 관리하는 현재 계정으로 한도를 확인한다. 토큰 갱신 요청은 401 복구에만 사용한다. [Claude GPT Usage Tray의 app-server 구현](https://github.com/kjhbond/claude-gpt-usage-tray/blob/80f148fb6120d451b8cad6b4bf267350c39d3716/quota.py#L21-L52)
+- Gemini CLI core 0.65.0은 `GEMINI_CLI_HOME` 아래에 프로필 파일을 두고 암호화된 파일 저장소를 지원한다. Code Assist의 추가 슬롯은 이 두 기능을 함께 쓰며, 프로세스에 상속된 다른 계정의 자격 증명 경로와 액세스 토큰은 제거한다. Antigravity 개인 계정은 공식 CLI에서 선택한다. [홈 경로](https://github.com/google-gemini/gemini-cli/blob/v0.65.0/packages/core/src/utils/paths.ts) · [OAuth 인증 로직](https://github.com/google-gemini/gemini-cli/blob/v0.65.0/packages/core/src/code_assist/oauth2.ts)
+- Windows에서는 WPF의 `TaskbarItemInfo`로 앱 버튼에 사용률 막대를, 미리 보기에 서비스별 수치와 리셋 시각을 표시할 수 있다. 버튼 제목을 항상 표시할지는 Windows의 작업표시줄 단추 결합 설정을 따른다. [WPF 작업표시줄 API](https://learn.microsoft.com/en-us/dotnet/api/system.windows.shell.taskbariteminfo) · [Windows 작업표시줄 설정](https://support.microsoft.com/en-us/windows/experience/personalization/customize-the-taskbar-in-windows)
+
 ## 2026-11-08 네 서비스의 조회 복구 비교
 
 | GitHub 프로젝트 | 소스에서 확인한 동작과 적용 |

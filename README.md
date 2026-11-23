@@ -135,7 +135,7 @@ Grok도 기본적으로 꺼져 있습니다. 공식 Grok Build CLI의 기존 인
 | 상황 | 해결 방법 |
 | --- | --- |
 | Codex·Claude가 연결되지 않음 | 공식 CLI 또는 설정에서 로그인한 뒤 새로고침하세요. |
-| Claude 인증 확인/재시도 상태 | 앱이 기존 로그인으로 다시 시도합니다. CLI가 오래됐다는 안내가 표시되면 [Claude Code를 업데이트](https://code.claude.com/docs/en/setup#update-claude-code)하세요. 로그인 버튼도 브라우저 전에 사용량을 확인합니다. |
+| Claude 인증 확인/재시도 상태 | 앱이 기존 로그인으로 다시 시도합니다. CLI가 오래됐다는 안내가 표시되면 [Claude Code를 업데이트](https://code.claude.com/docs/en/setup#update-claude-code)하세요. 로그인 버튼을 누르면 공식 CLI의 브라우저 인증을 바로 시작합니다. |
 | Claude가 조회 일시 제한으로 표시됨 | 툴팁의 재시도 시각까지 기다리세요. HTTP 429는 **사용량 조회 요청**에 대한 제한입니다. 대기 시각은 앱을 다시 실행해도 적용됩니다. |
 | 오류 후 이전 비율이 남아 있음 | Claude는 일시 오류나 요청 제한 때 같은 인증으로 확인한 30분 이내의 비율을 **이전 값**으로 표시합니다. 다음 확인에서 인증이 바뀌었거나 초기화 시각이 지난 항목을 숨깁니다. |
 | Gemini 사용량이 나오지 않음 | 개인 계정은 Antigravity CLI 1.4.7 이상과 로그인을 확인하세요. 회사 계정은 프로젝트 권한과 동봉 runtime을 확인하세요. [계정별 안내](docs/account-usage.md). |

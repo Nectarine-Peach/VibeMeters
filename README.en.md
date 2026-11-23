@@ -123,7 +123,7 @@ Updates use polling rather than a real-time server stream. Provider cooldowns ca
 | Situation | What to do |
 | --- | --- |
 | Codex or Claude is not connected | Sign in through the official CLI or Settings, then refresh. Credential-file changes trigger a new check. |
-| Claude authentication is checking or waiting to retry | The app retries with the existing session. If the app reports an outdated CLI, [update Claude Code](https://code.claude.com/docs/en/setup#update-claude-code). The Login action checks usage before opening a browser. |
+| Claude authentication is checking or waiting to retry | The app retries with the existing session. If the app reports an outdated CLI, [update Claude Code](https://code.claude.com/docs/en/setup#update-claude-code). Clicking Login starts the official CLI browser sign-in immediately. |
 | Claude reports a temporary query limit | Wait for the retry time in the tooltip. HTTP 429 limits the **usage lookup**. Restarting VibeMeters keeps that retry time in effect. |
 | A previous percentage remains visible after an error | During a temporary error or rate limit, Claude marks recent values as **Previous**. Each check drops values after 30 minutes, after their quota resets, or when the credentials change. |
 | Gemini has no quota information | Personal accounts require a signed-in Antigravity CLI 1.4.7 or newer; business accounts retain the bundled Code Assist runtime and project access. See [account details](docs/account-usage.md). |

@@ -136,26 +136,7 @@ public partial class App : Application
                 if (!_exiting) _window.SetLoginStatus(provider, true, message);
             });
             LoginResult result;
-            if (provider == UsageProviderKind.Claude && _providers.OfType<UsageProvider>().FirstOrDefault(p => p.Kind == provider) is { } claude)
-            {
-                _window.SetLoginStatus(provider, true, "브라우저를 열기 전에 기존 인증의 자동 복구를 확인합니다.");
-                var flow = await ClaudeLoginFlow.RunAsync(
-                    async token =>
-                    {
-                        var snapshot = await claude.FetchAsync(token, new UsageFetchOptions(true, DateTimeOffset.UtcNow, RecoverAuthentication: true));
-                        if (!_exiting) Render(snapshot);
-                        return snapshot;
-                    },
-                    token => PrepareAndLoginAsync(provider, token, progress), _lifetime.Token, new ClaudeAuthDiagnostics());
-                if (_exiting) return;
-                result = flow.Result;
-                if (!flow.LoginStarted)
-                {
-                    _window.SetLoginStatus(provider, false, result.Message);
-                    return;
-                }
-            }
-            else if (provider == UsageProviderKind.Gemini && _geminiAccounts.TryGetValue(loginProfile, out var gemini))
+            if (provider == UsageProviderKind.Gemini && _geminiAccounts.TryGetValue(loginProfile, out var gemini))
                 result = await gemini.LoginAsync(_lifetime.Token);
             else result = await PrepareAndLoginAsync(provider, _lifetime.Token, progress);
             if (_exiting) return;

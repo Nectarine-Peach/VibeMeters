@@ -23,6 +23,7 @@ public partial class App : Application
     private Forms.NotifyIcon? _tray;
     private ProviderTrayIcons? _providerTray;
     internal ProviderTaskbarButtons? ProviderButtons { get; private set; }
+    internal TaskbarWidgetHost? TaskbarWidget { get; private set; }
     private MainWindow? _window;
     private AppSettings _settings = new();
     private readonly CancellationTokenSource _lifetime = new();
@@ -83,7 +84,7 @@ public partial class App : Application
         foreach (var provider in _providers.OfType<UsageProvider>())
             provider.AuthenticationProgress += snapshot =>
             {
-                if (!_exiting) _ = Dispatcher.InvokeAsync(() => { if (!_exiting) Render(snapshot); });
+                if (!_exiting) _ = Dispatcher.InvokeAsync(() => { if (!_exiting && _settings.ShouldFetch(snapshot.Provider)) Render(snapshot); });
             };
         if (!_demo) WatchCredentials();
         _timer.Tick += async (_, _) =>
@@ -259,7 +260,7 @@ public partial class App : Application
         if (_tray?.ContextMenuStrip is { } localizedMenu)
             foreach (Forms.ToolStripItem item in localizedMenu.Items)
                 if (item.Tag is string source) item.Text = Localizer.T(source);
-        var visible = Enum.GetValues<UsageProviderKind>().Where(_settings.IsProviderVisible).ToHashSet();
+        var visible = Enum.GetValues<UsageProviderKind>().Where(_settings.ShouldFetch).ToHashSet();
         var enabledNewProvider = visible.Except(_activeProviders).Any();
         if (_providers.OfType<GeminiUsageProvider>().FirstOrDefault() is { } previous && previous.Profile != _settings.GeminiProfile)
         {
@@ -270,7 +271,7 @@ public partial class App : Application
                 Message: "선택한 Gemini 계정의 사용량을 확인합니다."));
             foreach (var key in _alertLevels.Keys.Where(key => key.StartsWith("Gemini", StringComparison.Ordinal)).ToArray())
                 _alertLevels.Remove(key);
-            enabledNewProvider |= _settings.ShowGemini;
+            enabledNewProvider |= _settings.ShouldFetch(UsageProviderKind.Gemini);
         }
         _activeProviders = visible;
         _window!.Topmost = _settings.AlwaysOnTop;
@@ -309,7 +310,7 @@ public partial class App : Application
         {
             if (_demo)
             {
-                foreach (var kind in Enum.GetValues<UsageProviderKind>().Where(_settings.IsProviderVisible))
+                foreach (var kind in Enum.GetValues<UsageProviderKind>().Where(_settings.ShouldFetch))
                 {
                     if (kind == UsageProviderKind.Gemini)
                     {
@@ -326,14 +327,14 @@ public partial class App : Application
                 _window.UpdateStatus("데모 모드 · 실제 계정 데이터가 아닙니다");
                 return;
             }
-            await Task.WhenAll(_providers.Where(p => _settings.IsProviderVisible(p.Kind)).Select(async provider =>
+            await Task.WhenAll(_providers.Where(p => _settings.ShouldFetch(p.Kind)).Select(async provider =>
             {
                 UsageSnapshot snapshot;
                 try { snapshot = await provider.FetchAsync(_lifetime.Token,
                     new UsageFetchOptions(RefreshPolicy.BypassSuccessCache(trigger, provider.Kind, _settings.RefreshIntervalSeconds), requestedAt)); }
                 catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
                 catch { snapshot = new UsageSnapshot(provider.Kind, UsageStatus.Unavailable, Array.Empty<UsageWindow>(), DateTimeOffset.UtcNow, Message: "조회 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요."); }
-                if (!_exiting && _providers.Contains(provider)) Render(snapshot);
+                if (!_exiting && _providers.Contains(provider) && _settings.ShouldFetch(provider.Kind)) Render(snapshot);
             }));
             if (!_exiting)
             {
@@ -371,12 +372,20 @@ public partial class App : Application
 
     private void UpdateTray()
     {
-        var selected = Enum.GetValues<UsageProviderKind>().Where(_settings.IsProviderVisible).ToDictionary(kind => kind,
-            kind => _latest.TryGetValue(kind, out var snapshot) ? snapshot : new UsageSnapshot(kind, UsageStatus.NotConnected, Array.Empty<UsageWindow>(), DateTimeOffset.Now));
+        UsageSnapshot Latest(UsageProviderKind kind) => _latest.TryGetValue(kind, out var snapshot)
+            ? snapshot : new UsageSnapshot(kind, UsageStatus.NotConnected, [], DateTimeOffset.Now);
+        var providers = Enum.GetValues<UsageProviderKind>();
+        var selected = providers.Where(_settings.IsProviderVisible).ToDictionary(kind => kind, Latest);
         TaskbarUsage.Update(_window!, _settings, selected.Values);
-        if (_settings.ShowInTaskbar && _settings.SeparateTaskbarButtons)
+        if (_settings.TaskbarDisplay == TaskbarMode.Separate)
             ProviderButtons?.Update(_settings, selected.Values);
         else ProviderButtons?.Clear();
+        if (_settings.TaskbarDisplay == TaskbarMode.Widget && !_suspended && !_exiting)
+        {
+            TaskbarWidget ??= new TaskbarWidgetHost(ShowWindow);
+            TaskbarWidget.Update(_settings, providers.Where(_settings.IsWidgetSelected).ToDictionary(kind => kind, Latest));
+        }
+        else TaskbarWidget?.Clear();
         _providerTray?.Update(selected, _settings);
         if (_tray is null) return;
         _tray.Visible = !_settings.ShowProviderTrayIcons || selected.Count == 0;
@@ -467,6 +476,7 @@ public partial class App : Application
         ThemeService.ThemeChanged -= OnThemeChanged;
         ThemeService.Dispose();
         ProviderButtons?.Dispose();
+        TaskbarWidget?.Dispose();
         _providerTray?.Dispose();
         if (_tray != null) { _tray.Visible = false; _tray.Icon?.Dispose(); _tray.ContextMenuStrip?.Dispose(); _tray.Dispose(); }
         foreach (var provider in _providers.OfType<IDisposable>()) provider.Dispose();

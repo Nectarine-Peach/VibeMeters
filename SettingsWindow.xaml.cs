@@ -29,7 +29,21 @@ public partial class SettingsWindow : Window
             if (item.Tag?.ToString() == settings.GeminiProfile.ToString()) GeminiProfileCombo.SelectedItem = item;
         GrokCheck.IsChecked=settings.ShowGrok;
         TopCheck.IsChecked=settings.AlwaysOnTop;
-        var taskbarMode = settings.ShowInTaskbar ? settings.SeparateTaskbarButtons ? "Separate" : "Combined" : "Off";
+        var taskbarMode = settings.TaskbarDisplay.ToString();
+        foreach (var kind in Enum.GetValues<UsageProviderKind>())
+        {
+            var entry = new MenuItem { Header = kind.ToString(), Tag = kind.ToString(), IsCheckable = true,
+                StaysOpenOnClick = true, IsChecked = settings.IsWidgetSelected(kind) };
+            entry.Click += (_, _) =>
+            {
+                var flag = AppSettings.WidgetFlag(kind);
+                if (entry.IsChecked) _settings.WidgetProviders |= flag;
+                else _settings.WidgetProviders &= ~flag;
+                SettingsChanged?.Invoke();
+            };
+            WidgetServicesButton.ContextMenu.Items.Add(entry);
+        }
+        WidgetServicesButton.Visibility = settings.TaskbarDisplay == TaskbarMode.Widget ? Visibility.Visible : Visibility.Collapsed;
         foreach (ComboBoxItem item in TaskbarModeCombo.Items)
             if (item.Tag?.ToString() == taskbarMode) TaskbarModeCombo.SelectedItem = item;
         ProviderTrayCheck.IsChecked=settings.ShowProviderTrayIcons;
@@ -130,10 +144,18 @@ public partial class SettingsWindow : Window
     }
     private void TaskbarMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (!_initialized || TaskbarModeCombo.SelectedItem is not ComboBoxItem item) return;
-        _settings.ShowInTaskbar = item.Tag?.ToString() != "Off";
-        _settings.SeparateTaskbarButtons = item.Tag?.ToString() == "Separate";
+        if (!_initialized || TaskbarModeCombo.SelectedItem is not ComboBoxItem item ||
+            !Enum.TryParse<TaskbarMode>(item.Tag?.ToString(), out var mode)) return;
+        _settings.TaskbarDisplay = mode;
+        WidgetServicesButton.Visibility = mode == TaskbarMode.Widget ? Visibility.Visible : Visibility.Collapsed;
         SettingsChanged?.Invoke();
+    }
+    private void WidgetServices_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = WidgetServicesButton.ContextMenu;
+        menu.PlacementTarget = WidgetServicesButton;
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+        menu.IsOpen = true;
     }
     private void GrokLogin_Click(object sender,RoutedEventArgs e)=>LoginRequested?.Invoke(UsageProviderKind.Grok);
     private void Close_Click(object sender,RoutedEventArgs e)=>Close();

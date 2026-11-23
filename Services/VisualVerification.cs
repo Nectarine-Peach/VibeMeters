@@ -116,6 +116,7 @@ internal sealed class VisualVerification
                 settings.Close();
                 await StableAsync(_window);
                 await CheckProviderTaskbarButtonsAsync();
+                await CheckTaskbarWidgetAsync();
             }
 
             SetTheme(AppTheme.Light);
@@ -315,6 +316,22 @@ internal sealed class VisualVerification
         var taskbarMode = (ComboBox)settings.FindName("TaskbarModeCombo");
         SelectTag(taskbarMode, "Off");
         Check("taskbar off removes the main window button", !_settings.ShowInTaskbar && !_window.ShowInTaskbar);
+        SelectTag(taskbarMode, "Widget");
+        var widgetSettings = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings))!;
+        Check("taskbar widget selection persists and suppresses the dashboard button",
+            widgetSettings.ShowInTaskbar && widgetSettings.ShowTaskbarWidget && !widgetSettings.SeparateTaskbarButtons && !_window.ShowInTaskbar);
+        var chooser = (Button)settings.FindName("WidgetServicesButton");
+        Click(chooser);
+        var menu = chooser.ContextMenu!;
+        var items = menu.Items.OfType<MenuItem>().ToDictionary(item => item.Tag!.ToString()!);
+        Check("widget chooser distinguishes enabled services from dashboard selection",
+            items.Count == 4 && items["Codex"].IsChecked && items["Claude"].IsChecked && !items["Grok"].IsChecked);
+        items["Grok"].IsChecked = true;
+        items["Grok"].RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        Check("widget chooser adds a service without enabling its dashboard card",
+            _settings.IsWidgetSelected(UsageProviderKind.Grok) && !_settings.ShowGrok &&
+            JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings))!.IsWidgetSelected(UsageProviderKind.Grok));
+        menu.IsOpen = false;
         SelectTag(taskbarMode, "Separate");
         var saved = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings))!;
         Check("separate taskbar mode persists and removes the combined button",
@@ -394,6 +411,153 @@ internal sealed class VisualVerification
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowTextW(IntPtr hwnd, StringBuilder text, int length);
     [DllImport("user32.dll")] private static extern IntPtr SendMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WidgetRect { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out WidgetRect bounds);
+    [DllImport("user32.dll")] private static extern int GetWindowLongW(IntPtr hwnd, int index);
+
+    private async Task CheckTaskbarWidgetAsync()
+    {
+        static TaskbarWidgetWindow[] Widgets() => Application.Current.Windows.OfType<TaskbarWidgetWindow>().ToArray();
+        static Button Tile(TaskbarWidgetWindow view) => (Button)view.FindName("ProviderButton");
+        static TextBlock[] QuotaRows(Button chip) => Descendants<TextBlock>((DependencyObject)chip.Content).Where(t => t.Text.Contains('%')).ToArray();
+        static bool IsTwoLine(Button chip, string topPercent, string bottomPercent)
+        {
+            var rows = QuotaRows(chip);
+            var meters = Descendants<ProgressBar>(chip).ToArray();
+            return rows.Length == 2 && rows[0].Text.Contains(topPercent) && rows[1].Text.Contains(bottomPercent)
+                && meters.Length == 2 && $"{meters[0].Value:0}%" == topPercent && $"{meters[1].Value:0}%" == bottomPercent
+                && Bounds(rows[0], chip).Bottom <= Bounds(rows[1], chip).Top + 1;
+        }
+        var initialTheme = _settings.Theme;
+        var initialLanguage = _settings.Language;
+        var codex = Demo(UsageProviderKind.Codex) with { Windows = [new("5시간", 27, DemoTime.AddHours(2)), new("주간", 39, DemoTime.AddDays(3))] };
+        var claude = Demo(UsageProviderKind.Claude);
+        try
+        {
+            _settings.ShowTaskbarWidget = true;
+            _settings.Language = AppLanguage.Korean;
+            _settings.Theme = AppTheme.Dark;
+            _applySettings();
+            _render(codex);
+            _render(claude);
+            await StableAsync(_window);
+            var views = Widgets();
+            Check("selected Codex, Claude and dashboard-hidden Grok each own one widget without taskbar buttons", views.Length == 3 &&
+                views.Select(w => w.Tag).ToHashSet().SetEquals([UsageProviderKind.Codex, UsageProviderKind.Claude, UsageProviderKind.Grok]) &&
+                !_window.ShowInTaskbar && !Application.Current.Windows.OfType<Window>().Any(w => w.Tag is UsageProviderKind && w.ShowInTaskbar));
+            if (views.Length != 3) return;
+            var codexView = views.Single(w => Equals(w.Tag, UsageProviderKind.Codex));
+            var view = views.Single(w => Equals(w.Tag, UsageProviderKind.Claude));
+            var grok = views.Single(w => Equals(w.Tag, UsageProviderKind.Grok));
+            Check("widgets do not activate or register independent Explorer buttons", views.All(w => !w.ShowInTaskbar && !w.ShowActivated));
+            var shown = views.Where(w => w.IsVisible).ToArray();
+            var bounds = new List<Rect>();
+            foreach (var widget in shown)
+            {
+                var handle = new WindowInteropHelper(widget).Handle;
+                var style = GetWindowLongW(handle, -20 /* GWL_EXSTYLE */);
+                Check($"{widget.Tag} widget has a visible non-activating native tool window without an app button",
+                    IsWindowVisible(handle) && (style & 0x08000080) == 0x08000080 && (style & 0x00040000) == 0);
+                if (GetWindowRect(handle, out var rect))
+                    bounds.Add(new Rect(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top));
+            }
+            if (bounds.Count > 1)
+                Check("shown taskbar widgets occupy disjoint rectangles",
+                    bounds.SelectMany((rect, i) => bounds.Skip(i + 1).Select(other => Rect.Intersect(rect, other))).All(r => r.IsEmpty || r.Width <= 1 || r.Height <= 1));
+            else _report.Add("INFO: taskbar offered room for fewer than two visible widgets; no overlap pair to measure.");
+            var claudeChip = Tile(view);
+            var darkText = (QuotaRows(claudeChip).FirstOrDefault()?.Foreground as SolidColorBrush)?.Color;
+            Check("widget accessibility describes remaining Claude limits in Korean",
+                AutomationProperties.GetName(claudeChip).Contains("Claude") && AutomationProperties.GetName(claudeChip).Contains("남음"));
+            _settings.ClaudeDisplayMode = UsageDisplayMode.Used;
+            _settings.Language = AppLanguage.English;
+            _settings.Theme = AppTheme.Light;
+            _applySettings();
+            await StableAsync(view);
+            claudeChip = Tile(view);
+            Check("widget theme and language update immediately with independent display modes",
+                AutomationProperties.GetName(claudeChip).Contains("Used", StringComparison.OrdinalIgnoreCase) &&
+                QuotaRows(claudeChip).Any(t => t.Text.Contains("45%")) &&
+                QuotaRows(Tile(codexView)).Any(t => t.Text.Contains("73%")) &&
+                (SystemParameters.HighContrast || (QuotaRows(claudeChip).First().Foreground as SolidColorBrush)?.Color != darkText));
+            _render(claude with { Status = UsageStatus.RateLimited });
+            claudeChip = Tile(view);
+            Check("failed widget lookup clears stale measurements", QuotaRows(claudeChip).Length == 0 &&
+                Descendants<TextBlock>((DependencyObject)claudeChip.Content).Any(t => t.Text.Contains('—')));
+            Click((Button)_window.FindName("HideButton"));
+            Click(claudeChip);
+            await StableAsync(_window);
+            Check("clicking a widget service restores the dashboard without adding a taskbar button",
+                _window.IsVisible && _window.WindowState == WindowState.Normal && !_window.ShowInTaskbar && Widgets().Length == 3);
+            var oldClaude = new WindowInteropHelper(view).Handle;
+            _settings.WidgetProviders &= ~TaskbarWidgetProviders.Claude;
+            _applySettings();
+            Check("removing one widget releases its window while keeping the dashboard and other widgets",
+                !Widgets().Contains(view) && !IsWindow(oldClaude) && _settings.ShowClaude && Widgets().Contains(codexView) && Widgets().Contains(grok));
+            _settings.WidgetProviders = TaskbarWidgetProviders.None;
+            _applySettings();
+            await StableAsync(_window);
+            Check("no selected widgets leaves no widget window", Widgets().Length == 0);
+            _settings.WidgetProviders = TaskbarWidgetProviders.Codex | TaskbarWidgetProviders.Claude;
+            _applySettings();
+            Check("restoring selection recreates exactly two widgets", Widgets().Length == 2);
+            _settings.ShowTaskbarWidget = false;
+            _applySettings();
+            Check("combined taskbar mode removes the widget and restores the dashboard button",
+                !Widgets().Any(w => w.IsVisible) && _window.ShowInTaskbar);
+
+            // Capture the widget content at a reproducible two-line size even when the user's
+            // Explorer taskbar has no free space or is configured to auto-hide.
+            var previews = new[] { new TaskbarWidgetWindow(() => { }) { Tag = UsageProviderKind.Codex }, new TaskbarWidgetWindow(() => { }) { Tag = UsageProviderKind.Claude } };
+            try
+            {
+                _settings.ClaudeDisplayMode = UsageDisplayMode.Remaining;
+                foreach (var (theme, language, filename) in new[] {
+                    (AppTheme.Dark, AppLanguage.Korean, "taskbar-widget-dark-ko.png"),
+                    (AppTheme.Light, AppLanguage.English, "taskbar-widget-light-en.png") })
+                {
+                    _settings.Theme = theme;
+                    _settings.Language = language;
+                    _applySettings();
+                    foreach (var preview in previews)
+                    {
+                        preview.Update([Equals(preview.Tag, UsageProviderKind.Codex) ? codex : claude], _settings);
+                        preview.SetLayout(false, 200, 48);
+                        if (!preview.IsVisible) preview.Show();
+                        await StableAsync(preview);
+                    }
+                    Check(filename + " shows both quota periods on separate lines without clipping",
+                        IsTwoLine(Tile(previews[0]), "73%", "61%") && IsTwoLine(Tile(previews[1]), "100%", "55%") &&
+                        previews.All(w => TextFits(Root(w), Root(w))));
+                    CaptureWidgetPreview(previews, filename);
+                }
+                var narrow = previews[1];
+                narrow.Update([claude with { Windows = [.. claude.Windows, new("Opus 주간", 60, null)] }], _settings);
+                narrow.SetLayout(true, 48, 80);
+                await StableAsync(narrow);
+                Check("narrow vertical widget keeps two readable values and exposes the extra limit with its unknown reset",
+                    narrow.ActualWidth <= 48 && IsTwoLine(Tile(narrow), "100%", "55%") && TextFits(Root(narrow), Root(narrow)) &&
+                    Descendants<TextBlock>(narrow).Any(t => t.Text == "+1" && t.IsVisible) &&
+                    AutomationProperties.GetHelpText(Tile(narrow)).Contains("Opus") &&
+                    AutomationProperties.GetHelpText(Tile(narrow)).Contains("40% · Reset N/A"));
+            }
+            finally { foreach (var preview in previews) preview.Close(); }
+        }
+        finally
+        {
+            _settings.Theme = initialTheme;
+            _settings.Language = initialLanguage;
+            _settings.ClaudeDisplayMode = UsageDisplayMode.Remaining;
+            _settings.ShowCodex = _settings.ShowClaude = true;
+            _settings.WidgetProviders = TaskbarWidgetProviders.Codex | TaskbarWidgetProviders.Claude;
+            _settings.ShowTaskbarWidget = false;
+            _applySettings();
+            _render(Demo(UsageProviderKind.Codex));
+            _render(claude);
+            if (!_window.IsVisible) _restoreWindow();
+        }
+    }
 
     private void CheckProviderTrayIcons(SettingsWindow settings, ComboBox claudeMode)
     {
@@ -646,6 +810,34 @@ internal sealed class VisualVerification
         await Task.Delay(70);
         window.UpdateLayout();
     }
+    private void CaptureWidgetPreview(IEnumerable<Window> widgets, string filename)
+    {
+        // Compose the two real WPF client surfaces against a neutral taskbar-colored
+        // background. No other application names or pixels enter the preview.
+        var roots = widgets.Select(Root).ToArray();
+        const double padding = 6, gap = 4, scale = 2;
+        var width = (int)Math.Ceiling(roots.Sum(w => w.ActualWidth) + 2 * padding + gap * (roots.Length - 1));
+        var height = (int)Math.Ceiling(roots.Max(w => w.ActualHeight) + 2 * padding);
+        var drawing = new DrawingVisual();
+        using (var context = drawing.RenderOpen())
+        {
+            context.DrawRectangle((Brush)Application.Current.Resources["WindowBackground"], null, new Rect(0, 0, width, height));
+            var x = padding;
+            foreach (var root in roots)
+            {
+                context.DrawRectangle(new VisualBrush(root), null, new Rect(x, (height - root.ActualHeight) / 2, root.ActualWidth, root.ActualHeight));
+                x += root.ActualWidth + gap;
+            }
+        }
+        var bitmap = new RenderTargetBitmap((int)(width * scale), (int)(height * scale), 96 * scale, 96 * scale, PixelFormats.Pbgra32);
+        bitmap.Render(drawing);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var file = File.Create(Path.Combine(_output, filename));
+        encoder.Save(file);
+        _report.Add($"CAPTURE: {filename} · actual widget controls with synthetic quota data · {bitmap.PixelWidth}×{bitmap.PixelHeight} px");
+    }
+
     private void Capture(Window window,string filename)
     {
         window.UpdateLayout();

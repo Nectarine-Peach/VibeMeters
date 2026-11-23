@@ -139,6 +139,10 @@ VibeMeters 설정|VibeMeters settings
 Windows 시작 시 실행|Start with Windows
 작업표시줄에 표시|Show in taskbar
 작업표시줄 버튼|Taskbar buttons
+작업표시줄 표시|Taskbar display
+두 줄 위젯|Two-row widgets
+서비스 선택|Services
+작업표시줄 위젯에 표시할 서비스를 선택합니다.|Choose services to show as taskbar widgets.
 숨기기|Hide
 한 버튼에 모아 표시|One combined button
 서비스별 버튼|One per service

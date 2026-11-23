@@ -646,9 +646,10 @@ internal sealed class VisualVerification
         AssertMainLayout("all services",new[]{("Codex",1),("Claude",2),("Gemini",2)});
         Check("all services natural design height with three refresh-status rows",Close(_window.ActualWidth,360)&&Close(_window.ActualHeight,442));
         Capture(_window,"window-all-services-dark.png");
-        _render(Demo(UsageProviderKind.Gemini) with { Windows = [new("Gemini Pro", 17, null), new("Flash", 6, null), new("4 Argon 주간", 20, null)] });
+        _render(Demo(UsageProviderKind.Gemini) with { Windows = [new("Pro", 17, null), new("Flash", 6, null), new("Flash-Lite", 8, null), new("4 Argon 주간", 20, null)] });
         await StableAsync(_window);
-        Check("dashboard abbreviates the three Gemini quota models", new[] { "P", "F", "A" }.All(label =>
+        Check("dashboard shows the five-hour window by name", Descendants<TextBlock>(Cards()[1]).Any(t => t.Text == "5시간" && t.IsVisible));
+        Check("dashboard preserves readable Gemini model names", new[] { "Pro", "Flash", "Flash-Lite", "Argon" }.All(label =>
             Descendants<TextBlock>(Cards()[2]).Any(t => t.Text == label && t.IsVisible)));
         _render(Demo(UsageProviderKind.Gemini));
         _window.Width=220;_window.Height=140;await StableAsync(_window);
@@ -662,7 +663,13 @@ internal sealed class VisualVerification
         Localizer.SetLanguage(AppLanguage.English);
         await StableAsync(_window);
         Capture(_window, "window-four-services-grok-en-dark.png");
+        ThemeService.Apply(AppTheme.Light);
+        await StableAsync(_window);
+        Capture(_window, "window-four-services-grok-en-light.png");
         Localizer.SetLanguage(AppLanguage.Korean);
+        await StableAsync(_window);
+        Capture(_window, "window-four-services-grok-light.png");
+        ThemeService.Apply(AppTheme.Dark);
         _window.Width=220;_window.Height=140;await StableAsync(_window);
         AssertMainLayout("four services minimum readable size",new[]{("Codex",1),("Claude",2),("Gemini",2),("Grok",1)});
         Capture(_window,"window-four-services-grok-minimum-dark.png");

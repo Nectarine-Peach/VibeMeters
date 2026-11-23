@@ -11,6 +11,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -500,7 +501,8 @@ internal sealed class VisualVerification
                 var rightAligned = true;
                 var logoPrecedesRows = true;
                 var readable = true;
-                var titlesFaceGraph = true;
+                var singleLetterStarts = new List<double>();
+                var balancedSpacing = true;
                 for (var i = 0; i < views.Length - 1; i++)
                 {
                     var rows = Descendants<Grid>(roots[i]).Where(row => AutomationProperties.GetAutomationId(row).StartsWith("WidgetQuota", StringComparison.Ordinal));
@@ -517,8 +519,21 @@ internal sealed class VisualVerification
                             var bounds = Bounds(text, roots[i]);
                             readable &= text.ActualHeight > 0 && text.FontSize * bounds.Height / text.ActualHeight >= 9;
                         }
-                        titlesFaceGraph &= name.TextAlignment == TextAlignment.Right;
-                        labels.Add(Bounds(name, roots[i]));
+                        if (name.Text.Length == 1)
+                        {
+                            var transform = name.TransformToAncestor(roots[i]);
+                            var start = transform.TransformBounds(name.ContentStart.GetCharacterRect(LogicalDirection.Forward)).Left;
+                            var end = transform.TransformBounds(name.ContentEnd.GetCharacterRect(LogicalDirection.Backward)).Right;
+                            var graph = Bounds(row.Children.OfType<ProgressBar>().Single(), roots[i]);
+                            singleLetterStarts.Add(start);
+                            var leftGap = start - logos[i].Right;
+                            var rightGap = graph.Left - end;
+                            balancedSpacing &= end > start && Math.Abs(leftGap - inset) <= 1.6 && rightGap >= 2 && rightGap <= 10;
+                        }
+                        var labelBounds = Bounds(name, roots[i]);
+                        if (VisualTreeHelper.GetClip(name) is Geometry clip)
+                            labelBounds.Intersect(name.TransformToAncestor(roots[i]).TransformBounds(clip.Bounds));
+                        labels.Add(labelBounds);
                         var gutter = labels[^1].Left - logos[i].Right;
                         logoPrecedesRows &= gutter >= 5 && gutter <= 8;
                         meters.Add(Bounds(row.Children.OfType<ProgressBar>().Single(), roots[i]));
@@ -526,8 +541,8 @@ internal sealed class VisualVerification
                     }
                 }
                 Check(layout + " leaves a small gap between the left logo and every quota row", logoPrecedesRows);
-                Check(layout + " keeps the graph close to its quota title", titlesFaceGraph && Enumerable.Range(0, labels.Count).All(i =>
-                    meters[i].Left - labels[i].Left <= 21 && meters[i].Left - labels[i].Right is >= -1 and <= 3));
+                Check(layout + " aligns the actual one-letter titles and leaves space before each graph",
+                    singleLetterStarts.Count == 5 && EqualCoordinates(singleLetterStarts) && balancedSpacing);
                 Check(layout + " aligns label origins, meter tracks and percentage right edges across providers",
                     labels.Count == 6 && rightAligned && EqualCoordinates(labels.Select(r => r.Left)) &&
                     EqualCoordinates(meters.Select(r => r.Left)) && EqualCoordinates(meters.Select(r => r.Right)) &&

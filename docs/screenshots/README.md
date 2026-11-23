@@ -1,39 +1,49 @@
-# VibeMeters 화면 캡처
+# VibeMeters 화면 안내
 
-## v1.4.13
+다음 화면은 예시 계정의 사용량을 보여 줍니다. 사용량 창과 툴팁은 v1.4.13에서 캡처했습니다.
 
-본체는 `5시간`, `Pro`, `Flash` 같은 한도 이름을 표시합니다. 작업표시줄 위젯에서는 `H`, `P`, `F`처럼 짧은 이름을 쓰며, 마우스를 올리면 전체 이름과 리셋 정보를 볼 수 있습니다.
+## 사용량 창
 
-### 본체와 위젯 툴팁
+서비스별로 사용량 막대, 남은 비율, 리셋까지의 시간을 확인할 수 있습니다. 아래 Claude 계정에는 5시간 한도와 주간 한도가 있고, Gemini 계정에는 Pro·Flash·Argon 한도가 있습니다.
 
-| 한국어 · 다크 | English · Light |
+<img src="v1.4.13/dashboard-quota-names-ko-dark.png" alt="Claude 5시간 한도 25%, 주간 한도 55%와 Gemini의 세 모델 한도가 보이는 사용량 창" width="360">
+
+다른 언어와 테마로 보기 · [한국어 라이트](v1.4.13/dashboard-quota-names-ko-light.png) · [English dark](v1.4.13/dashboard-quota-names-en-dark.png) · [English light](v1.4.13/dashboard-quota-names-en-light.png)
+
+## 작업표시줄 위젯
+
+작업표시줄에서는 서비스 아이콘 옆에 한도별로 한 줄씩 표시합니다. 아래 Claude 위젯의 `H`는 5시간 한도, `W`는 주간 한도입니다. 두 이미지는 실제 Windows 작업표시줄에서 위젯 영역만 캡처한 것입니다.
+
+| 다크 | 라이트 |
 | --- | --- |
-| ![5시간, 주간, Gemini Pro·Flash·Argon 한도를 보여 주는 본체](v1.4.13/dashboard-quota-names-ko-dark.png) | ![Dashboard with full quota names](v1.4.13/dashboard-quota-names-en-light.png) |
-| ![Claude Enterprise 한도와 리셋 시각을 보여 주는 툴팁](v1.4.13/widget-tooltip-dark-ko.png) | ![Claude Enterprise tooltip with full quota names and local reset time](v1.4.13/widget-tooltip-light-en.png) |
+| ![다크 테마의 Codex, Claude, Gemini, Grok 위젯](taskbar-widget-four-services.png) | ![라이트 테마의 Codex, Claude, Gemini, Grok 위젯](taskbar-widget-four-services-light.png) |
 
-툴팁은 실제 WPF 팝업을 열어 캡처했습니다. Claude Sonnet은 59%가 남았고 4시간 31분 뒤에 리셋됩니다. Opus는 리셋 시각이 없어 `—`로 표시됩니다. 사용량과 시각은 예시 데이터입니다.
+## 위젯 툴팁
+
+위젯에 마우스를 올리면 전체 한도 이름과 리셋 예정 시각을 확인할 수 있습니다. 아래 예시에서 Sonnet 주간 한도는 59%가 남았고 4시간 31분 뒤 리셋됩니다. Opus 행의 대시(`—`)는 서비스가 리셋 시각을 제공하지 않았다는 뜻입니다.
+
+![한국어 Claude Enterprise 위젯 툴팁](v1.4.13/widget-tooltip-dark-ko.png)
+
+[같은 툴팁을 영어 라이트 테마로 보기](v1.4.13/widget-tooltip-light-en.png)
+
+## 표시 설정
+
+설정에서 사용량 창에 표시할 서비스와 작업표시줄에 표시할 위젯을 각각 선택합니다. 아래 예시는 사용량 창에서 네 서비스를 모두 보고, 작업표시줄에는 Codex와 Claude만 표시하는 설정입니다.
+
+<img src="current/settings-dark.png" alt="Codex와 Claude의 위젯이 켜진 한국어 설정 창" width="410">
+
+다른 언어와 테마로 보기 · [한국어 라이트](current/settings-light.png) · [English dark](current/settings-en-dark.png) · [English light](current/settings-en-light.png)
+
+## 이전 버전 캡처 기록
 
 <details>
-<summary>한국어 라이트·영어 다크 본체와 설정</summary>
+<summary>v1.4.12부터 v1.4.5까지의 예시 화면과 검증 기록</summary>
 
-| 한국어 · 라이트 | English · Dark |
-| --- | --- |
-| ![라이트 테마 본체](v1.4.13/dashboard-quota-names-ko-light.png) | ![Dark dashboard](v1.4.13/dashboard-quota-names-en-dark.png) |
-| ![라이트 테마 설정](current/settings-light.png) | ![Dark settings](current/settings-en-dark.png) |
+### v1.4.12
 
-| 한국어 · 다크 | English · Light |
-| --- | --- |
-| ![다크 테마 설정](current/settings-dark.png) | ![Light settings](current/settings-en-light.png) |
+`current/`의 사용량 창과 설정 이미지는 v1.4.12 Release 빌드에서 120 DPI로 캡처했습니다. 인증 재시도와 요청 제한 화면은 격리된 UI 테스트의 합성 데이터입니다. [한국어 사용량 창](current/window-four-services-grok-dark.png) · [영문 인증 재시도](current/window-auth-retry-en.png) · [영문 요청 제한](current/window-refresh-wait-en.png)
 
-</details>
-
-### 작업표시줄 위젯
-
-![다크 테마 작업표시줄 위젯 네 개](taskbar-widget-four-services.png)
-
-![Four taskbar widgets in the light theme](taskbar-widget-four-services-light.png)
-
-## v1.4.11 배포 준비 캡처 · 2026-11-08
+### v1.4.11 배포 준비 캡처 · 2026-11-08
 
 [`provider-reliability/`](provider-reliability/)의 이미지는 `dc28f3f`를 기반으로 영문 화면 캡처를 추가한 v1.4.11 Release 빌드에서 `--smoke-test`로 생성했습니다. WPF가 실제로 표시한 클라이언트 영역을 120 DPI에서 렌더링했으며, 화면별 글자와 한도 행을 확인했습니다.
 
@@ -48,7 +58,7 @@
 
 사용량과 상태는 모두 합성 데이터입니다. 네 서비스 개요에는 Codex 주간 61%, Claude 5시간 100%·주간 55%, Gemini Pro 83%·Flash 94%, Grok Build 주간 68%가 표시됩니다. 스모크 검사는 별도 인스턴스와 메모리 설정을 사용합니다. 검증 범위는 WPF 클라이언트이며 실제 계정, 작업표시줄 및 트레이는 범위 밖입니다. [캡처별 크기와 SHA-256](provider-reliability/capture.json) · [WPF 스모크 검사 304개 통과 기록](provider-reliability/smoke-test.txt)
 
-## 영문 현지화 이미지 · v1.4.7 · 2026-10-26
+### 영문 현지화 이미지 · v1.4.7 · 2026-10-26
 
 `window-standard-en-dark.png`, `window-standard-en-light.png`, `window-mini-en.png`, `settings-en.png`, `window-cached-en.png`, `cli-install-en.png`, `cli-install-progress-en.png`는 실제 v1.4.7 WPF 컨트롤의 합성 렌더입니다. 영문 화면과 설치 안내/진행 문구 예시를 직접 열어 가독성을 확인했습니다. 설치 이미지는 대화상자 클라이언트 콘텐츠이며 실제 설치를 실행한 결과가 아닙니다.
 
@@ -56,7 +66,7 @@
 
 전체 회귀/UI 스모크를 실행하지 않았으며 실제 제공자 조회·설치·로그인·사용자 설정 쓰기 없이 메모리 설정과 합성 상태만 사용했습니다. 아래 한국어 v1.4.5 이미지 기록은 당시의 별도 캡처입니다.
 
-## 한국어 README 이전 이미지 · 2026-10-26
+### 한국어 README 이전 이미지 · 2026-10-26
 
 2026-10-26에 README에 사용한 대표·표준·라이트·최소 폭·설정 이미지는 v1.4.5 커밋 `a52ee12e580a795a8cf623326634276a4c5b6192`의 실제 WPF 컨트롤을 사용한 **합성 데모 렌더**입니다. `Gemini · Antigravity`와 `Grok / Build 주간`의 출처·범위를 표시합니다. 모든 이미지를 실제로 열어 가독성·잘림·표시 범위를 확인했습니다.
 
@@ -75,3 +85,5 @@
 현재 게시 DLL을 참조하는 임시 캡처 전용 STA 하네스에서 `MainWindow`와 `SettingsWindow`만 생성했습니다. 기본 WPF Application을 사용해 VibeMeters 앱 시작, 제공자 생성, 인증 감시, 자동 조회, 사용자 설정 저장을 실행하지 않았습니다. 현재 사용 중인 앱·인증·설정을 교체하거나 변경하지 않았습니다. 하네스는 `dist/readme-capture-20261026/`에 있으며 앱 코드는 수정하지 않았습니다.
 
 이미지는 표시된 WPF 클라이언트 영역을 렌더링한 것으로 OS 합성 테두리·작업표시줄·트레이 픽셀이나 실제 마우스 입력을 검증하지 않습니다. 전체 회귀·UI 스모크·실계정 조회·로그인도 실행하지 않았습니다. 기존 `verification.txt`와 캐시/로그인 오류 예시 이미지는 이전 스모크 기록으로, 이번 캡처 생성의 통과 기록이 아닙니다.
+
+</details>

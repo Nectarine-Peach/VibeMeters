@@ -1,20 +1,24 @@
-# Codex와 Claude 로그인 도구 설치
+# Codex와 Claude CLI 설치
 
-설정에서 **Codex 로그인** 또는 **Claude 로그인**을 누르면 공식 CLI로 인증을 시작합니다. 이미 설치한 CLI가 있으면 그대로 사용합니다.
+VibeMeters에서 Codex나 Claude에 로그인하려면 해당 서비스의 공식 CLI가 필요합니다. 이미 로그인한 계정은 저장된 인증 정보로 사용량을 조회합니다. 조회 중에는 Codex CLI를 통해 한도를 다시 확인하거나 Claude Code를 통해 만료된 인증을 갱신할 수 있습니다. Gemini 로그인에는 VibeMeters에 포함된 런타임을 사용합니다.
 
-## 설치 안내가 열릴 때
+## 설치 후 로그인
 
-1. **설치 후 로그인**을 선택하세요. 공식 Windows 설치 프로그램이 현재 사용자 계정에 CLI를 설치합니다.
-2. 설치가 끝나면 VibeMeters가 실행 파일을 다시 찾고 로그인을 시작합니다. 브라우저에서 사용할 계정이나 워크스페이스를 선택하세요.
-3. 사용량 창으로 돌아와 **F5**를 누르세요.
+1. VibeMeters에서 로그인할 서비스를 선택합니다. CLI가 설치되어 있으면 공식 로그인이 바로 열립니다.
+2. 설치 안내가 열리면 **설치 후 로그인**을 누릅니다. 공식 설치 프로그램이 현재 Windows 사용자 계정에 CLI를 설치합니다. 인터넷 연결이 필요하며, 회사에서 관리하는 PC에서는 소프트웨어 설치 정책이 적용됩니다.
+3. 설치가 끝나면 VibeMeters가 사용자 PATH를 다시 읽고 설치된 CLI로 로그인을 시작합니다. 실패한 경우 안내 창에서 **다시 설치**를 선택할 수 있습니다.
 
-인터넷 연결이 필요하며 회사 PC에서는 설치 정책이 적용됩니다. VibeMeters는 관리자 권한을 요청하지 않습니다. 설치를 취소했거나 실패했다면 안내에 따라 다시 시도하거나, 아래 공식 안내에서 직접 설치할 수 있습니다.
+## 설치 경로와 취소
 
-| 서비스 | 기본 실행 파일 폴더 | 설치 안내 |
-|---|---|---|
-| Codex | `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` | [OpenAI Windows 배포 안내](https://learn.chatgpt.com/docs/enterprise/windows-deployment) |
-| Claude | `%USERPROFILE%\.local\bin` | [Claude Code 설치 안내](https://code.claude.com/docs/en/setup) |
+| 서비스 | 기본 실행 파일 폴더 | PowerShell 설치 원본 |
+| --- | --- | --- |
+| Codex | `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` | `https://chatgpt.com/codex/install.ps1` |
+| Claude | `%USERPROFILE%\.local\bin` | `https://claude.ai/install.ps1` |
 
-앱은 사용자·시스템 PATH에서도 CLI를 찾습니다. 설치 후 실행 파일을 찾지 못하면 해당 폴더가 PATH에 있는지 확인하세요. 앱에서 설치를 시작한 경우 갱신된 사용자 PATH를 다시 읽습니다.
+VibeMeters는 기본 경로 외에도 사용자·시스템 PATH, npm 설치 경로, Codex 사용자 지정 경로에서 CLI를 찾습니다. 공식 설치 프로그램은 Windows PowerShell에서 현재 사용자 권한으로 실행합니다. [OpenAI 설치 환경 변수](https://learn.chatgpt.com/docs/config-file/environment-variables) · [Codex Windows 배포 안내](https://learn.chatgpt.com/docs/enterprise/windows-deployment) · [Claude Code 설치 안내](https://code.claude.com/docs/en/setup)
 
-Gemini 개인 계정에는 Antigravity CLI를, Grok에는 Grok Build CLI를 사용합니다. Gemini 회사 계정의 Code Assist 조회 런타임은 ZIP에 포함되어 있습니다. [계정별 연결 방법](account-usage.md) · [Grok Build 안내](grok-usage.md)
+설치는 최대 10분 동안 진행됩니다. 설치를 취소하거나 앱을 종료하면 실행 중인 설치 프로세스도 종료됩니다. 공식 설치 프로그램이 이미 기록한 파일은 남을 수 있습니다.
+
+## 초기 검증 기록
+
+설치 기능을 처음 추가했을 때 빌드, 배포 파일 생성, 계정 없이 실행하는 Gemini 런타임 진단을 확인했습니다. 당시 검증 범위에는 실제 CLI 설치와 취소 후 복구, 설치 직후 로그인이 포함되지 않았습니다.

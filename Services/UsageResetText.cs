@@ -11,10 +11,17 @@ public static class UsageResetText
         var remaining = resetsAt.Value - now;
         if (remaining <= TimeSpan.Zero) return english ? "Reset pending" : "리셋 대기";
 
+        return (english ? "Reset " : "리셋 ") + Compact(resetsAt, now);
+    }
+
+    public static string Compact(DateTimeOffset? resetsAt, DateTimeOffset now)
+    {
+        if (resetsAt is null) return "—";
+        var remaining = resetsAt.Value - now;
+        if (remaining <= TimeSpan.Zero) return "0:00";
         long minutes = (remaining.Ticks - 1) / TimeSpan.TicksPerMinute + 1;
-        string duration = remaining.TotalDays > 1 ? $"{remaining.Days}d"
+        return remaining.TotalDays > 1 ? $"{remaining.Days}d"
             : remaining.TotalHours > 5 ? $"{(int)remaining.TotalHours}h"
             : $"{minutes / 60}:{minutes % 60:00}";
-        return (english ? "Reset " : "리셋 ") + duration;
     }
 }

@@ -88,8 +88,10 @@ internal sealed class TaskbarWidgetHost : IDisposable
         int gap = Math.Max(1, (int)Math.Round(2 * scale));
         var windows = _views.OrderBy(entry => entry.Key).Select(entry => entry.Value).ToArray();
         var sizes = new List<Size>();
+        var now = DateTimeOffset.Now;
         foreach (var view in windows)
         {
+            view.RefreshCountdowns(now);
             view.SetLayout(vertical, Math.Max(1, (vertical ? bar.Width : monitor.Width) / scale),
                 Math.Max(1, work.Height / scale));
             sizes.Add(new Size((int)Math.Ceiling(view.Width * scale), (int)Math.Ceiling(view.Height * scale)));

@@ -38,7 +38,7 @@ Codex Business uses the supplied `spend_control.individual_limit` and Claude Ent
 
 The current source build shows a countdown beside each quota. It continues to update in manual refresh mode. Hover over a countdown to see the local reset date and time.
 
-In **Settings → Displayed services**, toggle the taskbar widget for each service. Widgets share the dashboard theme and percentage preference. Click a widget to open the dashboard. When space runs out on the primary taskbar, widgets move beside it.
+In **Settings → Displayed services**, toggle the taskbar widget for each service. Widgets share the dashboard theme and percentage preference. Each quota shows the time until its next reset (for example, `4:31`, `10h`, or `2d`). Click a widget to open the dashboard. When space runs out on the primary taskbar, widgets move beside it.
 
 ![Two-row Codex and Claude widgets with example quotas](docs/screenshots/taskbar-widget-light-en.png)
 

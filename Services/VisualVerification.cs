@@ -303,8 +303,9 @@ internal sealed class VisualVerification
         }
         var initialTheme = _settings.Theme;
         var initialLanguage = _settings.Language;
-        var codex = Demo(UsageProviderKind.Codex) with { Windows = [new("5시간", 27, DemoTime.AddHours(2)), new("주간", 39, DemoTime.AddDays(3))] };
-        var claude = Demo(UsageProviderKind.Claude);
+        var now = DateTimeOffset.Now;
+        var codex = Demo(UsageProviderKind.Codex) with { Windows = [new("5시간", 27, now.AddMinutes(271)), new("주간", 39, now.AddDays(3).AddHours(1))] };
+        var claude = Demo(UsageProviderKind.Claude) with { Windows = [new("5시간", 0, now.AddMinutes(92)), new("주간", 45, now.AddHours(10.5))] };
         try
         {
             _settings.Language = AppLanguage.Korean;
@@ -340,6 +341,14 @@ internal sealed class VisualVerification
                 Check("all visible widget HWNDs have equal pixel widths", bounds.Max(rect => rect.Width) - bounds.Min(rect => rect.Width) <= 1);
             }
             else _report.Add("INFO: taskbar offered room for fewer than two visible widgets; no overlap pair to measure.");
+            var deadline = DateTimeOffset.Now.AddSeconds(2);
+            _render(codex with { Windows = [new("5시간", 27, deadline)] });
+            static TextBlock WidgetReset(Window widget) => Descendants<TextBlock>(widget)
+                .Single(t => AutomationProperties.GetAutomationId(t) == "WidgetReset");
+            Check("widget shows the last minute before reset", WidgetReset(codexView).Text == "0:01");
+            await Task.Delay(3200);
+            Check("widget countdown expires without another quota lookup", WidgetReset(codexView).Text == "0:00");
+            _render(codex);
             var claudeChip = Tile(view);
             var darkText = (QuotaRows(claudeChip).FirstOrDefault()?.Foreground as SolidColorBrush)?.Color;
             Check("widget accessibility describes remaining Claude limits in Korean",
@@ -436,11 +445,12 @@ internal sealed class VisualVerification
     private async Task CheckWidgetAlignmentAsync()
     {
         const string longName = "Gemini 3.1 Pro Preview extended quota";
+        var now = DateTimeOffset.Now;
         var samples = new[]
         {
-            Demo(UsageProviderKind.Codex) with { Windows = [new("5시간", 27, null), new("주간", 39, null)] },
+            Demo(UsageProviderKind.Codex) with { Windows = [new("5시간", 27, now.AddMinutes(271)), new("주간", 39, now.AddDays(3.5))] },
             Demo(UsageProviderKind.Claude) with { Windows = [new("월 추가 사용", 41, null)] },
-            Demo(UsageProviderKind.Gemini) with { Windows = [new(longName, 17, null), new("Flash", 6, null), new("4 Argon 주간", 20, null)] },
+            Demo(UsageProviderKind.Gemini) with { Windows = [new(longName, 17, now.AddHours(10.5)), new("Flash", 6, now.AddMinutes(30)), new("4 Argon 주간", 20, now.AddDays(2.5))] },
             Demo(UsageProviderKind.Grok) with { Status = UsageStatus.Unavailable }
         };
         var views = samples.Select(s => new TaskbarWidgetWindow(() => { }) { Tag = s.Provider }).ToArray();
@@ -475,6 +485,8 @@ internal sealed class VisualVerification
                 var labels = new List<Rect>();
                 var meters = new List<Rect>();
                 var percentages = new List<Rect>();
+                var resets = new List<Rect>();
+                var resetLabels = new List<TextBlock>();
                 var rightAligned = true;
                 for (var i = 0; i < views.Length - 1; i++)
                 {
@@ -483,7 +495,10 @@ internal sealed class VisualVerification
                     {
                         var value = row.Children.OfType<TextBlock>().Single(t => t.Text.EndsWith('%'));
                         rightAligned &= value.TextAlignment == TextAlignment.Right;
-                        var name = row.Children.OfType<TextBlock>().Single(t => t != value);
+                        var reset = Descendants<TextBlock>(row).Single(t => AutomationProperties.GetAutomationId(t) == "WidgetReset");
+                        resetLabels.Add(reset);
+                        resets.Add(Bounds(reset, roots[i]));
+                        var name = row.Children.OfType<TextBlock>().Single(t => t != value && t != reset);
                         labels.Add(Bounds(name, roots[i]));
                         meters.Add(Bounds(row.Children.OfType<ProgressBar>().Single(), roots[i]));
                         percentages.Add(Bounds(value, roots[i]));
@@ -498,8 +513,12 @@ internal sealed class VisualVerification
                     var overlap = Rect.Intersect(first, second);
                     return overlap.IsEmpty || overlap.Width <= 1 || overlap.Height <= 1;
                 }
+                Check(layout + " shows each reset countdown directly on its quota row",
+                    resetLabels.All(t => t.IsVisible && t.ActualWidth > 0) && resetLabels[2].Text == "—" &&
+                    new[] { "4:31", "3d", "10h", "0:30", "2d" }.All(time => resetLabels.Any(t => t.Text.Contains(time))));
                 var overlapRows = Enumerable.Range(0, labels.Count).Where(i => !(Separate(labels[i], meters[i])
-                        && Separate(meters[i], percentages[i]) && Separate(labels[i], percentages[i]))).ToArray();
+                        && Separate(meters[i], percentages[i]) && Separate(labels[i], percentages[i])
+                        && Separate(resets[i], labels[i]) && Separate(resets[i], meters[i]) && Separate(resets[i], percentages[i]))).ToArray();
                 Check(layout + " keeps names, meter tracks and numbers in distinct spaces", overlapRows.Length == 0);
                 foreach (var i in overlapRows)
                     _report.Add($"GEOMETRY: {layout} row {i} · label {labels[i]} · meter {meters[i]} · value {percentages[i]}");

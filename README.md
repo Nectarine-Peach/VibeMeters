@@ -2,192 +2,98 @@
 
 **한국어** · [English](README.en.md)
 
-Codex·Claude·Gemini·Grok의 사용량을 Windows 본체 창과 서비스별 작업표시줄 위젯에서 확인하세요.
+Codex, Claude, Gemini, Grok의 구독 한도가 얼마나 남았는지, 언제 다시 채워지는지 한 창에서 확인하는 Windows 앱입니다. 자주 확인하는 서비스는 작업표시줄에도 띄울 수 있습니다.
 
-**Windows 10/11 x64 · 포터블 ZIP · 한국어·영어 · 라이트·다크·시스템 테마**
+**[Windows용 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip)** · [v1.4.13 변경 사항](docs/releases/v1.4.13.md)
 
-[최신 Windows x64 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [v1.4.13 변경 사항](docs/releases/v1.4.13.md)
+<img src="docs/screenshots/v1.4.13/dashboard-quota-names-ko-dark.png" alt="Codex와 Claude의 5시간·주간 한도, Gemini의 Pro·Flash·Argon 한도, Grok의 Build 주간 한도가 표시된 대시보드" width="360">
 
-**본체와 위젯 툴팁** · 예시 사용량
+그래프 오른쪽에는 선택한 기준에 따른 백분율과 리셋까지 남은 시간이 표시됩니다. 위 예시에서 Claude의 5시간 한도는 25%가 남았고 3시간 2분 뒤에 리셋됩니다. 남은 시간이 24시간 이하면 `3:02`, `24:00`처럼 시간과 분으로, 24시간을 넘으면 `2d`처럼 일 단위로 표시됩니다.
 
-| 전체 한도 이름을 표시한 본체 | 위젯 위에 마우스를 올렸을 때 |
-| --- | --- |
-| <img src="docs/screenshots/v1.4.13/dashboard-quota-names-ko-dark.png" alt="5시간·주간 한도와 Gemini Pro·Flash·Argon 한도를 표시한 본체" width="360"> | <img src="docs/screenshots/v1.4.13/widget-tooltip-dark-ko.png" alt="한도 전체 이름, 남은 양 59%와 28%, 리셋까지 남은 시간, 현지 리셋 시각과 마지막 확인 시각을 보여 주는 Claude Enterprise 툴팁" width="400"> |
+## 설치하고 계정 연결하기
 
+1. Windows 10 또는 11의 64비트 PC에서 ZIP **전체를** 원하는 폴더에 풉니다. `runtime` 폴더는 `VibeMeters.exe`와 같은 위치에 두세요. 실행에 필요한 .NET과 Node.js는 ZIP에 포함되어 있습니다.
+2. `VibeMeters.exe`를 실행한 뒤 오른쪽 위 톱니바퀴를 누릅니다. **표시할 서비스 · 수치 기준**에서 서비스 이름 옆의 체크박스를 켜고, 서비스마다 **남은 양** 또는 **사용한 양**을 고릅니다.
+3. **계정 연결**에서 사용할 서비스에 로그인합니다. Codex와 Claude는 공식 CLI에 이미 로그인했다면 기존 인증을 사용할 수 있습니다. CLI 설치 안내가 나오면 **설치 후 로그인**을 선택하고 브라우저에서 인증을 마치세요.
+4. 대시보드에서 **F5**를 눌러 사용량을 확인합니다. 핀 아이콘을 누르면 다른 창 위에 고정됩니다.
 
-툴팁 예시에서 *Claude Sonnet weekly quota*는 **59%**가 남았고 **4시간 31분** 뒤에 리셋됩니다. Opus는 28%가 남았으며 서비스가 리셋 시각을 제공하지 않아 `—`로 표시됩니다.
+**업데이트할 때**는 알림 영역의 VibeMeters 아이콘을 오른쪽 클릭해 **종료**한 뒤, 새 ZIP 전체를 풀고 새 폴더에서 실행하세요. 설정과 기존 로그인은 다시 사용할 수 있습니다. 실행 경로가 바뀌었다면 **Windows 시작 시 실행**을 껐다 켜서 자동시작 경로를 갱신하세요.
 
-## 지원 계정과 표시 항목
+## 작업표시줄 위젯
 
-개인 구독 한도와 함께 **Codex Business 개인 한도 · Claude Enterprise 월 추가 사용**을 표시합니다.
+**설정 → 표시할 서비스 · 수치 기준**에서 원하는 서비스의 **위젯**을 켜세요. 대시보드에는 네 서비스를 모두 표시하면서 작업표시줄에는 Claude만 띄우는 식으로 따로 선택할 수 있습니다. 위젯은 기본 모니터의 작업표시줄 안에서 빈 공간을 사용하며, 클릭하면 대시보드가 열립니다.
 
-| 서비스·계정 | 표시하는 사용량 |
-| --- | --- |
-| **Codex 개인 구독** | 계정에서 제공한 5시간·주간 등 구독 한도 |
-| **Codex Business** | **개인** 한도의 남은/사용 비율과 제공된 초기화 시각 |
-| **Claude 개인 구독** | 5시간·주간 구독 한도와 활성화된 월 추가 사용 |
-| **Claude Enterprise** | **월추가** 사용 비율. 개인 구독의 5시간·주간 한도와 구분 |
-| **Gemini 개인 계정 / Antigravity** | Gemini 공유 5시간·주간 및 제공되는 Argon 한도. Gemini 웹·앱 한도와 구분 |
-| **Gemini 회사 계정 / Code Assist** | 지원되는 계정·프로젝트가 반환한 모델별 할당량 |
-| **Grok Build / X 구독** | 공식 Build CLI가 제공한 Build 전용 또는 공유 구독 사용 비율·초기화 정보 |
+![Codex·Claude·Gemini·Grok의 작업표시줄 위젯. 각 행에 한도 이름, 그래프, 백분율, 남은 시간이 표시됩니다.](docs/screenshots/taskbar-widget-four-services.png)
 
-Codex Business는 `spend_control.individual_limit`, Claude Enterprise는 활성화된 `extra_usage.utilization` 응답을 사용합니다. 비율이 없는 지원 응답에는 **연결됨 · 비율 미제공**을 표시하며 수치를 추정하지 않습니다. 회사의 서비스 권한·SSO·네트워크 정책에 따라 조회나 로그인이 제한될 수 있습니다. [개인·회사 계정 상세 안내](docs/account-usage.md) · [검증 범위](VERIFICATION.md)
+위젯의 각 행은 **한도 이름 → 그래프 → 백분율 → 리셋까지 남은 시간** 순서입니다. `H`는 5시간, `W`는 주간 한도입니다. Gemini 모델은 Argon `A`, Pro `P`, Flash `F`, Flash-Lite `FL`로 줄여 씁니다.
 
-## 빠른 시작
+**전체 이름과 정확한 리셋 시각**을 보려면 위젯에 마우스를 올리세요. 툴팁이 작업표시줄에서 바탕 화면 쪽으로 열립니다. 아래 예시에서 Claude Sonnet 주간 한도는 59%가 남았고, 4시간 31분 뒤에 리셋됩니다. Opus는 28%가 남았으며 서비스에서 리셋 시각을 제공하지 않아 `—`로 표시됩니다.
 
-**설정 → 표시할 서비스 · 수치 기준**에서 서비스마다 본체 표시, 작업표시줄 위젯, 수치 기준(남은 양·사용한 양)을 각각 선택하세요. 위젯은 기본 모니터 작업표시줄의 빈 공간에 표시되며, 누르면 본체가 열립니다.
+![Claude Enterprise 위젯의 툴팁. 두 한도의 전체 이름, 남은 비율, 리셋까지 남은 시간과 현지 리셋 시각이 보입니다.](docs/screenshots/v1.4.13/widget-tooltip-dark-ko.png)
 
-한도마다 제목·그래프·백분율·리셋까지 남은 시간이 한 줄에 표시됩니다. 24시간 이하는 `24:00`, `10:00`, `4:31`처럼 시간:분으로, 24시간 초과는 `2d`처럼 일 단위로 표시합니다. 수동 새로고침 모드에서도 남은 시간은 계속 줄어듭니다. 본체는 한도와 모델 이름을 표시합니다. 작업표시줄 위젯은 5시간 한도를 `H`로, Gemini 계정이 제공하는 Argon·Pro·Flash·Flash-Lite 한도를 각각 `A`·`P`·`F`·`FL`로 표시합니다.
+## 서비스별로 확인할 수 있는 한도
 
-위젯에 마우스를 올리면 바탕 화면 쪽으로 툴팁이 열립니다. 한도별 전체 이름, 사용량 또는 남은 양, 리셋까지 남은 시간, 서비스가 제공한 현지 리셋 날짜와 시각을 표에서 확인할 수 있습니다. 요청 제한 중에는 서비스 상태와 확인된 재시도 시각이 표시됩니다.
-
-
-![네 서비스의 예시 사용량과 리셋까지 남은 시간을 표시한 다크 테마 작업표시줄 위젯](docs/screenshots/taskbar-widget-four-services.png)
-
-**설정 → 계정 연결 → Gemini 계정**에서 한 번에 표시할 계정을 고릅니다. **기본 CLI 계정**은 기존 연결을 유지합니다. **Antigravity**는 공식 CLI에서 현재 로그인한 개인 계정을 사용합니다. **Code Assist 1**과 **Code Assist 2**는 별도로 로그인할 수 있는 회사 계정입니다. 각 슬롯을 선택하고 **Gemini 로그인**을 누른 뒤 해당 Google 계정으로 인증하세요. 이후에는 계정 선택만 바꾸면 됩니다.
-
-1. **ZIP 전체**를 압축 해제하고 `VibeMeters.exe`를 실행하세요. Gemini에 필요한 `runtime` 폴더를 EXE와 함께 보관하세요.
-2. 상단 톱니바퀴로 설정을 열고 표시할 서비스와 계정을 연결하세요.
-3. 창 크기를 조절하고 핀 아이콘으로 항상 위에 고정하세요.
-
-설치 프로그램 없이 실행합니다. 소스에서 직접 만들려면 아래 **소스에서 빌드·검증**을 펼치세요.
-
-**기존 버전에서 업데이트:** 트레이 메뉴에서 실행 중인 VibeMeters를 종료한 뒤 새 ZIP 전체를 풀고, 새 폴더의 `VibeMeters.exe`를 실행하세요. 기존 설정과 CLI 로그인은 그대로 사용합니다. 실행 경로가 바뀌었고 자동시작을 사용한다면 설정에서 **Windows 시작 시 실행**을 껐다 켜세요.
-
-## 상세 가이드
-
-<details>
-<summary>계정 연결</summary>
-
-| 서비스 | 연결 방법 | 표시 정보 |
+| 서비스 | 개인 계정 | 회사 계정 또는 기타 구독 |
 | --- | --- | --- |
-| **Codex** | 설정의 **Codex 로그인**. CLI가 없으면 공식 설치를 선택한 뒤 로그인 | 계정에서 제공한 구독 한도·Business 개인 한도 |
-| **Claude** | 설정의 **Claude 로그인**. CLI가 없으면 공식 설치를 선택한 뒤 로그인 | 5시간·주간 구독 한도·Enterprise를 포함한 활성화된 월 추가 사용 |
-| **Gemini** | 개인 계정은 설치된 Antigravity CLI 1.4.7 이상에서 로그인, 회사 계정은 기존 Code Assist 인증 | Antigravity의 Gemini 공유 한도 또는 회사 Code Assist 할당량·초기화 정보 |
-| **Grok** | 공식 Grok Build CLI 설치 후 설정의 **Grok 로그인**, 또는 `grok login --oauth` | 공식 CLI의 구독 비율과 초기화 시각. Build 전용·공유 범위 구분, API 비용·추가 금액 제외 |
+| Codex | 계정이 제공하는 5시간·주간 등 구독 한도 | Business 계정의 개인 한도와 리셋 시각 |
+| Claude | 5시간·주간 한도, 활성화된 월 추가 사용 | Enterprise 계정에서 활성화된 월 추가 사용 비율 |
+| Gemini | Antigravity가 제공하는 공유 5시간·주간 한도 및 Argon 한도 | Code Assist 계정과 프로젝트에서 제공하는 모델별 할당량 |
+| Grok | 공식 Grok Build CLI가 제공하는 X 구독 사용량 | 응답에 따라 Build 전용 또는 공유 구독 한도로 표시 |
 
-Codex·Claude는 유효한 기존 인증 파일로 사용량을 조회합니다. Codex는 파일이 없거나 읽을 수 없을 때, 또는 조회가 401을 반환할 때 설치된 공식 Codex CLI의 계정과 한도도 확인합니다. Claude 자동 갱신에는 공식 Claude Code 2.1.317 이상이 필요합니다. 로그인 버튼을 눌렀을 때 CLI가 없으면 **설치 후 로그인** 또는 취소를 선택할 수 있습니다. 설치를 선택하면 공식 설치 프로그램을 내려받아 현재 사용자 계정에 설치하고 로그인으로 이어갑니다. [계정별 안내](docs/account-usage.md) · [CLI 설치 범위](docs/cli-installation.md)
+표시되는 백분율은 각 서비스가 제공하는 계정 한도 기준입니다. 정상적으로 연결됐어도 서비스가 비율을 제공하지 않으면 **연결됨 · 비율 미제공**으로 표시됩니다. 회사 계정은 조직의 SSO, 프로젝트 권한, 네트워크 정책에 따라 조회 범위가 달라집니다. [개인·회사 계정 안내](docs/account-usage.md) · [Grok Build 연결 안내](docs/grok-usage.md)
 
-Codex·Claude 로그인은 설치된 공식 CLI를 백그라운드에서 실행합니다. 터미널 창 없이 열린 브라우저에서 인증을 완료하세요. 앱은 로그인 결과를 확인한 뒤 사용량을 다시 조회하며, 5분 안에 완료되지 않으면 대기를 종료합니다. 웹사이트나 데스크톱 앱 로그인만으로는 필요한 CLI 인증 파일이 없을 수 있습니다. 인증 파일 변경도 자동으로 감지합니다. Gemini 개인 경로의 로그인 버튼은 공식 Antigravity 창을 열며 완료 후 새로고침합니다.
+### Gemini 계정 전환
 
-Gemini는 기본적으로 꺼져 있습니다. 개인 계정은 공식 Antigravity CLI의 `/usage`를 조회하고 카드에 **Gemini · Antigravity**로 출처를 표시합니다. Gemini 웹·앱 한도와 별개이며, Pro/Flash 공유 한도를 모델별로 나누지 않습니다. 회사 계정은 지원되는 Code Assist 프로젝트를 사용합니다. 사용량은 **VibeMeters 안에서** 표시하며 일반 조회는 터미널·브라우저나 모델 생성 요청을 열지 않습니다. [계정별 안내](docs/account-usage.md).
+**설정 → 계정 연결 → Gemini 계정**에서 한 번에 표시할 계정을 선택합니다.
 
-Grok도 기본적으로 꺼져 있습니다. 공식 Grok Build CLI의 기존 인증을 사용하므로 브라우저 확장은 필요하지 않습니다. 일반 조회는 모델·세션·로그인을 실행하지 않으며 앱이 인증 파일 내용을 읽거나 토큰을 갱신하지 않습니다. 응답이 Build 전용이면 **Build**, 공유 구독이면 **공유**로 표시합니다. CLI가 제공하지 않는 Grok Bot 한도는 만들지 않습니다. [Grok 연결 범위](docs/grok-usage.md).
+- **기본 CLI 계정**은 기존 CLI 연결을 사용합니다.
+- **Antigravity**는 설치된 공식 Antigravity CLI 1.4.7 이상에 로그인한 개인 계정의 사용량을 보여 줍니다. 대시보드에서 **Gemini · Antigravity**로 구분할 수 있습니다.
+- **Code Assist 1**, **Code Assist 2**에는 회사 계정을 각각 연결할 수 있습니다. 하나를 선택하고 **Gemini 로그인**을 눌러 인증한 다음 다른 계정도 같은 방법으로 연결하세요. 로그인 세션이 유효한 동안은 목록에서 계정만 바꾸면 됩니다.
 
-표시값은 계정 한도의 비율입니다. API 키 결제액·토큰 비용·정확한 남은 질문 횟수를 의미하지 않습니다. 서버가 제공하지 않는 값은 추정하지 않습니다. 회사 계정의 개인 한도·월 추가 사용은 구독의 5시간·주간 한도와 구분하며, 비율을 제공하지 않는 정상 응답은 **연결됨 · 비율 미제공**으로 표시합니다. [개인·회사 계정 안내](docs/account-usage.md)를 참고하세요. VibeMeters 자체 계정은 필요하지 않습니다.
+## 창과 새로고침 설정
 
-</details>
-
-<details>
-<summary>설정과 기본 조작</summary>
-
-| 조작 | 방법 |
+| 하고 싶은 일 | 방법 |
 | --- | --- |
-| 새로고침 | 상단 새로고침 아이콘, **F5**, 트레이 메뉴 |
-| 서비스·테마·표시 기준 선택 | 상단 톱니바퀴 → 설정 |
-| 항상 위에 표시 | 상단 핀 또는 트레이 메뉴 |
-| 트레이로 숨기기 | 닫기 또는 **Esc** |
-| 창 다시 열기 | 트레이 아이콘 클릭 또는 앱 다시 실행 |
-| 앱 종료 | 트레이 아이콘 우클릭 → **종료** |
+| 창을 숨기거나 다시 열기 | 닫기 또는 **Esc**로 숨깁니다. 알림 영역의 앱 아이콘을 클릭하면 다시 열립니다. |
+| 앱 완전히 종료하기 | 알림 영역의 앱 아이콘을 오른쪽 클릭하고 **종료**를 선택합니다. |
+| 창 위치와 크기 바꾸기 | 창을 끌어서 옮기거나 가장자리를 끌어 크기를 조절합니다. 위치와 크기는 자동으로 저장됩니다. |
+| 테마와 언어 바꾸기 | 설정에서 다크·라이트·시스템 테마와 한국어·영어·시스템 언어를 선택합니다. |
+| 남은 한도가 적을 때 알림 받기 | 설정에서 **남은 한도 20%·5% 알림**을 켭니다. |
 
-- **서비스 선택:** Codex·Claude·Gemini·Grok 중 원하는 조합만 표시합니다. 최소 한 서비스는 유지합니다. Gemini와 Grok은 기본적으로 꺼져 있습니다.
-- **표시 기준:** 서비스별로 남은 양 또는 사용한 양을 선택하며 본체와 해당 서비스 위젯에 함께 적용합니다.
-- **테마:** 다크·라이트·시스템 중 선택합니다. 메인 창·설정·메뉴·툴팁에 적용합니다.
-- **창 크기:** 표준·미니 창에서 같은 카드 구성과 세로 한도 행을 유지합니다. 최소 220 × 140 논리 픽셀부터 조절하며 한도가 많으면 최소 높이가 늘어납니다. 넓은 창에서는 카드를 가로로 배치합니다. 메인 창에는 스크롤이 없습니다.
-- **동작:** Windows 자동시작과 남은 한도 20%·5% 알림을 선택할 수 있습니다. 설정은 즉시 저장합니다.
+사용량은 기본 **2분마다** 확인합니다. 설정에서 30초·1분·2분·5분·15분·수동 중 하나를 선택할 수 있습니다. 수동 모드에서도 리셋까지 남은 시간은 계속 갱신됩니다. Windows 잠금이나 절전 중에는 조회를 멈춥니다. [다른 테마와 설정 화면 보기](docs/screenshots/README.md)
 
-창 이동·크기 변경은 자동 저장하며, 닫기·Windows 종료·절전 때 마지막 상태를 저장합니다. Windows 자동시작은 저장된 창 크기·위치와 표시 또는 트레이 상태를 복원합니다. 업데이트가 창을 기본 크기로 되돌리지 않으며, 이전 모니터가 없으면 보이는 화면으로 옮깁니다.
+## 사용량이 표시되지 않을 때
 
-
-앱과 문서는 한국어·영어를 지원합니다. 기본값 **시스템**은 Windows UI 언어가 한국어이면 한국어, 그 외에는 English를 선택합니다. 설정의 **언어**에서 시스템/한국어/English를 바꾸면 메인 카드·설정·트레이·툴팁·접근성 이름·설치/로그인/오류 안내가 즉시 바뀌고 기존 설정 파일에 저장됩니다. 언어 전환을 위해 계정에 다시 로그인하거나 사용량을 재조회하지 않습니다. 제품명·공식 API 값·내부 한도 식별자는 유지합니다.
-
-<img src="docs/screenshots/current/settings-en-dark.png" alt="언어와 서비스 연결을 보여 주는 영어 설정 화면" width="410">
-
-</details>
-
-<details>
-<summary>더 많은 화면</summary>
-
-| 표준 다크 | 표준 라이트 |
-| :---: | :---: |
-| <img src="docs/screenshots/current/window-standard-dark.png" alt="표준 다크 창" width="360"> | <img src="docs/screenshots/current/window-standard-light.png" alt="표준 라이트 창" width="360"> |
-
-| 네 서비스 최소 폭 | 조회 시각과 상태 |
-| :---: | :---: |
-| <img src="docs/screenshots/current/window-four-services-grok-minimum-dark.png" alt="최소 폭에서 네 서비스 사용량을 표시한 창" width="220"> | <img src="docs/screenshots/current/window-refresh-schedule-ko.png" alt="마지막 관측과 다음 자동 조회 시각" width="360"> |
-
-<img src="docs/screenshots/current/settings-dark.png" alt="네 서비스의 표시 및 계정 연결 설정" width="410">
-
-화면은 합성 데이터를 사용한 WPF 렌더입니다. [캡처 방식과 범위](docs/screenshots/README.md)
-
-</details>
-
-<details>
-<summary>조회 간격과 문제 해결</summary>
-
-새로고침은 **30초·1분·2분·5분·15분·수동** 중 선택하며 기본은 2분입니다. Windows 잠금·절전 중에는 조회를 멈춥니다. 수동 버튼·F5·트레이 새로고침은 표시 중인 모든 서비스의 성공 캐시를 우회합니다. Claude는 30초·1분으로 설정해도 최근 2분의 성공 결과를 재사용해 자동 조회를 줄입니다. 진행 중 들어온 수동 요청은 한 번으로 합쳐 처리합니다.
-
-한도 행이나 상태 표시에 마우스를 올리면 초기화 시각과 연결 상태를 확인할 수 있습니다.
-
-| 상황 | 해결 방법 |
+| 화면에 표시되는 상태 | 확인할 내용 |
 | --- | --- |
-| Codex·Claude가 연결되지 않음 | 공식 CLI 또는 설정에서 로그인한 뒤 새로고침하세요. |
-| Claude 인증 확인/재시도 상태 | 앱이 기존 로그인으로 다시 시도합니다. CLI가 오래됐다는 안내가 표시되면 [Claude Code를 업데이트](https://code.claude.com/docs/en/setup#update-claude-code)하세요. 로그인 버튼을 누르면 공식 CLI의 브라우저 인증을 바로 시작합니다. |
-| Claude가 조회 일시 제한으로 표시됨 | 툴팁의 재시도 시각까지 기다리세요. HTTP 429는 **사용량 조회 요청**에 대한 제한입니다. 대기 시각은 앱을 다시 실행해도 적용됩니다. |
-| 오류 후 이전 비율이 남아 있음 | Claude는 일시 오류나 요청 제한 때 같은 인증으로 확인한 30분 이내의 비율을 **이전 값**으로 표시합니다. 다음 확인에서 인증이 바뀌었거나 초기화 시각이 지난 항목을 숨깁니다. |
-| Gemini 사용량이 나오지 않음 | 개인 계정은 Antigravity CLI 1.4.7 이상과 로그인을 확인하세요. 회사 계정은 프로젝트 권한과 동봉 runtime을 확인하세요. [계정별 안내](docs/account-usage.md). |
-| 앱 이동 후 자동시작이 안 됨 | 설정에서 Windows 시작 시 실행을 껐다가 다시 켜서 경로를 갱신하세요. |
+| 로그인 또는 연결 필요 | 설정에서 해당 서비스의 공식 CLI 로그인을 완료하고 **F5**를 누르세요. Codex·Claude·Gemini·Grok은 각자 사용하는 CLI와 계정이 다릅니다. [CLI 설치와 로그인 안내](docs/cli-installation.md) |
+| Claude 인증 확인 또는 재시도 | 앱이 기존 로그인으로 인증 갱신을 시도합니다. 자동 갱신에는 Claude Code 2.1.317 이상이 필요합니다. 다시 로그인하려면 **Claude 로그인**을 누르세요. [Claude Code 업데이트](https://code.claude.com/docs/en/setup#update-claude-code) |
+| 요청 제한 대기 | 서비스가 허용하는 다음 조회 시각을 확인하세요. **F5**를 누르거나 앱을 다시 열어도 서버의 재시도 대기 시간을 지킵니다. |
+| Claude에 이전 값이 표시됨 | 일시 오류 때 같은 계정에서 최근 30분 이내 확인한 값이 남을 수 있습니다. 다음 조회 때 인증이 바뀌었거나 리셋 시각이 지난 값은 숨깁니다. |
+| Gemini 한도가 보이지 않음 | 개인 계정은 Antigravity의 로그인 상태를, 회사 계정은 선택한 Code Assist 계정의 프로젝트 권한과 ZIP의 `runtime` 폴더를 확인하세요. |
 
-인증 파일 변경·창 활성화 같은 보조 확인에는 기존 성공 캐시(Claude·Grok 2분, Gemini 회사 5분)를 재사용할 수 있습니다. 수동·자동 조회 모두 **요청 제한·서버 Retry-After·인증/실패 보호 대기**를 지킵니다. Claude 429 뒤에는 **5 → 10 → 20 → 30 → 60분**, Gemini·Grok 요청 제한 뒤에는 **10분** 기다립니다. Claude와 Gemini Code Assist는 서버가 더 긴 대기 시간을 보내면 그 시각을 따릅니다. `확인`은 마지막 성공 수치의 관측 시각이고, 툴팁의 `조회 확인`은 마지막 결과·오류 확인 시각입니다. 캐시를 재사용하면 이 시각은 유지됩니다. `다음 자동`은 설정 주기와 보호 대기로 계산한 다음 가능한 타이머 시각입니다. 진행 중 조회나 Windows 잠금·절전으로 더 늦어질 수 있습니다.
+## 개인정보와 실행 환경
 
-</details>
+VibeMeters 가입 없이 각 서비스의 기존 계정으로 사용합니다. 앱 설정은 `%LOCALAPPDATA%\VibeMeters\settings.json`에 저장합니다. Codex·Claude는 로컬 CLI 인증을 사용하며, Gemini·Grok은 공식 클라이언트가 인증을 관리합니다. Claude 인증 진단 파일에는 복구 결과와 오류 분류를 기록하며 토큰이나 CLI 원문은 기록하지 않습니다. [인증과 갱신 방식](docs/account-usage.md)
 
-<details>
-<summary>개인정보와 호환성</summary>
-
-- **인증:** Codex는 `%USERPROFILE%\.codex\auth.json`(`CODEX_HOME` 지원), Claude는 `%USERPROFILE%\.claude\.credentials.json`(`CLAUDE_CONFIG_DIR` 지원)에서 읽습니다. 앱은 토큰을 별도 저장하거나 인증 파일에 쓰지 않습니다. Claude는 만료 2분 전부터 토큰당 한 번 갱신을 시도하고, 만료 또는 401 이후에도 **공식 Claude Code 2.1.317 이상**의 `auth status`로 복구를 시도합니다. 만료 전 시도에서 새 토큰이 아직 저장되지 않으면 기존 토큰으로 조회합니다. 새 토큰과 미래 만료를 확인하고 실제 조회가 성공해야 복구가 완료됩니다. 교체 후 401 등 미확정 결과는 재시도 상태로, 명시적인 인증 갱신 거부는 재로그인 필요로 표시합니다. 자동 조회에서 브라우저나 모델 요청은 실행하지 않습니다. [갱신 및 CLI 업데이트 안내](docs/account-usage.md#claude-인증-자동-갱신과-재로그인-표시).
-- **Gemini:** 회사 경로는 동봉한 공식 `@google/gemini-cli-core` **0.65.0**, 개인 경로는 설치된 공식 Antigravity CLI를 사용합니다. 각 공식 클라이언트가 인증을 관리하며 원본 토큰을 .NET 앱의 설정이나 사용량 출력에 전달하지 않습니다.
-- **Grok:** 설치된 공식 Grok Build CLI가 인증을 관리합니다. 앱은 인증 파일의 수정 시각만 확인합니다. 조회 중 CLI가 새 인증을 저장하면 공식 CLI로 한 번 더 조회하고, 그 사이 다시 인증이 바뀌면 결과를 버립니다. 요청 제한을 받은 경우 정해진 대기 시간을 적용합니다. [Grok 연결 범위](docs/grok-usage.md)
-- **로컬 저장:** 앱 설정은 `%LOCALAPPDATA%\VibeMeters\settings.json`에 저장합니다. Claude 인증 진단은 같은 폴더의 `claude-auth-diagnostics.jsonl`에 원인 enum·종료코드·변경/만료 여부만 기록하며 현재/보관 파일 2개를 사용합니다. 현재 파일이 64KiB에 도달하면 다음 기록 전에 회전하므로 한 행만큼 초과할 수 있습니다. 마지막 수정 후 7일 지난 파일은 다음 진단 기록 때 정리하며, 개별 행의 7일 보존 기한을 보장하지 않습니다. 토큰·계정·CLI 원문은 기록하지 않습니다. 자동시작은 현재 사용자의 Windows Run 레지스트리를 사용합니다. 소스와 배포본에는 인증 정보를 포함하지 않습니다.
-- **연동:** Codex·Claude는 계정용 엔드포인트를, Gemini는 Code Assist 코어 또는 공식 Antigravity 사용량 명령을, Grok은 공식 Build CLI의 ACP billing 계약을 사용합니다. 서비스 정책이나 구현 변경으로 연동이 제한될 수 있습니다.
-- **실행 환경:** Windows 10/11 x64용 네이티브 WPF/.NET 8 앱입니다. 배포본에 .NET이 포함되며 내장 브라우저나 지속적인 애니메이션이 없습니다. Gemini 회사 경로는 숨겨진 Node 프로세스를, 개인 경로와 Grok은 설치된 공식 CLI의 짧은 프로세스를 사용합니다. 특정 메모리·CPU 사용량 수치는 보장하지 않습니다.
-
-배포본은 코드 서명이 없어 Windows에서 알 수 없는 게시자 안내가 나올 수 있습니다. VibeMeters는 OpenAI·Anthropic·Google·xAI와 제휴하지 않은 독립 프로젝트입니다.
-
-</details>
+배포 파일에 코드 서명이 없어 Windows에서 알 수 없는 게시자 안내를 표시할 수 있습니다. VibeMeters는 OpenAI·Anthropic·Google·xAI와 제휴하지 않은 독립 프로젝트입니다.
 
 <details>
-<summary>소스에서 빌드·검증</summary>
+<summary>개발자용 빌드와 테스트</summary>
 
-Windows x64, **.NET 8 SDK**, **Node.js 24.22.0/npm**이 필요합니다. 배포 스크립트는 잠금 파일로 빌드 의존성을 복원하고 Gemini 공식 코어의 인증·할당량 브리지를 번들링합니다. 배포본에는 `node.exe`와 번들·라이선스만 포함하며 `node_modules`는 포함하지 않습니다. 빌드용 Node 버전은 `runtime/gemini-quota/package.json`에 고정합니다.
+Windows x64에서 .NET 8 SDK와 Node.js 24.22.0/npm으로 빌드합니다.
 
 ```powershell
 git clone https://github.com/Nectarine-Peach/VibeMeters.git
 cd VibeMeters
 dotnet build -c Release
-.\scripts\publish.ps1
-.\dist\VibeMeters-portable-win-x64\VibeMeters.exe
-```
-
-산출물은 `dist/VibeMeters-portable-win-x64/`와 같은 이름의 ZIP입니다. 빌드가 성공하면 관리 대상 패키지를 교체하고 `dist`에 남은 이전 생성 패키지를 정리합니다. 따로 보관하려면 `-OutputDirectory`로 `dist` 밖의 새 경로를 지정하세요. `-Node`로 고정 버전 Node의 경로를 선택할 수 있습니다. runtime 폴더를 함께 배포해야 하며 사용 PC에 .NET·Node·npm 설치는 필요하지 않습니다. 설정과 CLI 인증 저장 위치는 기존과 같습니다. 패키징 경계와 오프라인 검사 방법은 [패키징 안내](docs/packaging.md)를 참고하세요. 배포본과 변경 사항은 [릴리스 페이지](https://github.com/Nectarine-Peach/VibeMeters/releases)에서 확인하세요.
-
-격리된 제공자·파서·설정 회귀 테스트:
-
-```powershell
 dotnet run --project tests/VibeMeters.Tests.csproj -c Release
-```
-
-데모 데이터로 실행 창을 검사하고 렌더링 캡처를 저장하려면:
-
-```powershell
-dotnet build -c Release
 dotnet .\bin\Release\net8.0-windows\VibeMeters.dll --smoke-test
+.\scripts\publish.ps1
 ```
 
-결과와 PNG는 빌드 폴더의 `artifacts/`에 저장됩니다. 버전별 결과와 제약은 [검증 기록](VERIFICATION.md)을 참고하세요. `VibeMeters.exe --demo`는 계정에 접근하지 않는 예시 데이터 미리보기입니다.
-
-버그 제보에는 앱 버전·Windows 배율·창 크기·서비스·오류 문구를 알려 주세요. 인증 파일이나 액세스 토큰은 첨부하지 마세요.
+UI 검사 결과와 PNG는 빌드 폴더의 `artifacts`에, 배포 폴더와 ZIP은 `dist`에 저장됩니다. 배포 스크립트는 완료 후 이전 관리 대상 패키지를 정리합니다. 별도로 보관할 빌드는 `-OutputDirectory`로 `dist` 밖의 새 경로를 지정하세요. 계정 연결 없이 예시 화면을 보려면 `VibeMeters.exe --demo`를 실행하세요. [패키징 안내](docs/packaging.md) · [검증 기록](VERIFICATION.md) · [구현 조사](RESEARCH.md) · [디자인 시안](docs/design/README.md)
 
 </details>
 
-[버그 제보](https://github.com/Nectarine-Peach/VibeMeters/issues) · [구현 조사](RESEARCH.md) · [검증 기록](VERIFICATION.md) · [디자인 시안](docs/design/README.md)
+오류를 제보할 때는 앱 버전, Windows 배율, 해당 서비스와 오류 문구를 알려 주세요. 인증 파일이나 액세스 토큰은 첨부하지 마세요. [버그 제보](https://github.com/Nectarine-Peach/VibeMeters/issues)

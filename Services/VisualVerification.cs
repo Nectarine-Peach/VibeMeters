@@ -166,7 +166,7 @@ internal sealed class VisualVerification
         var labels = rows.Select(row => row.Children.OfType<TextBlock>().Single(text => Grid.GetColumn(text) == 3)).ToArray();
         _window.UpdateLayout();
         Check("reset time and unknown deadline visible at minimum width",
-            labels[0].Text == "리셋 1분" && labels[1].Text == "리셋 미제공" &&
+            labels[0].Text == "리셋 0:01" && labels[1].Text == "리셋 미제공" &&
             labels.All(label => label.IsVisible && label.ActualWidth >= label.DesiredSize.Width - label.Margin.Left - 1) &&
             rows.All(row => Meter(row).ActualWidth > 0));
         await Task.Delay(TimeSpan.FromMilliseconds(2200));

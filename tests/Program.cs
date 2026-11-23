@@ -81,12 +81,17 @@ sealed class RegressionSuite
                 Equal("Reset N/A", UsageResetText.Countdown(null, Now));
                 Equal("Reset pending", UsageResetText.Countdown(Now, Now));
                 Equal("Reset pending", UsageResetText.Countdown(Now.AddDays(-1), Now));
-                Equal("Reset 1m", UsageResetText.Countdown(Now.AddSeconds(1), Now));
-                Equal("Reset 2m", UsageResetText.Countdown(Now.AddMinutes(1).AddSeconds(1), Now));
-                Equal("Reset 1h 5m", UsageResetText.Countdown(Now.AddMinutes(65).ToOffset(TimeSpan.FromHours(9)), Now));
-                Equal("Reset 1d 2h", UsageResetText.Countdown(Now.AddHours(26), Now));
+                Equal("Reset 0:01", UsageResetText.Countdown(Now.AddSeconds(1), Now));
+                Equal("Reset 0:02", UsageResetText.Countdown(Now.AddMinutes(1).AddSeconds(1), Now));
+                Equal("Reset 1:05", UsageResetText.Countdown(Now.AddMinutes(65).ToOffset(TimeSpan.FromHours(9)), Now));
+                Equal("Reset 5:00", UsageResetText.Countdown(Now.AddHours(5), Now));
+                Equal("Reset 4:31", UsageResetText.Countdown(Now.AddMinutes(271), Now));
+                Equal("Reset 5h", UsageResetText.Countdown(Now.AddHours(5).AddSeconds(1), Now));
+                Equal("Reset 24h", UsageResetText.Countdown(Now.AddDays(1), Now));
+                Equal("Reset 1d", UsageResetText.Countdown(Now.AddDays(1).AddSeconds(1), Now));
+                Equal("Reset 1d", UsageResetText.Countdown(Now.AddHours(26), Now));
                 Localizer.SetLanguage(AppLanguage.Korean);
-                Equal("리셋 1시간 5분", UsageResetText.Countdown(Now.AddMinutes(65), Now));
+                Equal("리셋 1:05", UsageResetText.Countdown(Now.AddMinutes(65), Now));
                 Equal("리셋 대기", UsageResetText.Countdown(Now, Now));
                 Equal("리셋 미제공", UsageResetText.Countdown(null, Now));
             }

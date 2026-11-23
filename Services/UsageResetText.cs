@@ -12,11 +12,9 @@ public static class UsageResetText
         if (remaining <= TimeSpan.Zero) return english ? "Reset pending" : "리셋 대기";
 
         long minutes = (remaining.Ticks - 1) / TimeSpan.TicksPerMinute + 1;
-        long hours = minutes / 60;
-        long days = hours / 24;
-        string duration = days > 0 ? (english ? $"{days}d {hours % 24}h" : $"{days}일 {hours % 24}시간")
-            : hours > 0 ? (english ? $"{hours}h {minutes % 60}m" : $"{hours}시간 {minutes % 60}분")
-            : (english ? $"{minutes}m" : $"{minutes}분");
+        string duration = remaining.TotalDays > 1 ? $"{remaining.Days}d"
+            : remaining.TotalHours > 5 ? $"{(int)remaining.TotalHours}h"
+            : $"{minutes / 60}:{minutes % 60:00}";
         return (english ? "Reset " : "리셋 ") + duration;
     }
 }

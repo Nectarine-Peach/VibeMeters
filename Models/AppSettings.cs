@@ -4,6 +4,9 @@ public enum AppTheme { System, Dark, Light }
 public enum UsageDisplayMode { Remaining, Used }
 public enum AppLanguage { System, Korean, English }
 public enum GeminiProfile { Default, Antigravity, CodeAssist1, CodeAssist2 }
+public enum TaskbarMode { Off, Combined, Separate, Widget }
+[System.Flags]
+public enum TaskbarWidgetProviders { None = 0, Codex = 1, Claude = 2, Gemini = 4, Grok = 8 }
 
 public sealed class AppSettings
 {
@@ -18,8 +21,22 @@ public sealed class AppSettings
     public bool AlwaysOnTop { get; set; }
     public bool ShowInTaskbar { get; set; } = true;
     public bool SeparateTaskbarButtons { get; set; }
+    public bool ShowTaskbarWidget { get; set; }
+    public TaskbarWidgetProviders WidgetProviders { get; set; } = TaskbarWidgetProviders.Codex | TaskbarWidgetProviders.Claude;
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool ShowMainTaskbarButton => ShowInTaskbar && !SeparateTaskbarButtons;
+    public TaskbarMode TaskbarDisplay
+    {
+        get => !ShowInTaskbar ? TaskbarMode.Off : ShowTaskbarWidget ? TaskbarMode.Widget :
+            SeparateTaskbarButtons ? TaskbarMode.Separate : TaskbarMode.Combined;
+        set
+        {
+            ShowInTaskbar = value != TaskbarMode.Off;
+            SeparateTaskbarButtons = value == TaskbarMode.Separate;
+            ShowTaskbarWidget = value == TaskbarMode.Widget;
+        }
+    }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool ShowMainTaskbarButton => TaskbarDisplay == TaskbarMode.Combined;
     public bool ShowProviderTrayIcons { get; set; }
     public bool StartWithWindows { get; set; }
     public double? Left { get; set; }
@@ -34,6 +51,19 @@ public sealed class AppSettings
     public bool ShowClaude { get; set; } = true;
     public bool ShowGemini { get; set; }
     public bool ShowGrok { get; set; }
+
+    public static TaskbarWidgetProviders WidgetFlag(UsageProviderKind provider) => provider switch
+    {
+        UsageProviderKind.Codex => TaskbarWidgetProviders.Codex,
+        UsageProviderKind.Claude => TaskbarWidgetProviders.Claude,
+        UsageProviderKind.Gemini => TaskbarWidgetProviders.Gemini,
+        UsageProviderKind.Grok => TaskbarWidgetProviders.Grok,
+        _ => TaskbarWidgetProviders.None
+    };
+
+    public bool IsWidgetSelected(UsageProviderKind provider) => (WidgetProviders & WidgetFlag(provider)) != 0;
+    public bool ShouldFetch(UsageProviderKind provider) => IsProviderVisible(provider) ||
+        (TaskbarDisplay == TaskbarMode.Widget && IsWidgetSelected(provider));
 
     public bool IsProviderVisible(UsageProviderKind provider) => provider switch
     {

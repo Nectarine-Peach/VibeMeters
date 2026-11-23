@@ -862,6 +862,29 @@ sealed class RegressionSuite
                 Equal(UsageStatus.RateLimited, switched.Status); Equal(limited.RetryAfter, switched.RetryAfter); Equal(0, switched.Windows.Count); Equal(2, handler.Calls);
             });
         }
+        Test("Widget-only providers participate in the normal fetch cycle while the widget mode is active", () =>
+        {
+            var settings = new AppSettings { ShowCodex = true, ShowClaude = false,
+                WidgetProviders = TaskbarWidgetProviders.Claude | TaskbarWidgetProviders.Gemini };
+            foreach (var mode in Enum.GetValues<TaskbarMode>())
+            {
+                settings.TaskbarDisplay = mode;
+                True(settings.ShouldFetch(UsageProviderKind.Codex));
+                Equal(mode == TaskbarMode.Widget, settings.ShouldFetch(UsageProviderKind.Claude));
+                Equal(mode == TaskbarMode.Widget, settings.ShouldFetch(UsageProviderKind.Gemini));
+                True(!settings.ShouldFetch(UsageProviderKind.Grok));
+            }
+            settings.WidgetProviders = TaskbarWidgetProviders.None;
+            var saved = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(settings))!;
+            Equal(TaskbarMode.Widget, saved.TaskbarDisplay);
+            Equal(TaskbarWidgetProviders.None, SettingsStore.Normalize(saved).WidgetProviders);
+        });
+        Test("Previously saved taskbar preferences retain their original mode", () =>
+        {
+            Equal(TaskbarMode.Combined, JsonSerializer.Deserialize<AppSettings>("{}")!.TaskbarDisplay);
+            Equal(TaskbarMode.Separate, JsonSerializer.Deserialize<AppSettings>("""{"SeparateTaskbarButtons":true}""")!.TaskbarDisplay);
+            Equal(TaskbarMode.Off, JsonSerializer.Deserialize<AppSettings>("""{"ShowInTaskbar":false}""")!.TaskbarDisplay);
+        });
         Test("Settings defaults are resource-friendly", () => { var s = new AppSettings(); Equal(120, s.RefreshIntervalSeconds); True(s.ShowInTaskbar); True(!s.AlwaysOnTop); True(!s.StartWithWindows); });
         Test("Language defaults and invalid settings retain system selection", () =>
         {

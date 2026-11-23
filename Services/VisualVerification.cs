@@ -306,7 +306,7 @@ internal sealed class VisualVerification
         var initialLanguage = _settings.Language;
         var now = DateTimeOffset.Now;
         var codex = Demo(UsageProviderKind.Codex) with { Windows = [new("5시간", 27, now.AddMinutes(271)), new("주간", 39, now.AddDays(3).AddHours(1))] };
-        var claude = Demo(UsageProviderKind.Claude) with { Windows = [new("5시간", 0, now.AddMinutes(92)), new("주간", 45, now.AddHours(10.5))] };
+        var claude = Demo(UsageProviderKind.Claude) with { Windows = [new("5시간", 0, now.AddMinutes(92)), new("주간", 45, now.AddHours(10))] };
         try
         {
             _settings.Language = AppLanguage.Korean;
@@ -457,7 +457,7 @@ internal sealed class VisualVerification
         {
             Demo(UsageProviderKind.Codex) with { Windows = [new("5시간", 27, now.AddMinutes(271)), new("주간", 39, now.AddDays(3.5))] },
             Demo(UsageProviderKind.Claude) with { Windows = [new("월 추가 사용", 41, null)] },
-            Demo(UsageProviderKind.Gemini) with { Windows = [new(longName, 17, now.AddHours(10.5)), new("Flash", 6, now.AddMinutes(30)), new("4 Argon 주간", 20, now.AddDays(2.5))] },
+            Demo(UsageProviderKind.Gemini) with { Windows = [new(longName, 17, now.AddHours(10)), new("Flash", 6, now.AddMinutes(30)), new("4 Argon 주간", 20, now.AddDays(2.5))] },
             Demo(UsageProviderKind.Grok) with { Status = UsageStatus.Unavailable }
         };
         var views = samples.Select(s => new TaskbarWidgetWindow(() => { }) { Tag = s.Provider }).ToArray();
@@ -486,6 +486,9 @@ internal sealed class VisualVerification
                 var roots = views.Select(Root).ToArray();
                 Check(layout + " widget widths match across two-row, single-row, long-label and unavailable services",
                     EqualCoordinates(views.Select(w => w.ActualWidth)) && views.All(w => w.ActualWidth > 0 && w.ActualWidth <= width + 1));
+                var inset = views[0].ActualWidth < 150 ? 3d : 4d;
+                Check(layout + " uses matching horizontal padding around the widget content",
+                    views.Select(w => ((Border)w.FindName("ContentFrame")).Padding).All(p => p.Left == inset && p.Right == inset));
                 var logos = views.Select((w, i) => Bounds((FrameworkElement)w.FindName("Logo"), roots[i])).ToArray();
                 Check(layout + " aligns provider logos even with different row counts",
                     EqualCoordinates(logos.Select(r => r.Left)) && EqualCoordinates(logos.Select(r => r.Width)));
@@ -532,7 +535,7 @@ internal sealed class VisualVerification
                 }
                 Check(layout + " shows each reset countdown directly on its quota row",
                     resetLabels.All(t => t.IsVisible && t.ActualWidth > 0) && resetLabels[2].Text == "—" &&
-                    new[] { "4:31", "3d", "10h", "0:30", "2d" }.All(time => resetLabels.Any(t => t.Text.Contains(time))));
+                    new[] { "4:31", "3d", "10:00", "0:30", "2d" }.All(time => resetLabels.Any(t => t.Text == time)));
                 Check(layout + " keeps label, graph, percentage and reset on one readable line", readable && meters.All(r => r.Width >= 15) &&
                     Enumerable.Range(0, labels.Count).All(i => EqualCoordinates(new[] { CenterY(labels[i]), CenterY(meters[i]),
                         CenterY(percentages[i]), CenterY(resets[i]) })));
@@ -551,7 +554,7 @@ internal sealed class VisualVerification
                 Check(layout + " grows each frame to accommodate its quota count",
                     views[2].ActualHeight > views[0].ActualHeight && views[0].ActualHeight > views[1].ActualHeight);
                 Check(layout + " retains full quota names in tooltips and omits unmeasured percentages",
-                    AutomationProperties.GetHelpText(gemini).Contains(longName) && Descendants<TextBlock>(gemini).Any(t => t.Text == "Argon" && t.IsVisible) &&
+                    AutomationProperties.GetHelpText(gemini).Contains(longName) && new[] { "P", "F", "A" }.All(label => Descendants<TextBlock>(gemini).Any(t => t.Text == label && t.IsVisible)) &&
                     !Descendants<TextBlock>(grok).Any(t => t.Text.Contains('%')) && roots.All(root => TextFits(root, root)));
                 if (layout == "horizontal") CaptureWidgetPreview(views, "taskbar-widget-four-services-ko.png");
             }
@@ -570,6 +573,11 @@ internal sealed class VisualVerification
         AssertMainLayout("all services",new[]{("Codex",1),("Claude",2),("Gemini",2)});
         Check("all services natural design height with three refresh-status rows",Close(_window.ActualWidth,360)&&Close(_window.ActualHeight,442));
         Capture(_window,"window-all-services-dark.png");
+        _render(Demo(UsageProviderKind.Gemini) with { Windows = [new("Gemini Pro", 17, null), new("Flash", 6, null), new("4 Argon 주간", 20, null)] });
+        await StableAsync(_window);
+        Check("dashboard abbreviates the three Gemini quota models", new[] { "P", "F", "A" }.All(label =>
+            Descendants<TextBlock>(Cards()[2]).Any(t => t.Text == label && t.IsVisible)));
+        _render(Demo(UsageProviderKind.Gemini));
         _window.Width=220;_window.Height=140;await StableAsync(_window);
         AssertMainLayout("all services minimum readable size",new[]{("Codex",1),("Claude",2),("Gemini",2)});
         Check("all service rows retained with readable minimum height",_window.ActualHeight>=160);

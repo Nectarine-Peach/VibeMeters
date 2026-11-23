@@ -87,7 +87,20 @@ internal sealed class VisualVerification
             if(settings!=null)
             {
                 await StableAsync(settings);
-                Check("settings contains no scroll viewers",!Descendants<ScrollViewer>(settings).Any());
+                Check("settings contains no scroll viewers", !Descendants<ScrollViewer>(settings).Any());
+                var previousHeight = settings.Height;
+                settings.Height = settings.MinHeight;
+                await StableAsync(settings);
+                var footer = Descendants<TextBlock>(settings).Single(text => text.Text.StartsWith("자동 저장"));
+                var status = (TextBlock)settings.FindName("LoginStatusText");
+                var lastLogin = (Button)settings.FindName("GrokLoginButton");
+                var frame = Root(settings);
+                Check("last login button and status fit above the footer at minimum settings height",
+                    lastLogin.ActualHeight > 0 && status.ActualHeight > 0 &&
+                    Bounds(lastLogin, frame).Bottom <= Bounds(status, frame).Top + 1 &&
+                    Bounds(status, frame).Bottom <= Bounds(footer, frame).Top + 1);
+                settings.Height = previousHeight;
+                await StableAsync(settings);
                 Check("settings has all service selection and mode controls",new[]{"CodexCheck","ClaudeCheck","GeminiCheck","GrokCheck","CodexModeCombo","ClaudeModeCombo","GeminiModeCombo","GrokModeCombo","ThemeCombo","IntervalCombo"}.All(name=>settings.FindName(name)!=null));
                 Capture(settings,"settings-dark.png");
                 Check("settings labels fit the client",TextFits(Root(settings),Root(settings)));

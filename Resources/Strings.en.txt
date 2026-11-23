@@ -138,6 +138,7 @@ VibeMeters 설정|VibeMeters settings
 남은 한도 20%·5% 알림|Notify at 20% / 5% remaining
 Windows 시작 시 실행|Start with Windows
 작업표시줄에 표시|Show in taskbar
+알림 영역에 서비스별 숫자 표시|Show per-service numbers in the notification area
 작업표시줄로 최소화|Minimize to taskbar
 항상 위에 표시|Always on top
 항상 위: 켜짐|Always on top: on

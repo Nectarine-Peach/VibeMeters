@@ -30,6 +30,7 @@ public partial class SettingsWindow : Window
         GrokCheck.IsChecked=settings.ShowGrok;
         TopCheck.IsChecked=settings.AlwaysOnTop;
         TaskbarCheck.IsChecked=settings.ShowInTaskbar;
+        ProviderTrayCheck.IsChecked=settings.ShowProviderTrayIcons;
         StartupCheck.IsChecked=settings.StartWithWindows;
         NotifyCheck.IsChecked=settings.NotifyLowQuota;
         UpdateServiceToggles();
@@ -53,6 +54,7 @@ public partial class SettingsWindow : Window
         _settings.ShowGrok=GrokCheck.IsChecked==true;
         _settings.AlwaysOnTop=TopCheck.IsChecked==true;
         _settings.ShowInTaskbar=TaskbarCheck.IsChecked==true;
+        _settings.ShowProviderTrayIcons=ProviderTrayCheck.IsChecked==true;
         _settings.StartWithWindows=StartupCheck.IsChecked==true;
         _settings.NotifyLowQuota=NotifyCheck.IsChecked==true;
         UpdateServiceToggles();

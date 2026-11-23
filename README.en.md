@@ -38,7 +38,7 @@ Codex Business uses the supplied `spend_control.individual_limit` and Claude Ent
 
 The current source build shows a countdown beside each quota. It continues to update in manual refresh mode. Hover over a countdown to see the local reset date and time.
 
-Enable **Show in taskbar** to see a progress bar for the most heavily used quota. Hover over the button for each service’s limiting quota and reset time. To see the percentage in the button label, set Windows’ taskbar button combining preference to **Never**.
+Enable **Show per-service numbers in the notification area** to display a percentage icon for each selected service beside the taskbar clock. Drag icons out of the overflow menu to keep them visible. With **Show in taskbar** enabled and Windows’ button combining preference set to **Never**, the app button also lists the service percentages together. Its progress bar shows the most heavily used quota.
 
 Under **Settings → Accounts → Gemini account**, choose the account to display. **Default CLI account** uses your existing connection. **Antigravity** uses the personal account currently signed in to the official CLI. **Code Assist 1** and **Code Assist 2** are independent company account slots. Select each slot and use **Gemini sign-in** to connect its Google account. You can then switch between them without signing in again while their sessions are valid.
 

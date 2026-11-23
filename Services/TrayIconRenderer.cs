@@ -40,6 +40,42 @@ internal static class TrayIconRenderer
             }
             else graphics.FillRectangle(fill, x, 14, width, 3);
         }
+        return ToIcon(bitmap);
+    }
+
+    public static Icon RenderNumber(UsageProviderKind provider, string number)
+    {
+        using var bitmap = new Bitmap(32, 32);
+        using var graphics = Graphics.FromImage(bitmap);
+        graphics.SmoothingMode = SmoothingMode.AntiAlias;
+        graphics.Clear(Color.Transparent);
+        var color = provider switch
+        {
+            UsageProviderKind.Codex => Color.FromArgb(139, 226, 195),
+            UsageProviderKind.Claude => Color.FromArgb(236, 169, 140),
+            UsageProviderKind.Gemini => Color.FromArgb(145, 169, 249),
+            _ => Color.FromArgb(216, 224, 234)
+        };
+        using var tile = new SolidBrush(color);
+        graphics.FillRectangle(tile, 0, 2, 32, 28);
+
+        // Fit the actual glyph outlines: even 100 has to remain legible at 16 px.
+        using var glyph = new GraphicsPath();
+        using var family = new FontFamily("Segoe UI");
+        using var format = StringFormat.GenericTypographic;
+        glyph.AddString(number, family, (int)FontStyle.Bold, 24f, PointF.Empty, format);
+        var bounds = glyph.GetBounds();
+        var scale = Math.Min(29f / bounds.Width, 22f / bounds.Height);
+        using var transform = new Matrix(scale, 0, 0, scale,
+            (32 - bounds.Width * scale) / 2 - bounds.Left * scale,
+            (32 - bounds.Height * scale) / 2 - bounds.Top * scale);
+        glyph.Transform(transform);
+        graphics.FillPath(Brushes.Black, glyph);
+        return ToIcon(bitmap);
+    }
+
+    private static Icon ToIcon(Bitmap bitmap)
+    {
         var native = bitmap.GetHicon();
         try { using var temporary = Icon.FromHandle(native); return (Icon)temporary.Clone(); }
         finally { DestroyIcon(native); }

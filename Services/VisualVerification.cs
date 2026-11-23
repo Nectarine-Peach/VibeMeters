@@ -292,9 +292,53 @@ internal sealed class VisualVerification
         SelectTag(mode,"Used");await StableAsync(_window);
         Check("settings Claude mode selection updates preference",_settings.ClaudeDisplayMode==UsageDisplayMode.Used);
         SelectTag(mode,"Remaining");await StableAsync(_window);
+        CheckProviderTrayIcons(settings, mode);
         var interval=(ComboBox)settings.FindName("IntervalCombo");
         SelectTag(interval,"0");
         Check("settings manual interval retained",_settings.RefreshIntervalSeconds==0);
+    }
+
+    private void CheckProviderTrayIcons(SettingsWindow settings, ComboBox claudeMode)
+    {
+        var app = (App)Application.Current;
+        var option = (CheckBox)settings.FindName("ProviderTrayCheck");
+        var claudeCheck = (CheckBox)settings.FindName("ClaudeCheck");
+        static void Toggle(CheckBox check, bool selected)
+        {
+            check.IsChecked = selected;
+            check.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+        }
+        bool SavedPreference() => JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings))!.ShowProviderTrayIcons;
+        var enabledKinds = Enum.GetValues<UsageProviderKind>();
+        Check("provider tray icons default to disabled", option.IsChecked == false && enabledKinds.All(kind => app.GetVisibleProviderTrayIcon(kind) is null));
+        Toggle(option, true);
+        var codex = app.GetVisibleProviderTrayIcon(UsageProviderKind.Codex);
+        var claude = app.GetVisibleProviderTrayIcon(UsageProviderKind.Claude);
+        Check("enabling provider icons persists and creates selected services with their current quotas", SavedPreference() &&
+            codex is { Visible: true, Icon: not null } && codex.Text.Contains("61%") &&
+            claude is { Visible: true, Icon: not null } && claude.Text.Contains("55%") &&
+            codex.ContextMenuStrip != null && ReferenceEquals(codex.ContextMenuStrip, claude.ContextMenuStrip) &&
+            app.GetVisibleProviderTrayIcon(UsageProviderKind.Gemini) == null && app.GetVisibleProviderTrayIcon(UsageProviderKind.Grok) == null);
+        SelectTag(claudeMode, "Used");
+        Check("provider tray icon follows its own used display mode",
+            app.GetVisibleProviderTrayIcon(UsageProviderKind.Claude)?.Text.Contains("45%") == true &&
+            app.GetVisibleProviderTrayIcon(UsageProviderKind.Codex)?.Text.Contains("61%") == true);
+        _render(Demo(UsageProviderKind.Claude) with { Status = UsageStatus.RateLimited });
+        var unavailable = app.GetVisibleProviderTrayIcon(UsageProviderKind.Claude);
+        Check("provider tray icon clears the previous percentage when the lookup is unavailable",
+            unavailable is { Visible: true, Icon: not null } && unavailable.Text.Contains("—") && !unavailable.Text.Contains("45%"));
+        _render(Demo(UsageProviderKind.Claude));
+        SelectTag(claudeMode, "Remaining");
+        Toggle(claudeCheck, false);
+        Check("hiding one provider removes only its tray icon", claude?.Visible == false &&
+            app.GetVisibleProviderTrayIcon(UsageProviderKind.Claude) == null && app.GetVisibleProviderTrayIcon(UsageProviderKind.Codex)?.Visible == true);
+        Toggle(claudeCheck, true);
+        Check("reenabling a provider preserves its tray icon identity and current percentage",
+            claude is { Visible: true } && ReferenceEquals(claude, app.GetVisibleProviderTrayIcon(UsageProviderKind.Claude)) && claude.Text.Contains("55%"));
+        Toggle(option, false);
+        Check("disabling provider icons persists and removes active shell entries", !SavedPreference() &&
+            claude?.Visible == false && codex?.Visible == false &&
+            enabledKinds.All(kind => app.GetVisibleProviderTrayIcon(kind) == null));
     }
 
     private async Task CheckSelectionsAsync()

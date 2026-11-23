@@ -21,6 +21,7 @@ public partial class App : Application
     private EventWaitHandle? _activateEvent;
     private RegisteredWaitHandle? _activationWait;
     private Forms.NotifyIcon? _tray;
+    private ProviderTrayIcons? _providerTray;
     private MainWindow? _window;
     private AppSettings _settings = new();
     private readonly CancellationTokenSource _lifetime = new();
@@ -113,6 +114,7 @@ public partial class App : Application
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("종료", null, (_, _) => Dispatcher.Invoke(ExitApplication));
         _tray.ContextMenuStrip = menu;
+        _providerTray = new ProviderTrayIcons(menu, () => Dispatcher.Invoke(ShowWindow));
         _tray.MouseClick += (_, e) => { if (e.Button == Forms.MouseButtons.Left) Dispatcher.Invoke(ShowWindow); };
         foreach (Forms.ToolStripItem item in menu.Items) { item.Tag = item.Text; item.Text = Localizer.T(item.Text); }
         _tray.Text = Localizer.T("VibeMeters · 사용량 확인");
@@ -370,19 +372,22 @@ public partial class App : Application
         var selected = Enum.GetValues<UsageProviderKind>().Where(_settings.IsProviderVisible).ToDictionary(kind => kind,
             kind => _latest.TryGetValue(kind, out var snapshot) ? snapshot : new UsageSnapshot(kind, UsageStatus.NotConnected, Array.Empty<UsageWindow>(), DateTimeOffset.Now));
         TaskbarUsage.Update(_window!, _settings, selected.Values);
+        _providerTray?.Update(selected, _settings);
+        if (_tray is null) return;
+        _tray.Visible = !_settings.ShowProviderTrayIcons || selected.Count == 0;
+        if (!_tray.Visible) return;
         var labels = selected.Values.OrderBy(s => s.Provider).Select(s => $"{s.Provider}: " + (s.Status == UsageStatus.Ready && s.Windows.Count > 0
             ? _settings.GetDisplayMode(s.Provider) == UsageDisplayMode.Used ? $"{s.Windows.Max(w => w.UsedPercent):0}% 사용" : $"{s.Windows.Min(w => w.RemainingPercent):0}% 남음"
             : "확인 필요"));
-        if (_tray != null)
-        {
-            var tooltip = string.Join(" / ", labels);
-            tooltip = Localizer.T(string.IsNullOrWhiteSpace(tooltip) ? "VibeMeters · 사용량 확인" : tooltip);
-            _tray.Text = tooltip[..Math.Min(127, tooltip.Length)];
-            var oldIcon = _tray.Icon;
-            _tray.Icon = TrayIconRenderer.Render(selected, _settings);
-            oldIcon?.Dispose();
-        }
+        var tooltip = string.Join(" / ", labels);
+        tooltip = Localizer.T(string.IsNullOrWhiteSpace(tooltip) ? "VibeMeters · 사용량 확인" : tooltip);
+        _tray.Text = tooltip[..Math.Min(127, tooltip.Length)];
+        var oldIcon = _tray.Icon;
+        _tray.Icon = TrayIconRenderer.Render(selected, _settings);
+        oldIcon?.Dispose();
     }
+
+    internal Forms.NotifyIcon? GetVisibleProviderTrayIcon(UsageProviderKind provider) => _providerTray?.GetVisible(provider);
 
     private void NotifyQuota(UsageSnapshot snapshot)
     {
@@ -394,7 +399,7 @@ public partial class App : Application
             bool known = _alertLevels.TryGetValue(key, out int previous);
             _alertLevels[key] = level;
             if (_settings.NotifyLowQuota && known && level > previous)
-                _tray!.ShowBalloonTip(6000, Localizer.T($"{snapshot.Provider} {quota.Name}"), Localizer.T($"남은 사용량 {quota.RemainingPercent:0.#}% · 사용량 창에서 초기화 시간을 확인하세요."), Forms.ToolTipIcon.Warning);
+                (GetVisibleProviderTrayIcon(snapshot.Provider) ?? _tray!).ShowBalloonTip(6000, Localizer.T($"{snapshot.Provider} {quota.Name}"), Localizer.T($"남은 사용량 {quota.RemainingPercent:0.#}% · 사용량 창에서 초기화 시간을 확인하세요."), Forms.ToolTipIcon.Warning);
         }
     }
 
@@ -456,7 +461,8 @@ public partial class App : Application
         SystemEvents.PowerModeChanged -= OnPowerMode; SystemEvents.SessionSwitch -= OnSessionSwitch;
         ThemeService.ThemeChanged -= OnThemeChanged;
         ThemeService.Dispose();
-        if (_tray != null) { _tray.Visible = false; _tray.Icon?.Dispose(); _tray.Dispose(); }
+        _providerTray?.Dispose();
+        if (_tray != null) { _tray.Visible = false; _tray.Icon?.Dispose(); _tray.ContextMenuStrip?.Dispose(); _tray.Dispose(); }
         foreach (var provider in _providers.OfType<IDisposable>()) provider.Dispose();
         _activationWait?.Unregister(null);
         _activateEvent?.Dispose();

@@ -424,10 +424,10 @@ internal sealed class VisualVerification
                 }
                 var narrow = previews[1];
                 narrow.Update([claude with { Windows = [.. claude.Windows, new("Opus 주간", 60, null)] }], _settings);
-                narrow.SetLayout(true, 126, 160);
+                narrow.SetLayout(true, 132, 160);
                 await StableAsync(narrow);
                 Check("narrow vertical widget shows all three values with its unknown reset",
-                    Math.Abs(narrow.ActualWidth - 126) <= 1 && QuotaRows(Tile(narrow)).Length == 3 && TextFits(Root(narrow), Root(narrow)) &&
+                    Math.Abs(narrow.ActualWidth - 132) <= 1 && QuotaRows(Tile(narrow)).Length == 3 && TextFits(Root(narrow), Root(narrow)) &&
                     Descendants<TextBlock>(narrow).Any(t => t.Text == "40%" && t.IsVisible) &&
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("Opus") &&
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("40% · Reset N/A"));
@@ -477,8 +477,8 @@ internal sealed class VisualVerification
                 views[i].Show();
             }
             foreach (var (layout, vertical, width, height) in new[] {
-                ("horizontal", false, 220d, 180d), ("narrow horizontal", false, 126d, 180d),
-                ("vertical", true, 150d, 180d), ("narrow vertical", true, 134.4d, 180d) })
+                ("horizontal", false, 220d, 180d), ("narrow horizontal", false, 132d, 180d),
+                ("vertical", true, 156d, 180d), ("narrow vertical", true, 134.4d, 180d) })
             {
                 foreach (var view in views) view.SetLayout(vertical, width, height);
                 await StableAsync(views[0]);
@@ -486,7 +486,7 @@ internal sealed class VisualVerification
                 var roots = views.Select(Root).ToArray();
                 Check(layout + " widget widths match across two-row, single-row, long-label and unavailable services",
                     EqualCoordinates(views.Select(w => w.ActualWidth)) && views.All(w => w.ActualWidth > 0 && w.ActualWidth <= width + 1));
-                var inset = views[0].ActualWidth < 150 ? 3d : 4d;
+                var inset = views[0].ActualWidth < 156 ? 6d : 7d;
                 Check(layout + " uses matching horizontal padding around the widget content",
                     views.Select(w => ((Border)w.FindName("ContentFrame")).Padding).All(p => p.Left == inset && p.Right == inset));
                 var logos = views.Select((w, i) => Bounds((FrameworkElement)w.FindName("Logo"), roots[i])).ToArray();

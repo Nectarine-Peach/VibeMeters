@@ -67,10 +67,10 @@ public partial class TaskbarWidgetWindow : Window
         var visible = windows;
         // Size the tile from the host's available space. Every provider shares the same
         // frame and columns, even when a lookup fails or the number of windows changes.
-        bool stacked = _vertical && _maxWidth < 95;
-        double tileWidth = stacked ? Math.Clamp(_maxWidth, 48, 80) : Math.Clamp(_maxWidth, 88, 176);
-        bool compact = !stacked && tileWidth < 150;
-        double rowHeight = stacked ? 45 : compact ? 36 : 15;
+        double tileWidth = Math.Clamp(_maxWidth, 96, 176);
+        bool stacked = tileWidth < 124;
+        bool compact = tileWidth < 150;
+        double rowHeight = compact ? 21 : 15;
         double tileHeight = (stacked ? 26 : 6) + Math.Max(stacked ? 0 : 19, Math.Max(1, visible.Length) * rowHeight);
         ContentFrame.Width = tileWidth - 2;
         ContentFrame.Height = tileHeight - 2;
@@ -85,13 +85,13 @@ public partial class TaskbarWidgetWindow : Window
         Logo.Margin = new Thickness(0);
         for (int i = 0; i < visible.Length; i++)
         {
-            var row = QuotaRow(snapshot.Provider, visible[i], tileWidth, stacked, compact);
+            var row = QuotaRow(snapshot.Provider, visible[i], compact);
             AutomationProperties.SetAutomationId(row, $"WidgetQuota{i}");
             QuotaRows.Children.Add(row);
         }
         if (visible.Length == 0)
         {
-            var unknown = new TextBlock { Text = "—", FontSize = 14, Margin = new Thickness(0,0,stacked || compact ? 0 : 29,0), TextAlignment = TextAlignment.Right };
+            var unknown = new TextBlock { Text = "—", FontSize = 14, Margin = new Thickness(0,0,29,0), TextAlignment = TextAlignment.Right };
             unknown.SetResourceReference(TextBlock.ForegroundProperty, "MutedText");
             QuotaRows.Children.Add(unknown);
         }
@@ -103,44 +103,38 @@ public partial class TaskbarWidgetWindow : Window
         ProviderButton.ToolTip = new ToolTip { Content = new TextBlock { Text = details, TextWrapping = TextWrapping.Wrap } };
     }
 
-    private Grid QuotaRow(UsageProviderKind kind, UsageWindow window, double tileWidth, bool stacked, bool compact)
+    private Grid QuotaRow(UsageProviderKind kind, UsageWindow window, bool compact)
     {
-        var row = new Grid { Height = stacked ? 45 : compact ? 36 : 15 };
-        if (!compact && !stacked)
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Min(30, tileWidth - 92)) });
+        var row = new Grid { Height = compact ? 21 : 15 };
+        if (!compact)
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
         row.ColumnDefinitions.Add(new ColumnDefinition());
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(stacked ? 25 : 30) });
-        if (stacked || compact)
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(29) });
+        if (compact)
         {
             row.RowDefinitions.Add(new RowDefinition());
-            row.RowDefinitions.Add(new RowDefinition { Height = new GridLength(stacked ? 16 : 5) });
+            row.RowDefinitions.Add(new RowDefinition { Height = new GridLength(5) });
         }
-
-        if (stacked || compact)
-            row.RowDefinitions.Add(new RowDefinition { Height = new GridLength(15) });
-        else
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(29) });
 
         var label = TaskbarProviderPresentation.WindowName(window.Name);
         if (label == "5H") label = "H";
         if (kind == UsageProviderKind.Gemini && label.Contains("Argon", StringComparison.OrdinalIgnoreCase)) label = "Argon";
         var name = new TextBlock { Text = label, FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         name.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
-        if (stacked) Grid.SetColumnSpan(name, 2);
         row.Children.Add(name);
         double amount = _mode == UsageDisplayMode.Used ? Math.Clamp(window.UsedPercent, 0, 100) : window.RemainingPercent;
         var meter = new ProgressBar { Minimum = 0, Maximum = 100, Value = amount, VerticalAlignment = VerticalAlignment.Center,
-            Margin = compact ? new Thickness(0,0,0,1) : new Thickness(stacked ? 0 : 2,0,3,0) };
+            Margin = compact ? new Thickness(0,0,0,1) : new Thickness(2,0,3,0) };
         meter.SetResourceReference(ProgressBar.ForegroundProperty, window.RemainingPercent <= 10 ? "CriticalText" : kind + "Accent");
-        if (stacked || compact) { Grid.SetRow(meter,1); if (compact) Grid.SetColumnSpan(meter,2); }
+        if (compact) { Grid.SetRow(meter,1); Grid.SetColumnSpan(meter,3); }
         else Grid.SetColumn(meter,1);
         row.Children.Add(meter);
         var value = new TextBlock { Text = $"{amount.ToString("0", CultureInfo.InvariantCulture)}%", FontSize = 10.5,
             FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         value.SetResourceReference(TextBlock.ForegroundProperty, window.RemainingPercent <= 10 ? "CriticalText" : "PrimaryText");
         Typography.SetNumeralAlignment(value, FontNumeralAlignment.Tabular);
-        Grid.SetColumn(value, stacked || compact ? 1 : 2);
-        if (stacked) Grid.SetRow(value, 1);
+        Grid.SetColumn(value, compact ? 1 : 2);
         row.Children.Add(value);
         var reset = new TextBlock { FontSize = 9.5, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
             Text = UsageResetText.Compact(window.ResetsAt, DateTimeOffset.Now) };
@@ -148,12 +142,7 @@ public partial class TaskbarWidgetWindow : Window
         Typography.SetNumeralAlignment(reset, FontNumeralAlignment.Tabular);
         AutomationProperties.SetAutomationId(reset, "WidgetReset");
         AutomationProperties.SetName(reset, UsageResetText.Countdown(window.ResetsAt, DateTimeOffset.Now));
-        if (stacked || compact)
-        {
-            Grid.SetRow(reset, 2);
-            Grid.SetColumnSpan(reset, 2);
-        }
-        else Grid.SetColumn(reset, 3);
+        Grid.SetColumn(reset, compact ? 2 : 3);
         row.Children.Add(reset);
         _countdowns.Add((reset, window.ResetsAt));
         return row;

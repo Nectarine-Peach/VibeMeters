@@ -92,7 +92,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
         foreach (var view in windows)
         {
             view.RefreshCountdowns(now);
-            view.SetLayout(vertical, Math.Max(1, (vertical ? bar.Width : monitor.Width) / scale),
+            view.SetLayout(vertical, Math.Max(96, (vertical ? bar.Width : monitor.Width) / scale),
                 Math.Max(1, work.Height / scale));
             sizes.Add(new Size((int)Math.Ceiling(view.Width * scale), (int)Math.Ceiling(view.Height * scale)));
         }

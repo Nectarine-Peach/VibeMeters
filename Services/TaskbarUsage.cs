@@ -8,7 +8,7 @@ internal static class TaskbarUsage
 {
     public static void Update(Window window, AppSettings settings, IEnumerable<UsageSnapshot> visible)
     {
-        if (!settings.ShowInTaskbar)
+        if (!settings.ShowMainTaskbarButton)
         {
             window.Title = "VibeMeters";
             window.TaskbarItemInfo = null;

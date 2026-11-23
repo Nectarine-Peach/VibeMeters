@@ -22,6 +22,7 @@ public partial class App : Application
     private RegisteredWaitHandle? _activationWait;
     private Forms.NotifyIcon? _tray;
     private ProviderTrayIcons? _providerTray;
+    internal ProviderTaskbarButtons? ProviderButtons { get; private set; }
     private MainWindow? _window;
     private AppSettings _settings = new();
     private readonly CancellationTokenSource _lifetime = new();
@@ -63,6 +64,7 @@ public partial class App : Application
         ThemeService.ThemeChanged += OnThemeChanged;
         _window = new MainWindow(_settings);
         MainWindow = _window;
+        ProviderButtons = new ProviderTaskbarButtons(ShowWindow);
         _activationWait = ThreadPool.RegisterWaitForSingleObject(_activateEvent, (_, _) => Dispatcher.InvokeAsync(ShowWindow), null, Timeout.Infinite, false);
         _window.Icon = BitmapFrame.Create(new Uri("pack://application:,,,/Assets/VibeMeters.ico"));
         _window.RefreshRequested += async () => await RefreshAsync(RefreshTrigger.Manual);
@@ -72,7 +74,7 @@ public partial class App : Application
         _windowSaveDebounce.Tick += (_, _) => PersistWindowState();
         _window.HideRequested += HideWindow;
         _window.Closing += (_, args) => { if (!_exiting) { args.Cancel = true; HideWindow(); } };
-        _window.StateChanged += (_, _) => { if (_window.WindowState == WindowState.Minimized && !_settings.ShowInTaskbar) HideWindow(); };
+        _window.StateChanged += (_, _) => { if (_window.WindowState == WindowState.Minimized && !_settings.ShowMainTaskbarButton) HideWindow(); };
         CreateTray();
         OnThemeChanged();
         _providers = _smokeTest ? Array.Empty<IUsageProvider>() : UsageProviderFactory.CreateDefault();
@@ -272,7 +274,7 @@ public partial class App : Application
         }
         _activeProviders = visible;
         _window!.Topmost = _settings.AlwaysOnTop;
-        _window.ShowInTaskbar = _settings.ShowInTaskbar;
+        _window.ShowInTaskbar = _settings.ShowMainTaskbarButton;
         _nextAutomaticAt = RefreshPolicy.NextAutomatic(DateTimeOffset.UtcNow, _settings.RefreshIntervalSeconds, _suspended);
         foreach (var snapshot in _latest.Values) _window.RenderSnapshot(WithSchedule(snapshot));
         UpdateTray();
@@ -372,6 +374,9 @@ public partial class App : Application
         var selected = Enum.GetValues<UsageProviderKind>().Where(_settings.IsProviderVisible).ToDictionary(kind => kind,
             kind => _latest.TryGetValue(kind, out var snapshot) ? snapshot : new UsageSnapshot(kind, UsageStatus.NotConnected, Array.Empty<UsageWindow>(), DateTimeOffset.Now));
         TaskbarUsage.Update(_window!, _settings, selected.Values);
+        if (_settings.ShowInTaskbar && _settings.SeparateTaskbarButtons)
+            ProviderButtons?.Update(_settings, selected.Values);
+        else ProviderButtons?.Clear();
         _providerTray?.Update(selected, _settings);
         if (_tray is null) return;
         _tray.Visible = !_settings.ShowProviderTrayIcons || selected.Count == 0;
@@ -461,6 +466,7 @@ public partial class App : Application
         SystemEvents.PowerModeChanged -= OnPowerMode; SystemEvents.SessionSwitch -= OnSessionSwitch;
         ThemeService.ThemeChanged -= OnThemeChanged;
         ThemeService.Dispose();
+        ProviderButtons?.Dispose();
         _providerTray?.Dispose();
         if (_tray != null) { _tray.Visible = false; _tray.Icon?.Dispose(); _tray.ContextMenuStrip?.Dispose(); _tray.Dispose(); }
         foreach (var provider in _providers.OfType<IDisposable>()) provider.Dispose();

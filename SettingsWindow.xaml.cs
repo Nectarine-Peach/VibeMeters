@@ -29,7 +29,9 @@ public partial class SettingsWindow : Window
             if (item.Tag?.ToString() == settings.GeminiProfile.ToString()) GeminiProfileCombo.SelectedItem = item;
         GrokCheck.IsChecked=settings.ShowGrok;
         TopCheck.IsChecked=settings.AlwaysOnTop;
-        TaskbarCheck.IsChecked=settings.ShowInTaskbar;
+        var taskbarMode = settings.ShowInTaskbar ? settings.SeparateTaskbarButtons ? "Separate" : "Combined" : "Off";
+        foreach (ComboBoxItem item in TaskbarModeCombo.Items)
+            if (item.Tag?.ToString() == taskbarMode) TaskbarModeCombo.SelectedItem = item;
         ProviderTrayCheck.IsChecked=settings.ShowProviderTrayIcons;
         StartupCheck.IsChecked=settings.StartWithWindows;
         NotifyCheck.IsChecked=settings.NotifyLowQuota;
@@ -53,7 +55,6 @@ public partial class SettingsWindow : Window
         _settings.ShowGemini=GeminiCheck.IsChecked==true;
         _settings.ShowGrok=GrokCheck.IsChecked==true;
         _settings.AlwaysOnTop=TopCheck.IsChecked==true;
-        _settings.ShowInTaskbar=TaskbarCheck.IsChecked==true;
         _settings.ShowProviderTrayIcons=ProviderTrayCheck.IsChecked==true;
         _settings.StartWithWindows=StartupCheck.IsChecked==true;
         _settings.NotifyLowQuota=NotifyCheck.IsChecked==true;
@@ -125,6 +126,13 @@ public partial class SettingsWindow : Window
         if (!_initialized || GeminiProfileCombo.SelectedItem is not ComboBoxItem item ||
             !Enum.TryParse<GeminiProfile>(item.Tag?.ToString(), out var profile)) return;
         _settings.GeminiProfile = profile;
+        SettingsChanged?.Invoke();
+    }
+    private void TaskbarMode_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!_initialized || TaskbarModeCombo.SelectedItem is not ComboBoxItem item) return;
+        _settings.ShowInTaskbar = item.Tag?.ToString() != "Off";
+        _settings.SeparateTaskbarButtons = item.Tag?.ToString() == "Separate";
         SettingsChanged?.Invoke();
     }
     private void GrokLogin_Click(object sender,RoutedEventArgs e)=>LoginRequested?.Invoke(UsageProviderKind.Grok);

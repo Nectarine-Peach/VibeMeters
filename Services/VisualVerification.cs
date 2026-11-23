@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using System.Windows;
@@ -113,6 +115,7 @@ internal sealed class VisualVerification
                 await CheckSettingsInteractionsAsync(settings);
                 settings.Close();
                 await StableAsync(_window);
+                await CheckProviderTaskbarButtonsAsync();
             }
 
             SetTheme(AppTheme.Light);
@@ -309,7 +312,88 @@ internal sealed class VisualVerification
         var interval=(ComboBox)settings.FindName("IntervalCombo");
         SelectTag(interval,"0");
         Check("settings manual interval retained",_settings.RefreshIntervalSeconds==0);
+        var taskbarMode = (ComboBox)settings.FindName("TaskbarModeCombo");
+        SelectTag(taskbarMode, "Off");
+        Check("taskbar off removes the main window button", !_settings.ShowInTaskbar && !_window.ShowInTaskbar);
+        SelectTag(taskbarMode, "Separate");
+        var saved = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings))!;
+        Check("separate taskbar mode persists and removes the combined button",
+            saved.ShowInTaskbar && saved.SeparateTaskbarButtons && !_window.ShowInTaskbar);
     }
+
+    private async Task CheckProviderTaskbarButtonsAsync()
+    {
+        static Window[] Buttons() => Application.Current.Windows.OfType<Window>()
+            .Where(w => w.Tag is UsageProviderKind).ToArray();
+        static IntPtr Handle(Window window) => new WindowInteropHelper(window).Handle;
+        static string NativeTitle(Window window)
+        {
+            var title = new StringBuilder(512);
+            GetWindowTextW(Handle(window), title, title.Capacity);
+            return title.ToString();
+        }
+        static bool ShownMinimized(Window window) => window.ShowInTaskbar && window.IsVisible && window.Owner == null
+            && IsWindowVisible(Handle(window)) && IsIconic(Handle(window));
+        try
+        {
+            var initial = Buttons();
+            Check("separate taskbar mode exposes just the two enabled providers as minimized native windows",
+                !_window.ShowInTaskbar && initial.Length == 2 && initial.All(ShownMinimized) &&
+                initial.Select(w => w.Tag).Distinct().Count() == 2);
+            var claude = initial.FirstOrDefault(w => Equals(w.Tag, UsageProviderKind.Claude));
+            var codex = initial.FirstOrDefault(w => Equals(w.Tag, UsageProviderKind.Codex));
+            if (codex == null || claude == null) return;
+            Check("native taskbar titles and window icons expose each selected service's quota",
+                NativeTitle(codex) == "W 61%" && NativeTitle(claude) == "5H 100% / W 55%" &&
+                codex.TaskbarItemInfo.Description.Contains("Codex") && claude.TaskbarItemInfo.Description.Contains("Claude") &&
+                !ReferenceEquals(codex.Icon, claude.Icon) &&
+                initial.All(w => w.Icon != null && SendMessageW(Handle(w), 0x007f /* WM_GETICON */, 1 /* ICON_BIG */, 0) != 0));
+            _settings.ClaudeDisplayMode = UsageDisplayMode.Used;
+            _applySettings();
+            _render(Demo(UsageProviderKind.Claude));
+            Check("independent native titles change in place without duplicate buttons",
+                Buttons().Length == 2 && NativeTitle(claude).Contains("45%") && NativeTitle(codex).Contains("61%"));
+            _render(Demo(UsageProviderKind.Claude) with { Status = UsageStatus.RateLimited });
+            Check("unavailable native taskbar button drops its previous percentage",
+                NativeTitle(claude).Contains("—") && !NativeTitle(claude).Contains('%'));
+            _render(Demo(UsageProviderKind.Claude));
+            _settings.ShowGemini = _settings.ShowGrok = true;
+            _applySettings();
+            var all = Buttons();
+            Check("four enabled providers have four distinct native taskbar handles",
+                all.Length == 4 && all.All(ShownMinimized) && all.Select(Handle).Distinct().Count() == 4);
+            Click((Button)_window.FindName("HideButton"));
+            Check("provider buttons remain accessible with dashboard hidden", !_window.IsVisible && all.All(ShownMinimized));
+            SendMessageW(Handle(claude), 0x0112 /* WM_SYSCOMMAND */, 0xf120 /* SC_RESTORE */, 0);
+            await StableAsync(_window);
+            Check("native taskbar restore brings back dashboard and leaves provider buttons minimized",
+                _window.IsVisible && _window.WindowState == WindowState.Normal && !_window.ShowInTaskbar &&
+                Buttons().Length == 4 && all.All(ShownMinimized));
+            var removed = all.Where(w => w != codex && w != claude).Select(Handle).ToArray();
+            _settings.ShowGemini = _settings.ShowGrok = false;
+            _applySettings();
+            Check("disabling providers destroys their native handles only",
+                Buttons().Length == 2 && removed.All(hwnd => !IsWindow(hwnd)) && initial.All(ShownMinimized));
+            var remaining = initial.Select(Handle).ToArray();
+            _settings.SeparateTaskbarButtons = false;
+            _applySettings();
+            Check("switching back to combined restores one button and destroys all provider windows",
+                _window.ShowInTaskbar && Buttons().Length == 0 && remaining.All(hwnd => !IsWindow(hwnd)));
+        }
+        finally
+        {
+            _settings.ShowGemini = _settings.ShowGrok = _settings.SeparateTaskbarButtons = false;
+            _settings.ClaudeDisplayMode = UsageDisplayMode.Remaining;
+            _applySettings();
+            if (!_window.IsVisible) _restoreWindow();
+        }
+    }
+
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowTextW(IntPtr hwnd, StringBuilder text, int length);
+    [DllImport("user32.dll")] private static extern IntPtr SendMessageW(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
 
     private void CheckProviderTrayIcons(SettingsWindow settings, ComboBox claudeMode)
     {

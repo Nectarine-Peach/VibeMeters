@@ -5,12 +5,48 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $project = Join-Path $PSScriptRoot '..\VibeMeters.csproj'
-$output = [IO.Path]::GetFullPath($OutputDirectory)
-$archivePath = $output + '.zip'
-# A new staging directory prevents stale node_modules or files from older packages leaking in.
-if ((Test-Path -LiteralPath $output) -or (Test-Path -LiteralPath $archivePath)) {
-    throw 'Output already exists. Choose a new -OutputDirectory; existing packages are never overwritten.'
+$destination = [IO.Path]::TrimEndingDirectorySeparator([IO.Path]::GetFullPath($OutputDirectory))
+$parent = Split-Path $destination
+$dist = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\dist'))
+$packagePattern = '^VibeMeters-(?:portable|[0-9a-f]{7,40})-win-x64$'
+$managed = $parent -eq $dist -and (Split-Path $destination -Leaf) -match $packagePattern
+[IO.Directory]::CreateDirectory($parent) | Out-Null
+if ((Get-Item -LiteralPath $parent).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+    throw "Output parent cannot be a reparse point: $parent"
 }
+function Remove-GeneratedItem([string]$path, [string]$expectedParent) {
+    $item = Get-Item -Force -LiteralPath $path
+    if ((Split-Path $item.FullName) -ne $expectedParent -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw "Unexpected generated artifact path: $path"
+    }
+    Remove-Item -LiteralPath $item.FullName -Recurse -Force
+}
+function Test-PackageFolder($item) {
+    if (!$item.PSIsContainer -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { return $false }
+    $allowed = @('VibeMeters.exe','README.md','README.ko.md','README.en.md','RESEARCH.md','VERIFICATION.md','docs','runtime','artifacts')
+    return (Test-Path -LiteralPath (Join-Path $item.FullName 'VibeMeters.exe') -PathType Leaf) -and
+        (Test-Path -LiteralPath (Join-Path $item.FullName 'runtime/gemini-quota/runtime-manifest.json') -PathType Leaf) -and
+        !(Get-ChildItem -Force -LiteralPath $item.FullName | Where-Object Name -NotIn $allowed)
+}
+$lock = $null
+$stage = $null
+$retainStage = $false
+try {
+if ($managed) {
+    $lock = [IO.FileStream]::new((Join-Path $dist '.publish.lock'), 'OpenOrCreate', 'ReadWrite', 'None', 4096, 'DeleteOnClose')
+}
+$targets = @($destination, "$destination.zip", "$destination.gemini-bundle-meta.json")
+foreach ($target in $targets) {
+    if (!(Test-Path -LiteralPath $target)) { continue }
+    $existing = Get-Item -LiteralPath $target
+    if (!$managed -or ($existing.Attributes -band [IO.FileAttributes]::ReparsePoint) -or
+        ($target -eq $destination -and !(Test-PackageFolder $existing)) -or
+        ($target -ne $destination -and $existing.PSIsContainer)) { throw "Unmanaged output already exists: $target" }
+}
+$stage = Join-Path $parent ('.publish-' + [Guid]::NewGuid().ToString('N'))
+[IO.Directory]::CreateDirectory($stage) | Out-Null
+$output = Join-Path $stage 'package'
+$archivePath = $output + '.zip'
 $nodeExecutable = (Get-Command $Node -ErrorAction Stop).Source
 $runtimeConfig = Get-Content (Join-Path $PSScriptRoot '..\runtime\gemini-quota\package.json') -Raw | ConvertFrom-Json
 if ((& $nodeExecutable --version) -ne "v$($runtimeConfig.bundledNodeVersion)") {
@@ -82,5 +118,47 @@ try {
     $archiveStream.Dispose()
 }
 [IO.File]::Move($temporaryArchive, $archivePath, $false)
-Write-Host "Ready: $output"
+$previous = @{}
+$installed = @()
+try {
+    foreach ($target in $targets) {
+        if (!(Test-Path -LiteralPath $target)) { continue }
+        $backup = Join-Path $stage ('previous-' + (Split-Path $target -Leaf))
+        Move-Item -LiteralPath $target -Destination $backup
+        $previous[$target] = $backup
+    }
+    foreach ($suffix in @('', '.zip', '.gemini-bundle-meta.json')) {
+        $target = $destination + $suffix
+        Move-Item -LiteralPath ($output + $suffix) -Destination $target
+        $installed += $target
+    }
+} catch {
+    $retainStage = $true
+    foreach ($target in $installed) { Remove-GeneratedItem $target $parent }
+    foreach ($target in $previous.Keys) { Move-Item -LiteralPath $previous[$target] -Destination $target }
+    $retainStage = $false
+    throw
+}
+if ($managed) {
+    foreach ($item in Get-ChildItem -LiteralPath $dist) {
+        if ($item.FullName -in $targets -or ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)) { continue }
+        $remove = if ($item.PSIsContainer) {
+            ($item.Name -match $packagePattern -and (Test-PackageFolder $item)) -or
+                ($item.Name -match '^dotnet-publish-[0-9a-f]{32}$' -and
+                 (Test-Path -LiteralPath (Join-Path $item.FullName 'VibeMeters.exe') -PathType Leaf) -and
+                 !(Get-ChildItem -Force -LiteralPath $item.FullName | Where-Object Name -ne 'VibeMeters.exe'))
+        } else {
+            $item.Name -match '^VibeMeters-(?:portable|[0-9a-f]{7,40})-win-x64(?:\.zip|\.gemini-bundle-meta\.json)$'
+        }
+        if ($remove) {
+            try { Remove-GeneratedItem $item.FullName $dist } catch { Write-Warning "Could not remove $($item.FullName): $_" }
+        }
+    }
+}
+Write-Host "Ready: $destination"
 $global:LASTEXITCODE = 0
+} finally {
+    try {
+        if ($stage -and !$retainStage -and (Test-Path -LiteralPath $stage)) { Remove-GeneratedItem $stage $parent }
+    } finally { if ($lock) { $lock.Dispose() } }
+}

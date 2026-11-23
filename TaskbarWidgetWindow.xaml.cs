@@ -11,7 +11,7 @@ namespace VibeMeters;
 
 public partial class TaskbarWidgetWindow : Window
 {
-    internal const double MinimumReadableWidth = 138;
+    internal const double MinimumReadableWidth = 126;
     private readonly Action _openMain;
     private readonly List<(TextBlock Label, DateTimeOffset? Deadline)> _countdowns = [];
     private UsageSnapshot? _snapshot;
@@ -69,18 +69,17 @@ public partial class TaskbarWidgetWindow : Window
         // Size the tile from the host's available space. Every provider shares the same
         // frame and columns, even when a lookup fails or the number of windows changes.
         double tileWidth = Math.Clamp(_maxWidth, MinimumReadableWidth, 176);
-        bool stacked = tileWidth < 150;
-        const double rowHeight = 15;
-        double tileHeight = (stacked ? 26 : 6) + Math.Max(stacked ? 0 : 19, Math.Max(1, visible.Length) * rowHeight);
+        bool compact = tileWidth < 150;
+        double tileHeight = 6 + Math.Max(19, Math.Max(1, visible.Length) * 15);
         ContentFrame.Width = tileWidth - 2;
         ContentFrame.Height = tileHeight - 2;
-        ContentFrame.Padding = stacked ? new Thickness(3,2,3,2) : new Thickness(5,2,5,2);
-        BrandColumn.Width = new GridLength(stacked ? 0 : 22);
-        BrandRow.Height = new GridLength(stacked ? 20 : 0);
-        Grid.SetColumn(Brand, stacked ? 1 : 0);
-        Grid.SetRow(Brand, stacked ? 0 : 1);
-        QuotaRows.Margin = new Thickness(stacked ? 0 : 5,0,0,0);
-        Logo.Width = Logo.Height = stacked ? 16 : 19;
+        ContentFrame.Padding = new Thickness(compact ? 2 : 5, 2, compact ? 2 : 5, 2);
+        BrandColumn.Width = new GridLength(compact ? 15 : 22);
+        BrandRow.Height = new GridLength(0);
+        Grid.SetColumn(Brand, 0);
+        Grid.SetRow(Brand, 1);
+        QuotaRows.Margin = new Thickness(compact ? 2 : 5, 0, 0, 0);
+        Logo.Width = Logo.Height = compact ? 15 : 19;
         Logo.VerticalAlignment = VerticalAlignment.Center;
         Logo.Margin = new Thickness(0);
         for (int i = 0; i < visible.Length; i++)

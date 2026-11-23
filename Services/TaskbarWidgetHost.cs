@@ -84,66 +84,46 @@ internal sealed class TaskbarWidgetHost : IDisposable
             _generation++;
         }
         if (!_scanning && DateTime.UtcNow >= _nextScan) _ = FindFreeAreaAsync(layout);
-        var (bar, monitor, work, vertical, far, scale) = (layout.Bar, layout.Monitor, layout.Work, layout.Vertical, layout.Far, layout.Scale);
+        var area = Rectangle.Intersect(_free, layout.Bar);
+        bool vertical = layout.Vertical;
+        double scale = layout.Scale;
         int gap = Math.Max(1, (int)Math.Round(2 * scale));
         var windows = _views.OrderBy(entry => entry.Key).Select(entry => entry.Value).ToArray();
-        var sizes = new List<Size>();
+        int axisLength = vertical ? area.Height : area.Width;
+        int length = 0;
+        var fitted = new List<(TaskbarWidgetWindow View, Size Size)>();
         var now = DateTimeOffset.Now;
+        double widthBudget = vertical ? area.Width / scale :
+            Math.Max(TaskbarWidgetWindow.MinimumReadableWidth, (area.Width - gap * (windows.Length + 1)) / (scale * windows.Length));
         foreach (var view in windows)
         {
+            if (area.Height <= 0 || area.Width / scale < TaskbarWidgetWindow.MinimumReadableWidth)
+            {
+                if (view.IsVisible) view.Hide();
+                continue;
+            }
             view.RefreshCountdowns(now);
-            view.SetLayout(vertical, Math.Max(TaskbarWidgetWindow.MinimumReadableWidth, (vertical ? bar.Width : monitor.Width) / scale),
-                Math.Max(1, work.Height / scale));
-            sizes.Add(new Size((int)Math.Ceiling(view.Width * scale), (int)Math.Ceiling(view.Height * scale)));
-        }
-        var length = sizes.Sum(s => vertical ? s.Height : s.Width) + gap * (sizes.Count - 1);
-        var depth = sizes.Max(s => vertical ? s.Width : s.Height);
-        bool inside = vertical
-            ? _free.Height >= length + 2 * gap && _free.Width >= depth
-            : _free.Width >= length + 2 * gap && _free.Height >= depth;
-        var area = inside ? _free : work;
-        // Some custom/auto-hidden taskbars do not reserve a working area. Explicitly exclude their rectangle.
-        var nearEdge = vertical ? bar.Left < monitor.Left + monitor.Width / 2 : bar.Top < monitor.Top + monitor.Height / 2;
-        if (!inside)
-        {
-            area = vertical
-                ? (nearEdge ? Rectangle.FromLTRB(Math.Max(work.Left, bar.Right), work.Top, work.Right, work.Bottom)
-                            : Rectangle.FromLTRB(work.Left, work.Top, Math.Min(work.Right, bar.Left), work.Bottom))
-                : (nearEdge ? Rectangle.FromLTRB(work.Left, Math.Max(work.Top, bar.Bottom), work.Right, work.Bottom)
-                            : Rectangle.FromLTRB(work.Left, work.Top, work.Right, Math.Min(work.Bottom, bar.Top)));
-        }
-        int axisStart = vertical ? area.Top : area.Left;
-        int axisLength = vertical ? area.Height : area.Width;
-        int crossStart = vertical ? area.Left : area.Top;
-        int crossEnd = vertical ? area.Right : area.Bottom;
-        int inset = gap;
-        for (int first = 0; first < windows.Length;)
-        {
-            int next = first, lineLength = 0, lineDepth = 0;
-            while (next < sizes.Count)
+            view.SetLayout(vertical, widthBudget, area.Height / scale);
+            var size = new Size(Math.Min(area.Width, (int)Math.Ceiling(view.Width * scale)),
+                Math.Min(area.Height, (int)Math.Ceiling(view.Height * scale)));
+            int itemLength = vertical ? size.Height : size.Width;
+            int candidate = length + (fitted.Count > 0 ? gap : 0) + itemLength;
+            if (candidate + 2 * gap > axisLength)
             {
-                var size = sizes[next];
-                int tileLength = vertical ? size.Height : size.Width;
-                int candidate = lineLength + (next == first ? 0 : gap) + tileLength;
-                if (next > first && candidate + 2 * gap > axisLength) break;
-                lineLength = candidate;
-                lineDepth = Math.Max(lineDepth, vertical ? size.Width : size.Height);
-                next++;
+                if (view.IsVisible) view.Hide();
+                continue;
             }
-            int cursor = far ? Math.Max(axisStart, axisStart + axisLength - gap - lineLength) : axisStart + gap;
-            for (int i = first; i < next; i++)
-            {
-                var size = sizes[i];
-                int crossSize = vertical ? size.Width : size.Height;
-                int cross = inside ? crossStart + (crossEnd - crossStart - crossSize) / 2
-                    : nearEdge ? crossStart + inset : crossEnd - crossSize - inset;
-                var target = vertical ? new Rectangle(cross, cursor, size.Width, size.Height)
-                                      : new Rectangle(cursor, cross, size.Width, size.Height);
-                Move(windows[i], target);
-                cursor += (vertical ? size.Height : size.Width) + gap;
-            }
-            inset += lineDepth + gap;
-            first = next;
+            length = candidate;
+            fitted.Add((view, size));
+        }
+        int cursor = (vertical ? area.Top : area.Left) + (layout.Far ? axisLength - gap - length : gap);
+        foreach (var (view, size) in fitted)
+        {
+            var target = vertical
+                ? new Rectangle(area.Left + (area.Width - size.Width) / 2, cursor, size.Width, size.Height)
+                : new Rectangle(cursor, area.Top + (area.Height - size.Height) / 2, size.Width, size.Height);
+            Move(view, target);
+            cursor += (vertical ? size.Height : size.Width) + gap;
         }
     }
 
@@ -230,7 +210,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
             if (classicGap.Width > 0 && classicGap.Height > 0) return classicGap;
         }
         // Some versions retain a classic compatibility HWND while the actual controls
-        // live in the XAML tree. Inspect it before using the adjacent work-area fallback.
+        // live in the XAML tree. Inspect it for space before hiding the widgets.
         return ReadFreeArea(layout, IntPtr.Zero);
     }
 

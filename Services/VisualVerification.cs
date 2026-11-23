@@ -463,8 +463,11 @@ internal sealed class VisualVerification
                     bounds.Add(new Rect(rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top));
             }
             if (bounds.Count > 1)
+            {
                 Check("shown taskbar widgets occupy disjoint rectangles",
                     bounds.SelectMany((rect, i) => bounds.Skip(i + 1).Select(other => Rect.Intersect(rect, other))).All(r => r.IsEmpty || r.Width <= 1 || r.Height <= 1));
+                Check("all visible widget HWNDs have equal pixel widths", bounds.Max(rect => rect.Width) - bounds.Min(rect => rect.Width) <= 1);
+            }
             else _report.Add("INFO: taskbar offered room for fewer than two visible widgets; no overlap pair to measure.");
             var claudeChip = Tile(view);
             var darkText = (QuotaRows(claudeChip).FirstOrDefault()?.Foreground as SolidColorBrush)?.Color;
@@ -543,6 +546,7 @@ internal sealed class VisualVerification
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("40% · Reset N/A"));
             }
             finally { foreach (var preview in previews) preview.Close(); }
+            await CheckWidgetAlignmentAsync();
         }
         finally
         {
@@ -557,6 +561,93 @@ internal sealed class VisualVerification
             _render(claude);
             if (!_window.IsVisible) _restoreWindow();
         }
+    }
+
+    private async Task CheckWidgetAlignmentAsync()
+    {
+        const string longName = "Gemini 3.1 Pro Preview extended quota";
+        var samples = new[]
+        {
+            Demo(UsageProviderKind.Codex) with { Windows = [new("5시간", 27, null), new("주간", 39, null)] },
+            Demo(UsageProviderKind.Claude) with { Windows = [new("월 추가 사용", 41, null)] },
+            Demo(UsageProviderKind.Gemini) with { Windows = [new(longName, 17, null), new("Flash", 6, null), new("Shared", 20, null)] },
+            Demo(UsageProviderKind.Grok) with { Status = UsageStatus.Unavailable }
+        };
+        var views = samples.Select(s => new TaskbarWidgetWindow(() => { }) { Tag = s.Provider }).ToArray();
+        static bool EqualCoordinates(IEnumerable<double> coordinates)
+        {
+            var values = coordinates.ToArray();
+            return values.Max() - values.Min() <= 1.25;
+        }
+        try
+        {
+            _settings.Theme = AppTheme.Dark;
+            _settings.Language = AppLanguage.Korean;
+            _applySettings();
+            for (var i = 0; i < views.Length; i++)
+            {
+                views[i].Update([samples[i]], _settings);
+                views[i].Show();
+            }
+            foreach (var (layout, vertical, width, height) in new[] {
+                ("horizontal", false, 220d, 48d), ("narrow horizontal", false, 92d, 48d),
+                ("vertical", true, 128d, 180d), ("narrow vertical", true, 48d, 80d) })
+            {
+                foreach (var view in views) view.SetLayout(vertical, width, height);
+                await StableAsync(views[0]);
+                foreach (var view in views) view.UpdateLayout();
+                var roots = views.Select(Root).ToArray();
+                Check(layout + " widget widths match across two-row, single-row, long-label and unavailable services",
+                    EqualCoordinates(views.Select(w => w.ActualWidth)) && views.All(w => w.ActualWidth > 0 && w.ActualWidth <= width + 1));
+                var logos = views.Select((w, i) => Bounds((FrameworkElement)w.FindName("Logo"), roots[i])).ToArray();
+                Check(layout + " aligns provider logos even with an overflow marker",
+                    EqualCoordinates(logos.Select(r => r.Left)) && EqualCoordinates(logos.Select(r => r.Width)) && EqualCoordinates(logos.Select(CenterY)));
+                var labels = new List<Rect>();
+                var meters = new List<Rect>();
+                var percentages = new List<Rect>();
+                var rightAligned = true;
+                for (var i = 0; i < views.Length - 1; i++)
+                {
+                    var rows = Descendants<Grid>(roots[i]).Where(row => AutomationProperties.GetAutomationId(row).StartsWith("WidgetQuota", StringComparison.Ordinal));
+                    foreach (var row in rows)
+                    {
+                        var value = row.Children.OfType<TextBlock>().Single(t => t.Text.EndsWith('%'));
+                        rightAligned &= value.TextAlignment == TextAlignment.Right;
+                        var name = row.Children.OfType<TextBlock>().Single(t => t != value);
+                        labels.Add(Bounds(name, roots[i]));
+                        meters.Add(Bounds(row.Children.OfType<ProgressBar>().Single(), roots[i]));
+                        percentages.Add(Bounds(value, roots[i]));
+                    }
+                }
+                Check(layout + " aligns label origins, meter tracks and percentage right edges across providers",
+                    labels.Count == 5 && rightAligned && EqualCoordinates(labels.Select(r => r.Left)) &&
+                    EqualCoordinates(meters.Select(r => r.Left)) && EqualCoordinates(meters.Select(r => r.Right)) &&
+                    EqualCoordinates(percentages.Select(r => r.Right)) && meters.All(r => r.Width > 0));
+                static bool Separate(Rect first, Rect second)
+                {
+                    var overlap = Rect.Intersect(first, second);
+                    return overlap.IsEmpty || overlap.Width <= 1 || overlap.Height <= 1;
+                }
+                var overlapRows = Enumerable.Range(0, labels.Count).Where(i => !(Separate(labels[i], meters[i])
+                        && Separate(meters[i], percentages[i]) && Separate(labels[i], percentages[i]))).ToArray();
+                Check(layout + " keeps names, meter tracks and numbers in distinct spaces", overlapRows.Length == 0);
+                foreach (var i in overlapRows)
+                    _report.Add($"GEOMETRY: {layout} row {i} · label {labels[i]} · meter {meters[i]} · value {percentages[i]}");
+                var gemini = (Button)views[2].FindName("ProviderButton");
+                var grok = (Button)views[3].FindName("ProviderButton");
+                var unavailableValue = Descendants<TextBlock>(grok).Single(t => t.Text == "—");
+                Check(layout + " aligns the unavailable marker with measured values",
+                    unavailableValue.TextAlignment == TextAlignment.Right &&
+                    EqualCoordinates(percentages.Select(r => r.Right).Append(Bounds(unavailableValue, roots[3]).Right)));
+                Check(layout + " vertically centers the single measured quota in the same frame",
+                    Close(CenterY(labels[2]), (CenterY(labels[0]) + CenterY(labels[1])) / 2));
+                Check(layout + " retains full quota names in tooltips and omits unmeasured percentages",
+                    AutomationProperties.GetHelpText(gemini).Contains(longName) && Descendants<TextBlock>(gemini).Any(t => t.Text == "+1" && t.IsVisible) &&
+                    !Descendants<TextBlock>(grok).Any(t => t.Text.Contains('%')) && roots.All(root => TextFits(root, root)));
+                if (layout == "horizontal") CaptureWidgetPreview(views, "taskbar-widget-four-services-ko.png");
+            }
+        }
+        finally { foreach (var view in views) view.Close(); }
     }
 
     private void CheckProviderTrayIcons(SettingsWindow settings, ComboBox claudeMode)
@@ -812,7 +903,7 @@ internal sealed class VisualVerification
     }
     private void CaptureWidgetPreview(IEnumerable<Window> widgets, string filename)
     {
-        // Compose the two real WPF client surfaces against a neutral taskbar-colored
+        // Compose the real WPF client surfaces against a neutral taskbar-colored
         // background. No other application names or pixels enter the preview.
         var roots = widgets.Select(Root).ToArray();
         const double padding = 6, gap = 4, scale = 2;

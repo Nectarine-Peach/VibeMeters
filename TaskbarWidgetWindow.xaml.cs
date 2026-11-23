@@ -78,7 +78,7 @@ public partial class TaskbarWidgetWindow : Window
         BrandRow.Height = new GridLength(0);
         Grid.SetColumn(Brand, 0);
         Grid.SetRow(Brand, 1);
-        QuotaRows.Margin = new Thickness(6, 0, 0, 0);
+        QuotaRows.Margin = new Thickness(compact ? 6 : 7, 0, 0, 0);
         Logo.Width = Logo.Height = compact ? 15 : 17;
         Logo.VerticalAlignment = VerticalAlignment.Center;
         Logo.Margin = new Thickness(0);
@@ -105,14 +105,14 @@ public partial class TaskbarWidgetWindow : Window
     private Grid QuotaRow(UsageProviderKind kind, UsageWindow window, bool compact)
     {
         var row = new Grid { Height = 14 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(12) });
         row.ColumnDefinitions.Add(new ColumnDefinition());
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 28 : 30) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 25 : 29) });
         var label = TaskbarProviderPresentation.WindowName(window.Name);
         if (label == "5H") label = "H";
         if (kind == UsageProviderKind.Gemini) label = TaskbarProviderPresentation.GeminiGraphLabel(window.Name) ?? label;
-        var name = new TextBlock { Text = label, FontSize = 9.5, TextAlignment = TextAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        var name = new TextBlock { Text = label, FontSize = 9.5, TextAlignment = TextAlignment.Left, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         name.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
         row.Children.Add(name);
         double amount = _mode == UsageDisplayMode.Used ? Math.Clamp(window.UsedPercent, 0, 100) : window.RemainingPercent;

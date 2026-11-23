@@ -78,7 +78,7 @@ public partial class TaskbarWidgetWindow : Window
         BrandRow.Height = new GridLength(0);
         Grid.SetColumn(Brand, 0);
         Grid.SetRow(Brand, 1);
-        QuotaRows.Margin = new Thickness(compact ? 1 : 2, 0, 0, 0);
+        QuotaRows.Margin = new Thickness(4, 0, 0, 0);
         Logo.Width = Logo.Height = compact ? 15 : 17;
         Logo.VerticalAlignment = VerticalAlignment.Center;
         Logo.Margin = new Thickness(0);
@@ -90,7 +90,7 @@ public partial class TaskbarWidgetWindow : Window
         }
         if (visible.Length == 0)
         {
-            var unknown = new TextBlock { Text = "—", FontSize = 14, Margin = new Thickness(0,0,compact ? 27 : 29,0), TextAlignment = TextAlignment.Right };
+            var unknown = new TextBlock { Text = "—", FontSize = 14, Margin = new Thickness(0,0,compact ? 25 : 29,0), TextAlignment = TextAlignment.Right };
             unknown.SetResourceReference(TextBlock.ForegroundProperty, "MutedText");
             QuotaRows.Children.Add(unknown);
         }
@@ -108,7 +108,7 @@ public partial class TaskbarWidgetWindow : Window
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 28 : 30) });
         row.ColumnDefinitions.Add(new ColumnDefinition());
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 28 : 30) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 27 : 29) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 25 : 29) });
         var label = TaskbarProviderPresentation.WindowName(window.Name);
         if (label == "5H") label = "H";
         if (kind == UsageProviderKind.Gemini && label.Contains("Argon", StringComparison.OrdinalIgnoreCase)) label = "Argon";

@@ -91,7 +91,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
         foreach (var view in windows)
         {
             view.SetLayout(vertical, Math.Max(1, (vertical ? bar.Width : monitor.Width) / scale),
-                Math.Max(1, (vertical ? monitor.Height : bar.Height) / scale));
+                Math.Max(1, work.Height / scale));
             sizes.Add(new Size((int)Math.Ceiling(view.Width * scale), (int)Math.Ceiling(view.Height * scale)));
         }
         var length = sizes.Sum(s => vertical ? s.Height : s.Width) + gap * (sizes.Count - 1);

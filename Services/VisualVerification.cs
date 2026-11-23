@@ -537,11 +537,11 @@ internal sealed class VisualVerification
                 }
                 var narrow = previews[1];
                 narrow.Update([claude with { Windows = [.. claude.Windows, new("Opus 주간", 60, null)] }], _settings);
-                narrow.SetLayout(true, 48, 80);
+                narrow.SetLayout(true, 48, 160);
                 await StableAsync(narrow);
-                Check("narrow vertical widget keeps two readable values and exposes the extra limit with its unknown reset",
-                    narrow.ActualWidth <= 48 && IsTwoLine(Tile(narrow), "100%", "55%") && TextFits(Root(narrow), Root(narrow)) &&
-                    Descendants<TextBlock>(narrow).Any(t => t.Text == "+1" && t.IsVisible) &&
+                Check("narrow vertical widget shows all three values with its unknown reset",
+                    narrow.ActualWidth <= 48 && QuotaRows(Tile(narrow)).Length == 3 && TextFits(Root(narrow), Root(narrow)) &&
+                    Descendants<TextBlock>(narrow).Any(t => t.Text == "40%" && t.IsVisible) &&
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("Opus") &&
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("40% · Reset N/A"));
             }
@@ -570,7 +570,7 @@ internal sealed class VisualVerification
         {
             Demo(UsageProviderKind.Codex) with { Windows = [new("5시간", 27, null), new("주간", 39, null)] },
             Demo(UsageProviderKind.Claude) with { Windows = [new("월 추가 사용", 41, null)] },
-            Demo(UsageProviderKind.Gemini) with { Windows = [new(longName, 17, null), new("Flash", 6, null), new("Shared", 20, null)] },
+            Demo(UsageProviderKind.Gemini) with { Windows = [new(longName, 17, null), new("Flash", 6, null), new("4 Argon 주간", 20, null)] },
             Demo(UsageProviderKind.Grok) with { Status = UsageStatus.Unavailable }
         };
         var views = samples.Select(s => new TaskbarWidgetWindow(() => { }) { Tag = s.Provider }).ToArray();
@@ -590,8 +590,8 @@ internal sealed class VisualVerification
                 views[i].Show();
             }
             foreach (var (layout, vertical, width, height) in new[] {
-                ("horizontal", false, 220d, 48d), ("narrow horizontal", false, 92d, 48d),
-                ("vertical", true, 128d, 180d), ("narrow vertical", true, 48d, 80d) })
+                ("horizontal", false, 220d, 180d), ("narrow horizontal", false, 92d, 180d),
+                ("vertical", true, 128d, 180d), ("narrow vertical", true, 48d, 180d) })
             {
                 foreach (var view in views) view.SetLayout(vertical, width, height);
                 await StableAsync(views[0]);
@@ -600,8 +600,8 @@ internal sealed class VisualVerification
                 Check(layout + " widget widths match across two-row, single-row, long-label and unavailable services",
                     EqualCoordinates(views.Select(w => w.ActualWidth)) && views.All(w => w.ActualWidth > 0 && w.ActualWidth <= width + 1));
                 var logos = views.Select((w, i) => Bounds((FrameworkElement)w.FindName("Logo"), roots[i])).ToArray();
-                Check(layout + " aligns provider logos even with an overflow marker",
-                    EqualCoordinates(logos.Select(r => r.Left)) && EqualCoordinates(logos.Select(r => r.Width)) && EqualCoordinates(logos.Select(CenterY)));
+                Check(layout + " aligns provider logos even with different row counts",
+                    EqualCoordinates(logos.Select(r => r.Left)) && EqualCoordinates(logos.Select(r => r.Width)));
                 var labels = new List<Rect>();
                 var meters = new List<Rect>();
                 var percentages = new List<Rect>();
@@ -620,7 +620,7 @@ internal sealed class VisualVerification
                     }
                 }
                 Check(layout + " aligns label origins, meter tracks and percentage right edges across providers",
-                    labels.Count == 5 && rightAligned && EqualCoordinates(labels.Select(r => r.Left)) &&
+                    labels.Count == 6 && rightAligned && EqualCoordinates(labels.Select(r => r.Left)) &&
                     EqualCoordinates(meters.Select(r => r.Left)) && EqualCoordinates(meters.Select(r => r.Right)) &&
                     EqualCoordinates(percentages.Select(r => r.Right)) && meters.All(r => r.Width > 0));
                 static bool Separate(Rect first, Rect second)
@@ -639,10 +639,10 @@ internal sealed class VisualVerification
                 Check(layout + " aligns the unavailable marker with measured values",
                     unavailableValue.TextAlignment == TextAlignment.Right &&
                     EqualCoordinates(percentages.Select(r => r.Right).Append(Bounds(unavailableValue, roots[3]).Right)));
-                Check(layout + " vertically centers the single measured quota in the same frame",
-                    Close(CenterY(labels[2]), (CenterY(labels[0]) + CenterY(labels[1])) / 2));
+                Check(layout + " grows each frame to accommodate its quota count",
+                    views[2].ActualHeight > views[0].ActualHeight && views[0].ActualHeight > views[1].ActualHeight);
                 Check(layout + " retains full quota names in tooltips and omits unmeasured percentages",
-                    AutomationProperties.GetHelpText(gemini).Contains(longName) && Descendants<TextBlock>(gemini).Any(t => t.Text == "+1" && t.IsVisible) &&
+                    AutomationProperties.GetHelpText(gemini).Contains(longName) && Descendants<TextBlock>(gemini).Any(t => t.Text == "Argon" && t.IsVisible) &&
                     !Descendants<TextBlock>(grok).Any(t => t.Text.Contains('%')) && roots.All(root => TextFits(root, root)));
                 if (layout == "horizontal") CaptureWidgetPreview(views, "taskbar-widget-four-services-ko.png");
             }

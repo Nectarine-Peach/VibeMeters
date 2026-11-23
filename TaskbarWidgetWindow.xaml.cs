@@ -62,13 +62,14 @@ public partial class TaskbarWidgetWindow : Window
         var windows = snapshot.Status == UsageStatus.Ready
             ? snapshot.Windows.Where(w => double.IsFinite(w.UsedPercent)).ToArray()
             : [];
-        var visible = windows.Take(2).ToArray();
+        var visible = windows;
         // Size the tile from the host's available space. Every provider shares the same
         // frame and columns, even when a lookup fails or the number of windows changes.
         bool stacked = _vertical && _maxWidth < 95;
         double tileWidth = stacked ? Math.Clamp(_maxWidth, 48, 80) : Math.Clamp(_maxWidth, 88, 148);
         bool compact = !stacked && tileWidth < 120;
-        double tileHeight = stacked ? 88 : compact ? 48 : 38;
+        double rowHeight = stacked ? 30 : compact ? 21 : 15;
+        double tileHeight = (stacked ? 26 : 6) + Math.Max(stacked ? 0 : 19, Math.Max(1, visible.Length) * rowHeight);
         ContentFrame.Width = tileWidth - 2;
         ContentFrame.Height = tileHeight - 2;
         ContentFrame.Padding = stacked ? new Thickness(3,2,3,2) : new Thickness(5,2,5,2);
@@ -79,13 +80,7 @@ public partial class TaskbarWidgetWindow : Window
         QuotaRows.Margin = new Thickness(stacked ? 0 : 5,0,0,0);
         Logo.Width = Logo.Height = stacked ? 16 : 19;
         Logo.VerticalAlignment = VerticalAlignment.Center;
-        Logo.Margin = stacked ? new Thickness(0) : new Thickness(0,0,0,5);
-        int extra = windows.Length - visible.Length;
-        Overflow.Text = extra > 0 ? $"+{extra}" : "";
-        Overflow.Visibility = extra > 0 ? Visibility.Visible : Visibility.Collapsed;
-        Overflow.HorizontalAlignment = stacked ? HorizontalAlignment.Right : HorizontalAlignment.Center;
-        Overflow.VerticalAlignment = stacked ? VerticalAlignment.Top : VerticalAlignment.Bottom;
-
+        Logo.Margin = new Thickness(0);
         for (int i = 0; i < visible.Length; i++)
         {
             var row = QuotaRow(snapshot.Provider, visible[i], tileWidth, stacked, compact);
@@ -110,7 +105,7 @@ public partial class TaskbarWidgetWindow : Window
     {
         var row = new Grid { Height = stacked ? 30 : compact ? 21 : 15 };
         if (!compact && !stacked)
-            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Min(44, tileWidth - 92)) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Min(30, tileWidth - 92)) });
         row.ColumnDefinitions.Add(new ColumnDefinition());
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(stacked ? 25 : 30) });
         if (stacked || compact)
@@ -120,6 +115,8 @@ public partial class TaskbarWidgetWindow : Window
         }
 
         var label = TaskbarProviderPresentation.WindowName(window.Name);
+        if (label == "5H") label = "H";
+        if (kind == UsageProviderKind.Gemini && label.Contains("Argon", StringComparison.OrdinalIgnoreCase)) label = "Argon";
         var name = new TextBlock { Text = label, FontSize = 10, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         name.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
         if (stacked) Grid.SetColumnSpan(name, 2);

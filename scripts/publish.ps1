@@ -33,7 +33,7 @@ $stage = $null
 $retainStage = $false
 try {
 if ($managed) {
-    $lock = [IO.FileStream]::new((Join-Path $dist '.publish.lock'), 'OpenOrCreate', 'ReadWrite', 'None', 4096, 'DeleteOnClose')
+    $lock = [IO.FileStream]::new((Join-Path $dist '.publish.lock'), 'OpenOrCreate', 'ReadWrite', 'None', 4096, [IO.FileOptions]::DeleteOnClose)
 }
 $targets = @($destination, "$destination.zip", "$destination.gemini-bundle-meta.json")
 foreach ($target in $targets) {

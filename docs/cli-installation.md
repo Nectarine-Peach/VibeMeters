@@ -1,6 +1,6 @@
 # Codex와 Claude CLI 설치
 
-VibeMeters에서 Codex나 Claude에 로그인하려면 해당 서비스의 공식 CLI가 필요합니다. 이미 로그인한 계정은 저장된 인증 정보로 사용량을 조회합니다. 조회 중에는 Codex CLI를 통해 한도를 다시 확인하거나 Claude Code를 통해 만료된 인증을 갱신할 수 있습니다. Gemini 로그인에는 VibeMeters에 포함된 런타임을 사용합니다.
+VibeMeters에서 Codex나 Claude에 로그인하려면 해당 서비스의 공식 CLI가 필요합니다. 이미 로그인한 계정은 저장된 인증 정보로 사용량을 조회합니다. 조회 중에는 Codex CLI를 통해 한도를 다시 확인하거나 Claude Code를 통해 만료된 인증을 갱신할 수 있습니다. Gemini 회사 계정의 Code Assist 런타임은 ZIP에 포함되어 있습니다. 개인 계정의 Antigravity 연결에는 별도로 설치한 Antigravity CLI를 사용합니다. [Gemini 계정 연결](account-usage.md#gemini)
 
 ## 설치 후 로그인
 

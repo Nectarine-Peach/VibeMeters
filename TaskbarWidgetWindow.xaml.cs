@@ -13,6 +13,8 @@ public partial class TaskbarWidgetWindow : Window
 {
     internal const double MinimumReadableWidth = 132;
     private readonly Action _openMain;
+    private readonly ToolTip _quotaTip = new();
+    private readonly List<(TextBlock Label, DateTimeOffset? Deadline)> _tooltipCountdowns = [];
     private readonly List<(TextBlock Label, DateTimeOffset? Deadline)> _countdowns = [];
     private UsageSnapshot? _snapshot;
     private UsageDisplayMode _mode;
@@ -23,6 +25,8 @@ public partial class TaskbarWidgetWindow : Window
     {
         _openMain = openMain;
         InitializeComponent();
+        _quotaTip.Style = (Style)FindResource(typeof(ToolTip));
+        ProviderButton.ToolTip = _quotaTip;
         ThemeService.ThemeChanged += RefreshLogo;
         Closed += (_, _) => ThemeService.ThemeChanged -= RefreshLogo;
         Width = 1;
@@ -98,10 +102,8 @@ public partial class TaskbarWidgetWindow : Window
         }
         Width = Math.Min(_maxWidth, tileWidth);
         Height = Math.Min(_maxHeight, tileHeight);
-        var details = Details(snapshot, basis);
         AutomationProperties.SetName(ProviderButton, $"{snapshot.Provider} · {basis}");
-        AutomationProperties.SetHelpText(ProviderButton, details);
-        ProviderButton.ToolTip = new ToolTip { Content = new TextBlock { Text = details, TextWrapping = TextWrapping.Wrap } };
+        UpdateToolTip(snapshot, basis);
     }
 
     private void RefreshLogo()
@@ -156,38 +158,103 @@ public partial class TaskbarWidgetWindow : Window
             label.Text = duration;
             AutomationProperties.SetName(label, UsageResetText.Countdown(deadline, now));
         }
+        if (_quotaTip.IsOpen)
+            foreach (var (label, deadline) in _tooltipCountdowns)
+            {
+                var duration = UsageResetText.Compact(deadline, now);
+                if (label.Text != duration) label.Text = duration;
+            }
     }
 
-    private string Details(UsageSnapshot snapshot, string basis)
+    private void UpdateToolTip(UsageSnapshot snapshot, string basis)
     {
-        var lines = new List<string> { $"{snapshot.Provider} · {basis}" + (string.IsNullOrWhiteSpace(snapshot.Plan) ? "" : " · " + snapshot.Plan) };
-        if (snapshot.Status == UsageStatus.Ready)
+        _tooltipCountdowns.Clear();
+        var now = DateTimeOffset.Now;
+        var panel = new StackPanel { MaxWidth = 378 };
+        string heading = snapshot.Provider.ToString();
+        if (!string.IsNullOrWhiteSpace(snapshot.Plan)) heading += " · " + snapshot.Plan;
+        var title = TipText(heading, "PrimaryText", 14);
+        title.FontWeight = FontWeights.SemiBold;
+        panel.Children.Add(title);
+        var lines = new List<string> { $"{heading} · {basis}" };
+        var windows = snapshot.Status == UsageStatus.Ready
+            ? snapshot.Windows.Where(w => double.IsFinite(w.UsedPercent)).ToArray() : [];
+        if (windows.Length > 0)
         {
-            foreach (var w in snapshot.Windows.Where(w => double.IsFinite(w.UsedPercent)))
+            var table = new Grid { Margin = new Thickness(0, 8, 0, 0) };
+            table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(144) });
+            table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(59) });
+            table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(146) });
+            panel.Children.Add(table);
+            void AddCell(FrameworkElement cell, int row, int column)
             {
-                var value = _mode == UsageDisplayMode.Used ? Math.Clamp(w.UsedPercent, 0, 100) : w.RemainingPercent;
-                var when = UsageResetText.Countdown(w.ResetsAt, DateTimeOffset.Now);
-                if (w.ResetsAt is { } reset) when += $" ({reset.ToLocalTime().ToString("g", Localizer.Culture)})";
-                lines.Add($"{Localizer.T(w.Name)} · {value.ToString("0.#", Localizer.Culture)}% · {when}");
+                Grid.SetRow(cell, row);
+                Grid.SetColumn(cell, column);
+                table.Children.Add(cell);
             }
-            if (lines.Count == 1) lines.Add(Localizer.T("연결됨 · 비율 미제공"));
+            table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            AddCell(TipText(Localizer.IsEnglish ? "Quota" : "한도", "SecondaryText", 11), 0, 0);
+            AddCell(TipText(basis, "SecondaryText", 11), 0, 1);
+            AddCell(TipText(Localizer.IsEnglish ? "Until reset" : "리셋까지", "SecondaryText", 11), 0, 2);
+            foreach (var w in windows)
+            {
+                int row = table.RowDefinitions.Count;
+                table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                double value = _mode == UsageDisplayMode.Used ? Math.Clamp(w.UsedPercent, 0, 100) : w.RemainingPercent;
+                var amount = value.ToString("0.#", Localizer.Culture) + "%";
+                var name = Localizer.T(w.Name);
+                var nameText = TipText(name, "PrimaryText", 12);
+                nameText.Margin = new Thickness(0, 5, 8, 0);
+                AddCell(nameText, row, 0);
+                var valueText = TipText(amount, "PrimaryText", 12);
+                valueText.Margin = new Thickness(0, 5, 5, 0);
+                valueText.FontWeight = FontWeights.SemiBold;
+                AddCell(valueText, row, 1);
+                var resetCell = new StackPanel { Margin = new Thickness(0, 5, 0, 0) };
+                var time = TipText(UsageResetText.Compact(w.ResetsAt, now), "PrimaryText", 12);
+                resetCell.Children.Add(time);
+                _tooltipCountdowns.Add((time, w.ResetsAt));
+                var when = UsageResetText.Countdown(w.ResetsAt, now);
+                if (w.ResetsAt is { } reset)
+                {
+                    var date = reset.ToLocalTime().ToString("g", Localizer.Culture);
+                    resetCell.Children.Add(TipText(date, "SecondaryText", 11));
+                    when += $" ({date})";
+                }
+                AddCell(resetCell, row, 2);
+                lines.Add($"{name} · {amount} · {when}");
+            }
         }
-        else
+        void AddNote(string text, string color)
         {
-            lines.Add(Localizer.T(snapshot.Status switch {
-                UsageStatus.AuthenticationRequired => "로그인 필요", UsageStatus.NotConnected => "연결 필요",
-                UsageStatus.AuthenticationRetry => "인증 재시도 대기", UsageStatus.AuthenticationRecovering => "인증 갱신 확인 중",
-                UsageStatus.RateLimited => "요청 제한 대기", _ => "확인 불가" }));
+            var note = TipText(text, color, 11);
+            note.Margin = new Thickness(0, 7, 0, 0);
+            panel.Children.Add(note);
+            lines.Add(text);
         }
-        if (!string.IsNullOrWhiteSpace(snapshot.Message)) lines.Add(Localizer.T(snapshot.Message));
-        lines.Add(UsageRefreshText.Summary(snapshot));
-        return string.Join("\n", lines);
+        if (windows.Length == 0)
+            AddNote(Localizer.T(snapshot.Status switch {
+                UsageStatus.Ready => "연결됨 · 비율 미제공", UsageStatus.AuthenticationRequired => "로그인 필요",
+                UsageStatus.NotConnected => "연결 필요", UsageStatus.AuthenticationRetry => "인증 재시도 대기",
+                UsageStatus.AuthenticationRecovering => "인증 갱신 확인 중", UsageStatus.RateLimited => "요청 제한 대기",
+                _ => "확인 불가" }), "PrimaryText");
+        if (!string.IsNullOrWhiteSpace(snapshot.Message)) AddNote(Localizer.T(snapshot.Message), "SecondaryText");
+        AddNote(UsageRefreshText.Summary(snapshot), "SecondaryText");
+        _quotaTip.Content = panel;
+        AutomationProperties.SetHelpText(ProviderButton, string.Join("\n", lines));
+    }
+
+    private static TextBlock TipText(string text, string color, double size)
+    {
+        var label = new TextBlock { Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap };
+        label.SetResourceReference(TextBlock.ForegroundProperty, color);
+        return label;
     }
 
     private void RefreshToolTip(object sender, ToolTipEventArgs args)
     {
-        if (_snapshot is { } snapshot && ProviderButton.ToolTip is ToolTip { Content: TextBlock text })
-            text.Text = Details(snapshot, Localizer.T(_mode == UsageDisplayMode.Used ? "사용" : "남음"));
+        if (_snapshot is { } snapshot)
+            UpdateToolTip(snapshot, Localizer.T(_mode == UsageDisplayMode.Used ? "사용" : "남음"));
     }
 
     private void OpenMain_Click(object sender, RoutedEventArgs e) => _openMain();

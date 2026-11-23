@@ -124,7 +124,7 @@ public partial class TaskbarWidgetWindow : Window
         var label = TaskbarProviderPresentation.WindowName(window.Name);
         if (label == "5H") label = "H";
         if (kind == UsageProviderKind.Gemini && label.Contains("Argon", StringComparison.OrdinalIgnoreCase)) label = "Argon";
-        var name = new TextBlock { Text = label, FontSize = 10, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        var name = new TextBlock { Text = label, FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         name.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
         if (stacked) Grid.SetColumnSpan(name, 2);
         row.Children.Add(name);
@@ -135,14 +135,14 @@ public partial class TaskbarWidgetWindow : Window
         if (stacked || compact) { Grid.SetRow(meter,1); if (compact) Grid.SetColumnSpan(meter,2); }
         else Grid.SetColumn(meter,1);
         row.Children.Add(meter);
-        var value = new TextBlock { Text = $"{amount.ToString("0", CultureInfo.InvariantCulture)}%", FontSize = 11,
+        var value = new TextBlock { Text = $"{amount.ToString("0", CultureInfo.InvariantCulture)}%", FontSize = 10.5,
             FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         value.SetResourceReference(TextBlock.ForegroundProperty, window.RemainingPercent <= 10 ? "CriticalText" : "PrimaryText");
         Typography.SetNumeralAlignment(value, FontNumeralAlignment.Tabular);
         Grid.SetColumn(value, stacked || compact ? 1 : 2);
         if (stacked) Grid.SetRow(value, 1);
         row.Children.Add(value);
-        var reset = new TextBlock { FontSize = 10, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+        var reset = new TextBlock { FontSize = 9.5, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
             Text = UsageResetText.Compact(window.ResetsAt, DateTimeOffset.Now) };
         reset.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
         Typography.SetNumeralAlignment(reset, FontNumeralAlignment.Tabular);

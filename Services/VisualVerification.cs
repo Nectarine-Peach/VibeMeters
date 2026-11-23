@@ -361,11 +361,19 @@ internal sealed class VisualVerification
             var darkText = (QuotaRows(claudeChip).FirstOrDefault()?.Foreground as SolidColorBrush)?.Color;
             Check("widget accessibility describes remaining Claude limits in Korean",
                 AutomationProperties.GetName(claudeChip).Contains("Claude") && AutomationProperties.GetName(claudeChip).Contains("남음"));
+            var darkGrok = MeasureWidgetIcon(grok);
+            var darkCodex = MeasureWidgetIcon(codexView);
             _settings.ClaudeDisplayMode = UsageDisplayMode.Used;
             _settings.Language = AppLanguage.English;
             _settings.Theme = AppTheme.Light;
             _applySettings();
             await StableAsync(view);
+            var lightGrok = MeasureWidgetIcon(grok);
+            var lightCodex = MeasureWidgetIcon(codexView);
+            Check("live Codex widget swaps between contrasting marks when the theme changes", SystemParameters.HighContrast ||
+                darkCodex.Brightness > lightCodex.Brightness + 80 && darkCodex.Extent == lightCodex.Extent);
+            Check("live Grok widget swaps between contrasting marks when the theme changes", SystemParameters.HighContrast ||
+                darkGrok.Brightness > lightGrok.Brightness + 80 && darkGrok.Extent == lightGrok.Extent);
             claudeChip = Tile(view);
             Check("widget theme and language update immediately with independent display modes",
                 AutomationProperties.GetName(claudeChip).Contains("Used", StringComparison.OrdinalIgnoreCase) &&
@@ -450,6 +458,35 @@ internal sealed class VisualVerification
         }
     }
 
+    private static (int Extent, bool ClearCorners, double Brightness) MeasureWidgetIcon(Window widget)
+    {
+        const int side = 96;
+        var logo = (System.Windows.Controls.Image)widget.FindName("Logo");
+        var visual = new DrawingVisual();
+        using (var context = visual.RenderOpen())
+            context.DrawImage(logo.Source, new Rect(0, 0, side, side));
+        var bitmap = new RenderTargetBitmap(side, side, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var pixels = new byte[side * side * 4];
+        bitmap.CopyPixels(pixels, side * 4, 0);
+        var left = side; var top = side; var right = -1; var bottom = -1;
+        var count = 0; var brightness = 0d;
+        for (int y = 0; y < side; y++)
+        for (int x = 0; x < side; x++)
+        {
+            var i = 4 * (y * side + x);
+            var alpha = pixels[i + 3];
+            if (alpha < 32) continue;
+            left = Math.Min(left, x); right = Math.Max(right, x);
+            top = Math.Min(top, y); bottom = Math.Max(bottom, y);
+            brightness += (pixels[i] + pixels[i + 1] + pixels[i + 2]) * 255d / (3 * alpha);
+            count++;
+        }
+        var corners = new[] { 0, side - 1, side * (side - 1), side * side - 1 };
+        return (Math.Max(right - left, bottom - top) + 1, corners.All(i => pixels[4 * i + 3] == 0),
+            count > 0 ? brightness / count : 0);
+    }
+
     private async Task CheckWidgetAlignmentAsync()
     {
         const string longName = "Gemini 3.1 Pro Preview extended quota";
@@ -476,6 +513,23 @@ internal sealed class VisualVerification
             {
                 views[i].Update([samples[i]], _settings);
                 views[i].Show();
+            }
+            foreach (var theme in new[] { AppTheme.Light, AppTheme.Dark })
+            {
+                _settings.Theme = theme;
+                _applySettings();
+                for (var i = 0; i < views.Length; i++)
+                {
+                    views[i].Update([samples[i]], _settings);
+                    views[i].SetLayout(false, 220, 180);
+                }
+                await StableAsync(views[0]);
+                var marks = views.Select(MeasureWidgetIcon).ToArray();
+                Check(theme + " widget logos have clear corners and comparable visible extents",
+                    marks.All(mark => mark.ClearCorners && Math.Abs(mark.Extent - 90) <= 2) &&
+                    marks.Max(mark => mark.Extent) - marks.Min(mark => mark.Extent) <= 3);
+                _report.Add($"GEOMETRY: {theme} widget icon extents on 96px canvas: {string.Join(", ", marks.Select(mark => mark.Extent))}");
+                if (theme == AppTheme.Light) CaptureWidgetPreview(views, "taskbar-widget-four-services-light.png");
             }
             foreach (var (layout, vertical, width, height) in new[] {
                 ("horizontal", false, 220d, 180d), ("narrow horizontal", false, 132d, 180d),

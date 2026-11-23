@@ -84,13 +84,13 @@ public partial class TaskbarWidgetWindow : Window
         Logo.Margin = new Thickness(0);
         for (int i = 0; i < visible.Length; i++)
         {
-            var row = QuotaRow(snapshot.Provider, visible[i]);
+            var row = QuotaRow(snapshot.Provider, visible[i], compact);
             AutomationProperties.SetAutomationId(row, $"WidgetQuota{i}");
             QuotaRows.Children.Add(row);
         }
         if (visible.Length == 0)
         {
-            var unknown = new TextBlock { Text = "—", FontSize = 14, Margin = new Thickness(0,0,29,0), TextAlignment = TextAlignment.Right };
+            var unknown = new TextBlock { Text = "—", FontSize = 14, Margin = new Thickness(0,0,compact ? 27 : 29,0), TextAlignment = TextAlignment.Right };
             unknown.SetResourceReference(TextBlock.ForegroundProperty, "MutedText");
             QuotaRows.Children.Add(unknown);
         }
@@ -102,13 +102,13 @@ public partial class TaskbarWidgetWindow : Window
         ProviderButton.ToolTip = new ToolTip { Content = new TextBlock { Text = details, TextWrapping = TextWrapping.Wrap } };
     }
 
-    private Grid QuotaRow(UsageProviderKind kind, UsageWindow window)
+    private Grid QuotaRow(UsageProviderKind kind, UsageWindow window, bool compact)
     {
         var row = new Grid { Height = 14 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 28 : 30) });
         row.ColumnDefinitions.Add(new ColumnDefinition());
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(29) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 28 : 30) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 27 : 29) });
         var label = TaskbarProviderPresentation.WindowName(window.Name);
         if (label == "5H") label = "H";
         if (kind == UsageProviderKind.Gemini && label.Contains("Argon", StringComparison.OrdinalIgnoreCase)) label = "Argon";

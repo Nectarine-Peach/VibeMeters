@@ -120,10 +120,6 @@ internal sealed class TaskbarWidgetHost : IDisposable
                 if (view.IsVisible) view.Hide();
                 continue;
             }
-            var placement = vertical
-                ? (layout.Bar.Left + layout.Bar.Width / 2 < layout.Monitor.Left + layout.Monitor.Width / 2 ? PlacementMode.Right : PlacementMode.Left)
-                : (layout.Bar.Top + layout.Bar.Height / 2 < layout.Monitor.Top + layout.Monitor.Height / 2 ? PlacementMode.Bottom : PlacementMode.Top);
-            view.SetToolTipPlacement(placement);
             view.RefreshCountdowns(now);
             view.SetLayout(vertical, widthBudget, area.Height / scale);
             var size = new Size(Math.Min(area.Width, (int)Math.Ceiling(view.Width * scale)),
@@ -144,6 +140,19 @@ internal sealed class TaskbarWidgetHost : IDisposable
             var target = vertical
                 ? new Rectangle(area.Left + (area.Width - size.Width) / 2, cursor, size.Width, size.Height)
                 : new Rectangle(cursor, area.Top + (area.Height - size.Height) / 2, size.Width, size.Height);
+            var placement = vertical
+                ? (layout.Bar.Left + layout.Bar.Width / 2 < layout.Monitor.Left + layout.Monitor.Width / 2 ? PlacementMode.Right : PlacementMode.Left)
+                : (layout.Bar.Top + layout.Bar.Height / 2 < layout.Monitor.Top + layout.Monitor.Height / 2 ? PlacementMode.Bottom : PlacementMode.Top);
+            // Anchor beyond the whole bar, including when adjacent widgets have
+            // more quota rows and therefore extend farther toward the desktop.
+            double offset = placement switch
+            {
+                PlacementMode.Left => layout.Bar.Left - target.Left,
+                PlacementMode.Right => layout.Bar.Right - target.Right,
+                PlacementMode.Top => layout.Bar.Top - target.Top,
+                _ => layout.Bar.Bottom - target.Bottom
+            };
+            view.SetToolTipPlacement(placement, offset / scale);
             Move(view, target, layout.Taskbar);
             cursor += (vertical ? size.Height : size.Width) + gap;
         }

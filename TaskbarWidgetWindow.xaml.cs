@@ -107,10 +107,12 @@ public partial class TaskbarWidgetWindow : Window
         UpdateToolTip(snapshot, basis);
     }
 
-    internal void SetToolTipPlacement(PlacementMode side)
+    internal void SetToolTipPlacement(PlacementMode side, double offset)
     {
         _quotaTip.PlacementTarget = ProviderButton;
         _quotaTip.Placement = side;
+        _quotaTip.HorizontalOffset = side is PlacementMode.Left or PlacementMode.Right ? offset : 0;
+        _quotaTip.VerticalOffset = side is PlacementMode.Top or PlacementMode.Bottom ? offset : 0;
     }
 
     private void RefreshLogo()

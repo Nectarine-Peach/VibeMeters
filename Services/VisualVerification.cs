@@ -144,8 +144,22 @@ internal sealed class VisualVerification
         Check("pin control enables always on top",_window.Topmost&&_settings.AlwaysOnTop);
         Click((Button)_window.FindName("PinButton"));
         Check("pin control disables always on top",!_window.Topmost&&!_settings.AlwaysOnTop);
+        Check("taskbar label and meter use the tightest visible limit",
+            _window.Title.Contains("Claude") && _window.Title.Contains("55%") &&
+            _window.TaskbarItemInfo is { ProgressState: System.Windows.Shell.TaskbarItemProgressState.Normal } quota &&
+            Math.Abs(quota.ProgressValue - .45) < .001 && quota.Description.Contains("Codex") &&
+            quota.Description.Contains("초기화") && !quota.Description.Contains("Gemini"));
+        var claude = Demo(UsageProviderKind.Claude);
+        _render(claude with { Windows = new[] { new UsageWindow("주간", 80, null) } });
+        Check("taskbar warns at 20% remaining",_window.TaskbarItemInfo.ProgressState == System.Windows.Shell.TaskbarItemProgressState.Paused);
+        _render(claude with { Windows = new[] { new UsageWindow("주간", 95, null) } });
+        Check("taskbar warns at 5% remaining",_window.TaskbarItemInfo.ProgressState == System.Windows.Shell.TaskbarItemProgressState.Error);
+        _render(claude with { Status = UsageStatus.RateLimited });
+        Check("taskbar excludes retained quotas from failed lookups",
+            !_window.Title.Contains("Claude") && _window.TaskbarItemInfo.Description.Contains("Claude · 확인 필요"));
+        _render(claude);
         _settings.ShowInTaskbar=false;_applySettings();
-        Check("taskbar preference disabled",!_window.ShowInTaskbar);
+        Check("taskbar preference disabled",!_window.ShowInTaskbar && _window.TaskbarItemInfo == null && _window.Title == "VibeMeters");
         _settings.ShowInTaskbar=true;_applySettings();
         Check("taskbar preference restored",_window.ShowInTaskbar);
         _window.WindowState=WindowState.Minimized;

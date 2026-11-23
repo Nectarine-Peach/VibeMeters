@@ -346,6 +346,7 @@ public partial class App : Application
     {
         var selected = Enum.GetValues<UsageProviderKind>().Where(_settings.IsProviderVisible).ToDictionary(kind => kind,
             kind => _latest.TryGetValue(kind, out var snapshot) ? snapshot : new UsageSnapshot(kind, UsageStatus.NotConnected, Array.Empty<UsageWindow>(), DateTimeOffset.Now));
+        TaskbarUsage.Update(_window!, _settings, selected.Values);
         var labels = selected.Values.OrderBy(s => s.Provider).Select(s => $"{s.Provider}: " + (s.Status == UsageStatus.Ready && s.Windows.Count > 0
             ? _settings.GetDisplayMode(s.Provider) == UsageDisplayMode.Used ? $"{s.Windows.Max(w => w.UsedPercent):0}% 사용" : $"{s.Windows.Min(w => w.RemainingPercent):0}% 남음"
             : "확인 필요"));

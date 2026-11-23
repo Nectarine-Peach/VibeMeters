@@ -1,15 +1,18 @@
 # VibeMeters 화면 캡처
 
-## v1.4.12
+## v1.4.13
 
-한국어와 영어 대시보드에는 같은 예시 계정을 표시했습니다. Claude의 5시간 한도는 25%가 남았고 3시간 2분 뒤에 리셋됩니다. Gemini는 Pro, Flash, Argon을 각각 P, F, A로 표시하며, Pro의 `24:00`은 리셋까지 24시간이 남았다는 뜻입니다. 설정 화면에서는 네 서비스를 대시보드에 표시하고 Codex와 Claude의 위젯을 켰습니다.
+본체는 `5시간`, `Pro`, `Flash` 같은 한도 이름을 표시합니다. 작업표시줄 위젯에서는 `H`, `P`, `F`처럼 짧은 이름을 쓰며, 마우스를 올리면 전체 이름과 리셋 정보를 볼 수 있습니다.
 
 | 화면 | 한국어 | English |
 | --- | --- | --- |
 | 네 서비스 대시보드 | [다크](current/window-four-services-grok-dark.png) · [라이트](current/window-four-services-grok-light.png) | [Dark](current/window-four-services-grok-en-dark.png) · [Light](current/window-four-services-grok-en-light.png) |
 | 설정 | [다크](current/settings-dark.png) · [라이트](current/settings-light.png) | [Dark](current/settings-en-dark.png) · [Light](current/settings-en-light.png) |
+| 작업표시줄 위젯 툴팁 | [다크](current/widget-tooltip-dark-ko.png) | [Light](current/widget-tooltip-light-en.png) |
 
-대시보드와 설정은 Release 빌드의 WPF 창을 120 DPI에서 렌더링했습니다. 인증과 요청 제한 예시는 격리된 UI 스모크 검사에서 캡처했습니다. 네 서비스 위젯은 실제 Windows 작업표시줄에서 각 위젯의 창 영역만 잘라 표시 순서대로 모았습니다. 모든 사용량과 리셋 시각은 합성 데이터입니다. [어두운 작업표시줄 위젯](taskbar-widget-four-services.png) · [밝은 작업표시줄 위젯](taskbar-widget-four-services-light.png)
+툴팁은 실제 WPF 팝업을 열어 캡처했습니다. 예시에서 Claude Sonnet은 59%가 남았고 4시간 31분 뒤에 리셋됩니다. Opus는 리셋 시각이 없어 `—`로 표시됩니다. 대시보드와 툴팁의 사용량은 합성 데이터입니다.
+
+서비스별 위젯 네 개를 함께 보려면 작업표시줄 캡처를 확인하세요. [다크 테마](taskbar-widget-four-services.png) · [라이트 테마](taskbar-widget-four-services-light.png)
 
 ## v1.4.11 배포 준비 캡처 · 2026-11-08
 

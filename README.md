@@ -6,7 +6,7 @@ Codex·Claude·Gemini·Grok의 사용량을 Windows 본체 창과 서비스별 �
 
 **Windows 10/11 x64 · 포터블 ZIP · 한국어·영어 · 라이트·다크·시스템 테마**
 
-[최신 Windows x64 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [v1.4.12 변경 사항](docs/releases/v1.4.12.md)
+[최신 Windows x64 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [v1.4.13 변경 사항](docs/releases/v1.4.13.md)
 
 ![네 서비스의 예시 사용량과 리셋까지 남은 시간을 표시한 다크 테마 작업표시줄 위젯](docs/screenshots/taskbar-widget-four-services.png)
 
@@ -32,7 +32,11 @@ Codex Business는 `spend_control.individual_limit`, Claude Enterprise는 활성�
 
 **설정 → 표시할 서비스 · 수치 기준**에서 서비스마다 본체 표시, 작업표시줄 위젯, 수치 기준(남은 양·사용한 양)을 각각 선택하세요. 위젯은 기본 모니터 작업표시줄의 빈 공간에 표시되며, 누르면 본체가 열립니다.
 
-한도마다 제목·그래프·백분율·리셋까지 남은 시간이 한 줄에 표시됩니다. 24시간 이하는 `24:00`, `10:00`, `4:31`처럼 시간:분으로, 24시간 초과는 `2d`처럼 일 단위로 표시합니다. 수동 새로고침 모드에서도 남은 시간은 계속 줄어듭니다. 마우스를 올리면 전체 한도 이름과 현지 리셋 시각을 볼 수 있습니다. 본체는 한도와 모델 이름을 표시합니다. 작업표시줄 위젯은 5시간 한도를 `H`로, Gemini 계정이 제공하는 Argon·Pro·Flash·Flash-Lite 한도를 각각 `A`·`P`·`F`·`FL`로 표시합니다.
+한도마다 제목·그래프·백분율·리셋까지 남은 시간이 한 줄에 표시됩니다. 24시간 이하는 `24:00`, `10:00`, `4:31`처럼 시간:분으로, 24시간 초과는 `2d`처럼 일 단위로 표시합니다. 수동 새로고침 모드에서도 남은 시간은 계속 줄어듭니다. 본체는 한도와 모델 이름을 표시합니다. 작업표시줄 위젯은 5시간 한도를 `H`로, Gemini 계정이 제공하는 Argon·Pro·Flash·Flash-Lite 한도를 각각 `A`·`P`·`F`·`FL`로 표시합니다.
+
+위젯에 마우스를 올리면 바탕 화면 쪽으로 툴팁이 열립니다. 한도별 전체 이름, 사용량 또는 남은 양, 리셋까지 남은 시간, 서비스가 제공한 현지 리셋 날짜와 시각을 표에서 확인할 수 있습니다. 요청 제한 중에는 서비스 상태와 확인된 재시도 시각이 표시됩니다.
+
+![Claude 한도 두 개의 남은 백분율과 리셋 정보를 보여주는 다크 테마 위젯 툴팁](docs/screenshots/current/widget-tooltip-dark-ko.png)
 
 **설정 → 계정 연결 → Gemini 계정**에서 한 번에 표시할 계정을 고릅니다. **기본 CLI 계정**은 기존 연결을 유지합니다. **Antigravity**는 공식 CLI에서 현재 로그인한 개인 계정을 사용합니다. **Code Assist 1**과 **Code Assist 2**는 별도로 로그인할 수 있는 회사 계정입니다. 각 슬롯을 선택하고 **Gemini 로그인**을 누른 뒤 해당 Google 계정으로 인증하세요. 이후에는 계정 선택만 바꾸면 됩니다.
 

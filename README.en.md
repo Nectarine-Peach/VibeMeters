@@ -6,7 +6,7 @@ Track Codex, Claude, Gemini and Grok quotas in a Windows dashboard or individual
 
 **Windows 10/11 x64 · Portable ZIP · Korean and English · Light, dark and system themes**
 
-[Download the latest Windows x64 ZIP](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [What’s new in v1.4.12](docs/releases/v1.4.12.md)
+[Download the latest Windows x64 ZIP](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [What’s new in v1.4.13](docs/releases/v1.4.13.md)
 
 ![Four taskbar widgets showing sample quotas and reset countdowns in the light theme](docs/screenshots/taskbar-widget-four-services-light.png)
 
@@ -32,7 +32,11 @@ Codex Business uses the supplied `spend_control.individual_limit` and Claude Ent
 
 In **Settings → Services · Display basis**, each service has separate controls for dashboard visibility, its taskbar widget and the percentage shown (used or remaining). Click a widget to open the dashboard. Widgets appear in free space inside the primary taskbar.
 
-Each reported quota gets one row with its label, graph, percentage and time to reset. Up to 24 hours, the time is shown in hours and minutes, such as `24:00`, `10:00` or `4:31`. Above 24 hours it shows whole days, such as `2d`. Countdowns keep updating in manual refresh mode. Hover for full quota names and the local reset time. The dashboard shows quota and model names. Taskbar widgets use `H` for a five-hour window and `A` for Argon, `P` for Pro, `F` for Flash and `FL` for Flash-Lite when the account reports these quotas.
+Each reported quota gets one row with its label, graph, percentage and time to reset. Up to 24 hours, the time is shown in hours and minutes, such as `24:00`, `10:00` or `4:31`. Above 24 hours it shows whole days, such as `2d`. Countdowns keep updating in manual refresh mode. The dashboard shows quota and model names. Taskbar widgets use `H` for a five-hour window and `A` for Argon, `P` for Pro, `F` for Flash and `FL` for Flash-Lite when the account reports these quotas.
+
+Hover over a widget to open its tooltip toward the desktop. Each row shows the full quota name, used or remaining percentage, countdown and local reset date and time when available. During a rate limit, the tooltip shows the service status and any reported retry time.
+
+![Light-theme widget tooltip with two Claude quotas and their reset details](docs/screenshots/current/widget-tooltip-light-en.png)
 
 Under **Settings → Accounts → Gemini account**, choose the account to display. **Default CLI account** uses your existing connection. **Antigravity** uses the personal account currently signed in to the official CLI. **Code Assist 1** and **Code Assist 2** are independent company account slots. Select each slot and use **Sign in to Gemini** to connect its Google account. You can then switch between them without signing in again while their sessions are valid.
 

@@ -1,5 +1,11 @@
 # 유사 앱 조사와 적용 방향
 
+## 작업표시줄에 여러 한도 표시
+
+- Zrnik의 Windows 위젯은 서비스 아이콘 아래에 5시간·7일 막대를 두고, 계정마다 열을 추가한다. 리셋 시각은 마우스를 올렸을 때 보여준다. [Zrnik 위젯의 표시 방식](https://github.com/Zrnik/claude-usage-windows-taskbar-widget#how-it-works)
+- gcampton의 위젯은 5시간·7일을 두 행으로 고정하고 각 행에 파란색 Codex와 주황색 Claude 수치를 나란히 표시한다. [Codex-Claude-Windows-Taskbar](https://github.com/gcampton/Codex-Claude-Windows-Taskbar#what-you-get)
+- VibeMeters의 **서비스별 버튼**은 한 프로세스에서 Windows 작업표시줄 버튼을 서비스마다 등록한다. 버튼에는 서비스 아이콘, 짧은 기간 표기와 백분율을 두고, 상세 창을 열 때는 같은 앱의 기존 창을 사용한다. Windows는 창별 AppUserModelID를 이용해 작업표시줄 그룹을 구분한다. [Microsoft의 창별 작업표시줄 그룹 예제](https://learn.microsoft.com/en-us/windows/win32/shell/samples-appusermodelidwindowproperty)
+
 ## 2026-11-23 계정 복구와 Windows 작업표시줄
 
 - Claude Code 2.1.319의 개인 구독에서 액세스 토큰 만료 후 `auth status`는 성공했지만 인증 파일은 갱신되지 않았다. 내장 `/status`를 호출한 뒤 토큰 교체를 확인했다. 내장 명령 검증에서 모델 턴, 입출력 토큰, 비용은 모두 0이었다. 토큰 갱신 후 사용량 서버의 429와 장기 로그인 만료는 각각 별도 상태로 처리한다. [Claude Code 인증](https://code.claude.com/docs/en/authentication) · [CodexBar의 Claude 데이터 소스](https://github.com/steipete/CodexBar/blob/main/docs/claude.md)

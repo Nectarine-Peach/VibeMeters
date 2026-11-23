@@ -4,15 +4,34 @@
 
 본체는 `5시간`, `Pro`, `Flash` 같은 한도 이름을 표시합니다. 작업표시줄 위젯에서는 `H`, `P`, `F`처럼 짧은 이름을 쓰며, 마우스를 올리면 전체 이름과 리셋 정보를 볼 수 있습니다.
 
-| 화면 | 한국어 | English |
-| --- | --- | --- |
-| 네 서비스 대시보드 | [다크](current/window-four-services-grok-dark.png) · [라이트](current/window-four-services-grok-light.png) | [Dark](current/window-four-services-grok-en-dark.png) · [Light](current/window-four-services-grok-en-light.png) |
-| 설정 | [다크](current/settings-dark.png) · [라이트](current/settings-light.png) | [Dark](current/settings-en-dark.png) · [Light](current/settings-en-light.png) |
-| 작업표시줄 위젯 툴팁 | [다크](current/widget-tooltip-dark-ko.png) | [Light](current/widget-tooltip-light-en.png) |
+### 본체와 위젯 툴팁
 
-툴팁은 실제 WPF 팝업을 열어 캡처했습니다. 예시에서 Claude Sonnet은 59%가 남았고 4시간 31분 뒤에 리셋됩니다. Opus는 리셋 시각이 없어 `—`로 표시됩니다. 대시보드와 툴팁의 사용량은 합성 데이터입니다.
+| 한국어 · 다크 | English · Light |
+| --- | --- |
+| ![5시간, 주간, Gemini Pro·Flash·Argon 한도를 보여 주는 본체](v1.4.13/dashboard-quota-names-ko-dark.png) | ![Dashboard with full quota names](v1.4.13/dashboard-quota-names-en-light.png) |
+| ![Claude Enterprise 한도와 리셋 시각을 보여 주는 툴팁](v1.4.13/widget-tooltip-dark-ko.png) | ![Claude Enterprise tooltip with full quota names and local reset time](v1.4.13/widget-tooltip-light-en.png) |
 
-서비스별 위젯 네 개를 함께 보려면 작업표시줄 캡처를 확인하세요. [다크 테마](taskbar-widget-four-services.png) · [라이트 테마](taskbar-widget-four-services-light.png)
+툴팁은 실제 WPF 팝업을 열어 캡처했습니다. Claude Sonnet은 59%가 남았고 4시간 31분 뒤에 리셋됩니다. Opus는 리셋 시각이 없어 `—`로 표시됩니다. 사용량과 시각은 예시 데이터입니다.
+
+<details>
+<summary>한국어 라이트·영어 다크 본체와 설정</summary>
+
+| 한국어 · 라이트 | English · Dark |
+| --- | --- |
+| ![라이트 테마 본체](v1.4.13/dashboard-quota-names-ko-light.png) | ![Dark dashboard](v1.4.13/dashboard-quota-names-en-dark.png) |
+| ![라이트 테마 설정](current/settings-light.png) | ![Dark settings](current/settings-en-dark.png) |
+
+| 한국어 · 다크 | English · Light |
+| --- | --- |
+| ![다크 테마 설정](current/settings-dark.png) | ![Light settings](current/settings-en-light.png) |
+
+</details>
+
+### 작업표시줄 위젯
+
+![다크 테마 작업표시줄 위젯 네 개](taskbar-widget-four-services.png)
+
+![Four taskbar widgets in the light theme](taskbar-widget-four-services-light.png)
 
 ## v1.4.11 배포 준비 캡처 · 2026-11-08
 

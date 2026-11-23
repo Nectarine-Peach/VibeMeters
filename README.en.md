@@ -8,9 +8,14 @@ Track Codex, Claude, Gemini and Grok quotas in a Windows dashboard or individual
 
 [Download the latest Windows x64 ZIP](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [What’s new in v1.4.13](docs/releases/v1.4.13.md)
 
-![Four taskbar widgets showing sample quotas and reset countdowns in the light theme](docs/screenshots/taskbar-widget-four-services-light.png)
+**Dashboard and widget tooltip** · Example quotas
 
-<img src="docs/screenshots/current/window-four-services-grok-en-dark.png" alt="English dashboard with sample quotas for all four services" width="360">
+| Dashboard with full quota names | Tooltip opened over a widget |
+| --- | --- |
+| <img src="docs/screenshots/v1.4.13/dashboard-quota-names-en-dark.png" alt="Dashboard showing the five-hour and weekly limits and Gemini Pro, Flash and Argon" width="360"> | <img src="docs/screenshots/v1.4.13/widget-tooltip-light-en.png" alt="Claude Enterprise tooltip showing full quota names, 59% and 28% remaining, countdown, local reset time and last check" width="400"> |
+
+
+In the tooltip example, *Claude Sonnet weekly quota* has **59% remaining** and resets in **4 hours 31 minutes**. Opus has 28% remaining and its reset time is unavailable.
 
 ## Supported accounts and quota types
 
@@ -36,7 +41,8 @@ Each reported quota gets one row with its label, graph, percentage and time to r
 
 Hover over a widget to open its tooltip toward the desktop. Each row shows the full quota name, used or remaining percentage, countdown and local reset date and time when available. During a rate limit, the tooltip shows the service status and any reported retry time.
 
-![Light-theme widget tooltip with two Claude quotas and their reset details](docs/screenshots/current/widget-tooltip-light-en.png)
+
+![Four taskbar widgets showing sample quotas and reset countdowns in the light theme](docs/screenshots/taskbar-widget-four-services-light.png)
 
 Under **Settings → Accounts → Gemini account**, choose the account to display. **Default CLI account** uses your existing connection. **Antigravity** uses the personal account currently signed in to the official CLI. **Code Assist 1** and **Code Assist 2** are independent company account slots. Select each slot and use **Sign in to Gemini** to connect its Google account. You can then switch between them without signing in again while their sessions are valid.
 

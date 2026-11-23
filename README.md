@@ -8,9 +8,14 @@ Codex·Claude·Gemini·Grok의 사용량을 Windows 본체 창과 서비스별 �
 
 [최신 Windows x64 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [v1.4.13 변경 사항](docs/releases/v1.4.13.md)
 
-![네 서비스의 예시 사용량과 리셋까지 남은 시간을 표시한 다크 테마 작업표시줄 위젯](docs/screenshots/taskbar-widget-four-services.png)
+**본체와 위젯 툴팁** · 예시 사용량
 
-<img src="docs/screenshots/current/window-four-services-grok-dark.png" alt="네 서비스의 예시 사용량을 표시한 한국어 본체 창" width="360">
+| 전체 한도 이름을 표시한 본체 | 위젯 위에 마우스를 올렸을 때 |
+| --- | --- |
+| <img src="docs/screenshots/v1.4.13/dashboard-quota-names-ko-dark.png" alt="5시간·주간 한도와 Gemini Pro·Flash·Argon 한도를 표시한 본체" width="360"> | <img src="docs/screenshots/v1.4.13/widget-tooltip-dark-ko.png" alt="한도 전체 이름, 남은 양 59%와 28%, 리셋까지 남은 시간, 현지 리셋 시각과 마지막 확인 시각을 보여 주는 Claude Enterprise 툴팁" width="400"> |
+
+
+툴팁 예시에서 *Claude Sonnet weekly quota*는 **59%**가 남았고 **4시간 31분** 뒤에 리셋됩니다. Opus는 28%가 남았으며 서비스가 리셋 시각을 제공하지 않아 `—`로 표시됩니다.
 
 ## 지원 계정과 표시 항목
 
@@ -36,7 +41,8 @@ Codex Business는 `spend_control.individual_limit`, Claude Enterprise는 활성�
 
 위젯에 마우스를 올리면 바탕 화면 쪽으로 툴팁이 열립니다. 한도별 전체 이름, 사용량 또는 남은 양, 리셋까지 남은 시간, 서비스가 제공한 현지 리셋 날짜와 시각을 표에서 확인할 수 있습니다. 요청 제한 중에는 서비스 상태와 확인된 재시도 시각이 표시됩니다.
 
-![Claude 한도 두 개의 남은 백분율과 리셋 정보를 보여주는 다크 테마 위젯 툴팁](docs/screenshots/current/widget-tooltip-dark-ko.png)
+
+![네 서비스의 예시 사용량과 리셋까지 남은 시간을 표시한 다크 테마 작업표시줄 위젯](docs/screenshots/taskbar-widget-four-services.png)
 
 **설정 → 계정 연결 → Gemini 계정**에서 한 번에 표시할 계정을 고릅니다. **기본 CLI 계정**은 기존 연결을 유지합니다. **Antigravity**는 공식 CLI에서 현재 로그인한 개인 계정을 사용합니다. **Code Assist 1**과 **Code Assist 2**는 별도로 로그인할 수 있는 회사 계정입니다. 각 슬롯을 선택하고 **Gemini 로그인**을 누른 뒤 해당 Google 계정으로 인증하세요. 이후에는 계정 선택만 바꾸면 됩니다.
 

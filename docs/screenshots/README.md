@@ -1,5 +1,16 @@
 # VibeMeters 화면 캡처
 
+## v1.4.12
+
+한국어와 영어 대시보드에는 같은 예시 계정을 표시했습니다. Claude의 5시간 한도는 25%가 남았고 3시간 2분 뒤에 리셋됩니다. Gemini는 Pro, Flash, Argon을 각각 P, F, A로 표시하며, Pro의 `24:00`은 리셋까지 24시간이 남았다는 뜻입니다. 설정 화면에서는 네 서비스를 대시보드에 표시하고 Codex와 Claude의 위젯을 켰습니다.
+
+| 화면 | 한국어 | English |
+| --- | --- | --- |
+| 네 서비스 대시보드 | [다크](current/window-four-services-grok-dark.png) · [라이트](current/window-four-services-grok-light.png) | [Dark](current/window-four-services-grok-en-dark.png) · [Light](current/window-four-services-grok-en-light.png) |
+| 설정 | [다크](current/settings-dark.png) · [라이트](current/settings-light.png) | [Dark](current/settings-en-dark.png) · [Light](current/settings-en-light.png) |
+
+대시보드와 설정은 Release 빌드의 WPF 창을 120 DPI에서 렌더링했습니다. 인증과 요청 제한 예시는 격리된 UI 스모크 검사에서 캡처했습니다. 네 서비스 위젯은 실제 Windows 작업표시줄에서 각 위젯의 창 영역만 잘라 표시 순서대로 모았습니다. 모든 사용량과 리셋 시각은 합성 데이터입니다. [어두운 작업표시줄 위젯](taskbar-widget-four-services.png) · [밝은 작업표시줄 위젯](taskbar-widget-four-services-light.png)
+
 ## v1.4.11 배포 준비 캡처 · 2026-11-08
 
 [`provider-reliability/`](provider-reliability/)의 이미지는 `dc28f3f`를 기반으로 영문 화면 캡처를 추가한 v1.4.11 Release 빌드에서 `--smoke-test`로 생성했습니다. WPF가 실제로 표시한 클라이언트 영역을 120 DPI에서 렌더링했으며, 화면별 글자와 한도 행을 확인했습니다.

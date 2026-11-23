@@ -72,6 +72,7 @@ internal sealed class VisualVerification
             Check("controlled demonstration percentages",Rows(Cards()[0]).Select(ValueText).SequenceEqual(new[]{"61%"})&&Rows(Cards()[1]).Select(ValueText).SequenceEqual(new[]{"100%","55%"}));
             await CaptureScenario("mini dark",274,174,"window-mini-dark.png");
             await CaptureScenario("minimum dark",220,140,"window-minimum-dark.png");
+            await CheckResetCountdownAsync();
             await CaptureScenario("wide dark",600,300,"window-wide-dark.png");
 
             await CheckWindowActionsAsync();
@@ -135,6 +136,26 @@ internal sealed class VisualVerification
         Check(name+" requested logical size",Close(_window.ActualWidth,width)&&Close(_window.ActualHeight,height));
         AssertMainLayout(name,new[]{("Codex",1),("Claude",2)});
         Capture(_window,filename);
+    }
+
+    private async Task CheckResetCountdownAsync()
+    {
+        var deadline = DateTimeOffset.Now.AddSeconds(2);
+        _render(Demo(UsageProviderKind.Claude) with
+        {
+            Windows = new[] { new UsageWindow("5시간", 21, deadline), new UsageWindow("주간", 44, null) }
+        });
+        var rows = Rows(Cards()[1]);
+        var labels = rows.Select(row => row.Children.OfType<TextBlock>().Single(text => Grid.GetColumn(text) == 3)).ToArray();
+        _window.UpdateLayout();
+        Check("reset time and unknown deadline visible at minimum width",
+            labels[0].Text == "리셋 1분" && labels[1].Text == "리셋 미제공" &&
+            labels.All(label => label.IsVisible && label.ActualWidth >= label.DesiredSize.Width - label.Margin.Left - 1) &&
+            rows.All(row => Meter(row).ActualWidth > 0));
+        await Task.Delay(TimeSpan.FromMilliseconds(2200));
+        await StableAsync(_window);
+        Check("reset expires on screen with automatic fetching disabled", labels[0].Text == "리셋 대기" && ValueText(rows[0]) == "79%");
+        _render(Demo(UsageProviderKind.Claude));
     }
 
     private async Task CheckWindowActionsAsync()

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -8,6 +7,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using VibeMeters.Models;
 using VibeMeters.Services;
 
@@ -18,6 +18,8 @@ public partial class MainWindow : Window
     private bool _initialized, _changingMode;
     private double _normalWidth = 360, _normalHeight = 360;
     private readonly Dictionary<UsageProviderKind, UsageSnapshot> _snapshots = new();
+    private readonly List<(TextBlock Label, DateTimeOffset Reset)> _resetLabels = new();
+    private readonly DispatcherTimer _resetTimer = new(DispatcherPriority.Background);
     private SettingsWindow? _settingsWindow;
     private string _statusSource = "";
     public bool IsCompactLayout { get; private set; }
@@ -34,6 +36,10 @@ public partial class MainWindow : Window
         Settings = settings;
         Localizer.SetLanguage(settings.Language);
         InitializeComponent();
+        _resetTimer.Tick += (_, _) => UpdateResetLabels();
+        IsVisibleChanged += (_, _) => UpdateResetLabels();
+        StateChanged += (_, _) => UpdateResetLabels();
+        Closed += (_, _) => _resetTimer.Stop();
         Localizer.Track(this);
         Localizer.Changed += RefreshLanguage;
         Closed += (_,_)=>Localizer.Changed -= RefreshLanguage;
@@ -196,7 +202,8 @@ public partial class MainWindow : Window
         var effectiveMinimum=Math.Max(140,Math.Ceiling(minimumHeight));
         if(Math.Abs(MinHeight-effectiveMinimum)>0.1) MinHeight=effectiveMinimum;
         height=Math.Max(height,effectiveMinimum);
-        var widthScale=Math.Clamp((width-160)/200,0,1);
+        var cardWidth = wide ? width / providers.Length : width;
+        var widthScale=Math.Clamp((cardWidth-160)/200,0,1);
         var heightScale=Math.Clamp((height-minimumHeight)/Math.Max(1,normalHeight-minimumHeight),0,1);
         var metrics=new CardMetrics(Math.Min(widthScale,heightScale));
         IsCompactLayout=metrics.Scale<0.999;
@@ -214,6 +221,8 @@ public partial class MainWindow : Window
             button.FontSize=metrics.Size(9,10);
             button.Padding=new Thickness(2);
         }
+        _resetTimer.Stop();
+        _resetLabels.Clear();
         ClearGrid(ProviderGrid);
         if(providers.Length==0)
         {
@@ -230,7 +239,25 @@ public partial class MainWindow : Window
             if(wide) Grid.SetColumn(element,i);else Grid.SetRow(element,i);
             ProviderGrid.Children.Add(element);
         }
+        UpdateResetLabels();
         Localizer.Apply(this);
+    }
+    private void UpdateResetLabels()
+    {
+        _resetTimer.Stop();
+        if (!IsVisible || WindowState == WindowState.Minimized) return;
+        var now = DateTimeOffset.Now;
+        long nextTicks = long.MaxValue;
+        foreach (var (label, reset) in _resetLabels)
+        {
+            label.Text = UsageResetText.Countdown(reset, now);
+            long remaining = (reset - now).Ticks;
+            if (remaining > 0)
+                nextTicks = Math.Min(nextTicks, (remaining - 1) % TimeSpan.TicksPerMinute + 1);
+        }
+        if (nextTicks == long.MaxValue) return;
+        _resetTimer.Interval = TimeSpan.FromTicks(Math.Max(nextTicks, TimeSpan.TicksPerMillisecond * 100));
+        _resetTimer.Start();
     }
     private static double RequiredCardHeight(UsageSnapshot snapshot)=>CardHeight(snapshot,new CardMetrics(1));
     private static void ClearGrid(Grid grid) { grid.Children.Clear(); grid.RowDefinitions.Clear(); grid.ColumnDefinitions.Clear(); }
@@ -268,6 +295,7 @@ public partial class MainWindow : Window
     private FrameworkElement RenderCard(UsageSnapshot snapshot,CardMetrics metrics)
     {
         var stack=new StackPanel();
+        Grid.SetIsSharedSizeScope(stack, true);
         stack.Children.Add(ProviderHeading(snapshot,metrics));
         stack.Children.Add(new TextBlock { Text=UsageRefreshText.Summary(snapshot),Foreground=Palette("SecondaryText"),FontSize=metrics.Size(8,10),Height=metrics.StatusHeight,TextTrimming=TextTrimming.CharacterEllipsis,VerticalAlignment=VerticalAlignment.Center,ToolTip=WrappedTip(UsageRefreshText.Details(snapshot)) });
         stack.Children.Add(new Border { Background=Palette("WindowBorder"),Height=1,Margin=new Thickness(0,metrics.DividerTop,0,metrics.DividerBottom),Opacity=0.7 });
@@ -298,10 +326,24 @@ public partial class MainWindow : Window
             Grid.SetColumn(meter,1);row.Children.Add(meter);
             var value=quota==null?new TextBlock { Text="—",FontSize=metrics.ValueFont,Foreground=Palette("MutedText"),TextAlignment=TextAlignment.Right,VerticalAlignment=VerticalAlignment.Center }:QuotaValue(snapshot.Provider,quota,metrics.ValueFont);
             Grid.SetColumn(value,2);row.Children.Add(value);
+            if (quota != null)
+            {
+                row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto, SharedSizeGroup = "Reset" });
+                var resetLabel = new TextBlock
+                {
+                    Text = UsageResetText.Countdown(quota.ResetsAt, DateTimeOffset.Now),
+                    Foreground = Palette("SecondaryText"), FontSize = metrics.Size(8,10),
+                    Margin = new Thickness(metrics.Size(4,8),0,0,0),
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                Grid.SetColumn(resetLabel,3);
+                row.Children.Add(resetLabel);
+                if (quota.ResetsAt is { } reset) _resetLabels.Add((resetLabel, reset));
+            }
             if(i<entries.Length-1)
             {
                 var separator=new Border { Height=1,Background=Palette("WindowBorder"),Opacity=0.45,VerticalAlignment=VerticalAlignment.Bottom };
-                Grid.SetColumnSpan(separator,3);row.Children.Add(separator);
+                Grid.SetColumnSpan(separator,row.ColumnDefinitions.Count);row.Children.Add(separator);
             }
             stack.Children.Add(row);
         }
@@ -374,13 +416,13 @@ public partial class MainWindow : Window
     }
     private static Brush Palette(string key) => (Brush)Application.Current.FindResource(key);
     private static string StatusLabel(UsageStatus status)=>status switch { UsageStatus.Ready=>"연결됨",UsageStatus.NotConnected=>"연결 필요",UsageStatus.AuthenticationRequired=>"로그인 필요",UsageStatus.AuthenticationRecovering=>"인증 갱신 확인 중",UsageStatus.AuthenticationRetry=>"인증 재시도 대기",UsageStatus.RateLimited=>"잠시 대기",_=>"확인 불가" };
-    private static string ResetShort(DateTimeOffset? resets)
+    private static string WindowTooltip(UsageWindow quota,UsageSnapshot snapshot)
     {
-        if(resets is null) return "—";
-        var delta=resets.Value-DateTimeOffset.Now;
-        return delta<=TimeSpan.Zero?"초기화 대기":delta.TotalDays>=1?$"{(int)delta.TotalDays}일 {delta.Hours}시간 ↻":delta.TotalHours>=1?$"{(int)delta.TotalHours}시간 {delta.Minutes}분 ↻":$"{Math.Max(1,(int)delta.TotalMinutes)}분 ↻";
+        var reset = quota.ResetsAt is { } at
+            ? (Localizer.IsEnglish ? "Reset " : "리셋 ") + at.ToLocalTime().ToString("g", Localizer.Culture)
+            : "초기화 정보 없음";
+        return $"{snapshot.Provider} · {quota.Name}\n남음 {quota.RemainingPercent:0.#}% · 사용 {quota.UsedPercent:0.#}%\n{reset}\n{ProviderStatus(snapshot)}\n{UsageRefreshText.Details(snapshot)}";
     }
-    private static string WindowTooltip(UsageWindow quota,UsageSnapshot snapshot)=>$"{snapshot.Provider} · {quota.Name}\n남음 {quota.RemainingPercent:0.#}% · 사용 {quota.UsedPercent:0.#}%\n{ResetShort(quota.ResetsAt)} · {quota.ResetsAt?.ToLocalTime().ToString("M/d HH:mm",CultureInfo.InvariantCulture)??"초기화 정보 없음"}\n{ProviderStatus(snapshot)}\n{UsageRefreshText.Details(snapshot)}";
     protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
     { base.OnPropertyChanged(e); if(_initialized&&e.Property==TopmostProperty) { Settings.AlwaysOnTop=Topmost; UpdatePin(); } }
     private void UpdatePin() { PinButton.Foreground=Palette(Topmost?"CodexAccent":"SecondaryText"); PinButton.ToolTip=Topmost?"항상 위: 켜짐":"항상 위: 꺼짐"; Localizer.Apply(PinButton); }

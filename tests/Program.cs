@@ -38,6 +38,26 @@ sealed class RegressionSuite
 
     public async Task<int> RunAsync()
     {
+        Test("Reset countdown uses observation deadlines and handles missing, elapsed and offset times", () =>
+        {
+            var previous = Localizer.Language;
+            try
+            {
+                Localizer.SetLanguage(AppLanguage.English);
+                Equal("Reset N/A", UsageResetText.Countdown(null, Now));
+                Equal("Reset pending", UsageResetText.Countdown(Now, Now));
+                Equal("Reset pending", UsageResetText.Countdown(Now.AddDays(-1), Now));
+                Equal("Reset 1m", UsageResetText.Countdown(Now.AddSeconds(1), Now));
+                Equal("Reset 2m", UsageResetText.Countdown(Now.AddMinutes(1).AddSeconds(1), Now));
+                Equal("Reset 1h 5m", UsageResetText.Countdown(Now.AddMinutes(65).ToOffset(TimeSpan.FromHours(9)), Now));
+                Equal("Reset 1d 2h", UsageResetText.Countdown(Now.AddHours(26), Now));
+                Localizer.SetLanguage(AppLanguage.Korean);
+                Equal("리셋 1시간 5분", UsageResetText.Countdown(Now.AddMinutes(65), Now));
+                Equal("리셋 대기", UsageResetText.Countdown(Now, Now));
+                Equal("리셋 미제공", UsageResetText.Countdown(null, Now));
+            }
+            finally { Localizer.SetLanguage(previous); }
+        });
         Test("Codex windows, plan, remaining and absolute reset", () =>
         {
             var s = Parse(UsageProviderKind.Codex, """{"plan_type":"plus","rate_limit":{"primary_window":{"used_percent":25.5,"limit_window_seconds":18000,"reset_at":1792756800},"secondary_window":{"used_percent":100,"limit_window_seconds":604800}}}""");

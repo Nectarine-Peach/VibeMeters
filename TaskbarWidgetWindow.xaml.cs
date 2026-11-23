@@ -73,7 +73,7 @@ public partial class TaskbarWidgetWindow : Window
         double tileHeight = 4 + Math.Max(17, Math.Max(1, visible.Length) * 14);
         ContentFrame.Width = tileWidth - 2;
         ContentFrame.Height = tileHeight - 2;
-        ContentFrame.Padding = new Thickness(compact ? 2 : 3, 1, compact ? 2 : 3, 1);
+        ContentFrame.Padding = new Thickness(compact ? 3 : 4, 1, compact ? 3 : 4, 1);
         BrandColumn.Width = new GridLength(compact ? 15 : 18);
         BrandRow.Height = new GridLength(0);
         Grid.SetColumn(Brand, 0);
@@ -105,13 +105,13 @@ public partial class TaskbarWidgetWindow : Window
     private Grid QuotaRow(UsageProviderKind kind, UsageWindow window, bool compact)
     {
         var row = new Grid { Height = 14 };
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 28 : 30) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 26 : 30) });
         row.ColumnDefinitions.Add(new ColumnDefinition());
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 28 : 30) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 25 : 29) });
         var label = TaskbarProviderPresentation.WindowName(window.Name);
         if (label == "5H") label = "H";
-        if (kind == UsageProviderKind.Gemini && label.Contains("Argon", StringComparison.OrdinalIgnoreCase)) label = "Argon";
+        if (kind == UsageProviderKind.Gemini) label = TaskbarProviderPresentation.GeminiGraphLabel(window.Name) ?? label;
         var name = new TextBlock { Text = label, FontSize = 9.5, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         name.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
         row.Children.Add(name);

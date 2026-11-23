@@ -326,7 +326,7 @@ public partial class MainWindow : Window
             var entry=entries[i];var quota=entry.Quota;
             var row=new Grid { Height=metrics.RowHeight,ToolTip=WrappedTip(quota==null?ProviderTooltip(snapshot)+"\n사용량 정보 없음 · 수치를 확인하면 표시합니다.":WindowTooltip(quota,snapshot)+(quota.Name=="월 추가 사용"?"\n"+snapshot.Message:"")) };
             row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(snapshot.Provider==UsageProviderKind.Grok?Math.Max(Localizer.IsEnglish?metrics.Size(54,82):metrics.Size(44,70),metrics.LabelWidth):metrics.LabelWidth) });row.ColumnDefinitions.Add(new ColumnDefinition());row.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(metrics.ValueWidth) });
-            row.Children.Add(new TextBlock { Text=ShortQuotaName(entry.Name),Foreground=Palette("SecondaryText"),FontSize=metrics.LabelFont,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis });
+            row.Children.Add(new TextBlock { Text=ShortQuotaName(snapshot.Provider, entry.Name),Foreground=Palette("SecondaryText"),FontSize=metrics.LabelFont,VerticalAlignment=VerticalAlignment.Center,TextTrimming=TextTrimming.CharacterEllipsis });
             var meter=new ProgressBar { Value=quota==null?0:DisplayPercent(snapshot.Provider,quota),Foreground=quota!=null&&quota.RemainingPercent<=10?Palette("CriticalText"):Accent(snapshot.Provider),Height=metrics.MeterHeight,Margin=new Thickness(0,0,metrics.MeterGap,0),VerticalAlignment=VerticalAlignment.Center };
             Grid.SetColumn(meter,1);row.Children.Add(meter);
             var value=quota==null?new TextBlock { Text="—",FontSize=metrics.ValueFont,Foreground=Palette("MutedText"),TextAlignment=TextAlignment.Right,VerticalAlignment=VerticalAlignment.Center }:QuotaValue(snapshot.Provider,quota,metrics.ValueFont);
@@ -360,7 +360,11 @@ public partial class MainWindow : Window
         Typography.SetNumeralAlignment(value,FontNumeralAlignment.Tabular);
         return value;
     }
-    private static string ShortQuotaName(string name)=>name.StartsWith("Build ",StringComparison.Ordinal)||name.StartsWith("공유 ",StringComparison.Ordinal)?name:name.Contains("Argon",StringComparison.OrdinalIgnoreCase)?"Argon":name=="개인 한도"?"개인":name=="월 추가 사용"?"월추가":name.Contains("주")?"주간":name.Contains("5시간")?"H":name.Contains("세션")||name.Contains("시간")?"세션":name.Replace("모델","").Trim();
+    private static string ShortQuotaName(UsageProviderKind provider, string name)
+    {
+        if (provider == UsageProviderKind.Gemini && TaskbarProviderPresentation.GeminiGraphLabel(name) is { } model) return model;
+        return name.StartsWith("Build ",StringComparison.Ordinal)||name.StartsWith("공유 ",StringComparison.Ordinal)?name:name=="개인 한도"?"개인":name=="월 추가 사용"?"월추가":name.Contains("주")?"주간":name.Contains("5시간")?"H":name.Contains("세션")||name.Contains("시간")?"세션":name.Replace("모델","").Trim();
+    }
     private static ToolTip WrappedTip(string text)=>new ToolTip { MaxWidth=280,Content=new TextBlock { Text=text,TextWrapping=TextWrapping.Wrap,MaxWidth=254,FontSize=11,LineHeight=17 } };
     private static string ProviderStatus(UsageSnapshot snapshot)
     {

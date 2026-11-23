@@ -25,6 +25,17 @@ internal static class TaskbarProviderPresentation
         return windows.Length <= 2 ? title : $"{title} +{windows.Length - 2}";
     }
 
+    internal static string? GeminiGraphLabel(string name)
+    {
+        if (name.StartsWith("Build ", StringComparison.Ordinal) || name.StartsWith("공유 ", StringComparison.Ordinal)) return null;
+        var tokens = name.Split([' ', '-', '_', '/', '.', '(', ')'], StringSplitOptions.RemoveEmptyEntries);
+        bool Has(string model) => tokens.Contains(model, StringComparer.OrdinalIgnoreCase);
+        if (Has("Argon")) return "A";
+        if (Has("Flash")) return Has("Lite") ? "FL" : "F";
+        if (Has("Pro")) return "P";
+        return null;
+    }
+
     internal static string WindowName(string name)
     {
         if (name == "개인 한도") return Localizer.IsEnglish ? "Individual" : "개인";

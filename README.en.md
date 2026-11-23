@@ -2,21 +2,15 @@
 
 [한국어](README.md) · **English**
 
-Keep your **Codex, Claude, Gemini, and Grok quotas** visible in a small Windows tray window.
+Track Codex, Claude, Gemini and Grok quotas in a Windows dashboard or individual taskbar widgets.
 
-**Windows 10/11 x64 · Always on top · Dark / light / system theme**
+**Windows 10/11 x64 · Portable ZIP · Korean and English · Light, dark and system themes**
 
-**English and Korean UI:** Settings → Language switches between System, 한국어 and English immediately and saves your choice.
+[Download the latest Windows x64 ZIP](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [What’s new in v1.4.12](docs/releases/v1.4.12.md)
 
-**Personal Gemini via Antigravity and Grok Build subscription quotas are displayed inside the app.**
+![Four taskbar widgets showing sample quotas and reset countdowns in the light theme](docs/screenshots/taskbar-widget-four-services-light.png)
 
-[Download ZIP for Windows](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [Release notes](https://github.com/Nectarine-Peach/VibeMeters/releases/latest)
-
-v1.4.11 improves Claude and Codex sign-in recovery, honors Gemini's server retry deadlines, and handles Grok credential changes during a lookup. [What's new in v1.4.11](docs/releases/v1.4.11.md)
-
-<img src="docs/screenshots/provider-reliability/window-four-services-grok-en-dark.png" alt="English dark window showing Codex, Claude, Gemini, and Grok Build" width="360">
-
-*The v1.4.11 WPF window with example quotas for all four services.*
+<img src="docs/screenshots/current/window-four-services-grok-en-dark.png" alt="English dashboard with sample quotas for all four services" width="360">
 
 ## Supported accounts and quota types
 
@@ -36,13 +30,11 @@ Codex Business uses the supplied `spend_control.individual_limit` and Claude Ent
 
 ## Quick start
 
-The current source build shows a countdown beside each quota. It continues to update in manual refresh mode. Hover over a countdown to see the local reset date and time.
+In **Settings → Services · Display basis**, each service has separate controls for dashboard visibility, its taskbar widget and the percentage shown (used or remaining). Click a widget to open the dashboard. Widgets appear in free space inside the primary taskbar.
 
-In **Settings → Displayed services**, toggle the taskbar widget for each service. Widgets share the dashboard theme and percentage preference. Each quota shows the time until its next reset (for example, `4:31`, `10:00`, or `2d`). Click a widget to open the dashboard. Widgets appear inside the primary taskbar with each service icon to the left of its quota rows.
+Each reported quota gets one row with its label, graph, percentage and time to reset. Up to 24 hours, the time is shown in hours and minutes, such as `24:00`, `10:00` or `4:31`. Above 24 hours it shows whole days, such as `2d`. Countdowns keep updating in manual refresh mode. Hover for full quota names and the local reset time. Gemini labels use `A` for Argon, `P` for Pro, `F` for Flash and `FL` for Flash-Lite when the account reports these quotas.
 
-![Two-row Codex and Claude widgets with example quotas](docs/screenshots/taskbar-widget-light-en.png)
-
-Under **Settings → Accounts → Gemini account**, choose the account to display. **Default CLI account** uses your existing connection. **Antigravity** uses the personal account currently signed in to the official CLI. **Code Assist 1** and **Code Assist 2** are independent company account slots. Select each slot and use **Gemini sign-in** to connect its Google account. You can then switch between them without signing in again while their sessions are valid.
+Under **Settings → Accounts → Gemini account**, choose the account to display. **Default CLI account** uses your existing connection. **Antigravity** uses the personal account currently signed in to the official CLI. **Code Assist 1** and **Code Assist 2** are independent company account slots. Select each slot and use **Sign in to Gemini** to connect its Google account. You can then switch between them without signing in again while their sessions are valid.
 
 1. Extract the **entire package**, keeping its `runtime` folder, and run `VibeMeters.exe`.
 2. Open **Settings (gear)**, choose your services, and sign in.
@@ -59,10 +51,10 @@ No installer is required. To build it yourself, expand **Build and verification*
 
 | Service | Setup | What is shown |
 | --- | --- | --- |
-| **Codex** | Choose **Codex 로그인** in Settings. If the CLI is missing, choose official installation before sign-in. | Supplied subscription windows and Business individual limits. |
-| **Claude** | Choose **Claude 로그인** in Settings. If the CLI is missing, choose official installation before sign-in. | Subscription windows and enabled monthly additional usage, including Enterprise. |
+| **Codex** | Choose **Sign in to Codex** in Settings. If the CLI is missing, choose official installation before sign-in. | Supplied subscription windows and Business individual limits. |
+| **Claude** | Choose **Sign in to Claude** in Settings. If the CLI is missing, choose official installation before sign-in. | Subscription windows and enabled monthly additional usage, including Enterprise. |
 | **Gemini** | Personal accounts: sign in to installed Antigravity CLI 1.4.7 or newer. Business accounts: existing Code Assist authentication/project. | Antigravity shared Gemini quotas or business Code Assist quota buckets and reset information. |
-| **Grok** | Install official Grok Build CLI and use **Grok 로그인**, or run `grok login --oauth`. | Included subscription percentages/reset times supplied by the official CLI. Build-only and shared scope remain distinct; API costs and extra credits are excluded. |
+| **Grok** | Install official Grok Build CLI and use **Sign in to Grok**, or run `grok login --oauth`. | Included subscription percentages/reset times supplied by the official CLI. Build-only and shared scope remain distinct; API costs and extra credits are excluded. |
 
 Codex and Claude can read usage with valid credentials already on disk. If the Codex file is missing or unreadable, or the usage endpoint returns 401, the app also checks the account and quota through the installed official Codex CLI. Automatic Claude renewal requires official Claude Code 2.1.317 or newer. If a CLI is missing when you click sign-in, choose whether to run the official user-scoped installer and continue to sign-in. [Account details](docs/account-usage.md) · [CLI installation scope](docs/cli-installation.md)
 
@@ -86,7 +78,7 @@ Choose any combination of Codex, Claude, Gemini and Grok, and set **remaining or
 | Keep the window on top | Top pin icon or tray menu |
 | Hide to tray | Close button or **Esc** |
 | Restore the window | Click the tray icon, or launch the app again |
-| Quit | Right-click the tray icon → **종료** |
+| Quit | Right-click the tray icon → **Exit** |
 
 Settings save immediately. Window moves and resizing are saved automatically, with a final save on close, Windows shutdown, or sleep. Windows startup restores the saved size, position, and visible-window or tray state. Updates do not reset the window to a default size; if a previous monitor is missing, the window moves onto an available screen.
 
@@ -102,9 +94,9 @@ Refresh options are **30 seconds, 1, 2, 5, or 15 minutes, or manual**; the defau
 
 | Claude lookup limited | Claude authentication retry |
 | :---: | :---: |
-| <img src="docs/screenshots/provider-reliability/window-refresh-wait-en.png" alt="Claude rate-limit wait showing the previous quota" width="220"> | <img src="docs/screenshots/provider-reliability/window-auth-retry-en.png" alt="Claude authentication retry with renewal pending" width="220"> |
+| <img src="docs/screenshots/current/window-refresh-wait-en.png" alt="Claude rate-limit wait showing the previous quota" width="220"> | <img src="docs/screenshots/current/window-auth-retry-en.png" alt="Claude authentication retry with renewal pending" width="220"> |
 
-<img src="docs/screenshots/provider-reliability/settings-en-dark.png" alt="English settings including the Language selector" width="410">
+<img src="docs/screenshots/current/settings-en-dark.png" alt="English settings including the Language selector" width="410">
 
 These WPF screenshots use synthetic data. The screenshot index includes the light theme and minimum-width layout. [Capture method and scope](docs/screenshots/README.md)
 
@@ -158,7 +150,7 @@ dotnet build -c Release
 .\dist\VibeMeters-portable-win-x64\VibeMeters.exe
 ```
 
-Output: `dist/VibeMeters-portable-win-x64/` and its ZIP. Existing outputs are never overwritten; choose a new `-OutputDirectory` for another build. Use `-Node` to select the pinned Node executable. Include the runtime folder when distributing this self-contained Windows x64 package; end users do not need .NET, Node or npm installed. Settings and CLI authentication locations are unchanged. See [packaging notes](docs/packaging.md) for boundaries and offline checks.
+Output: `dist/VibeMeters-portable-win-x64/` and its ZIP. After a successful publish, the script replaces the managed package and prunes older generated packages in `dist`. To retain a separate build, choose a new `-OutputDirectory` outside `dist`. Use `-Node` to select the pinned Node executable. Include the runtime folder when distributing this self-contained Windows x64 package; end users do not need .NET, Node or npm installed. Settings and CLI authentication locations are unchanged. See [packaging notes](docs/packaging.md) for boundaries and offline checks.
 
 Run the isolated provider/parser/settings regression suite with:
 

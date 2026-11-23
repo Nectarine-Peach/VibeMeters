@@ -2,21 +2,15 @@
 
 **한국어** · [English](README.en.md)
 
-Codex·Claude·Gemini·Grok의 남은 한도와 사용량을 작은 Windows 창에서 확인하세요.
+Codex·Claude·Gemini·Grok의 사용량을 Windows 본체 창과 서비스별 작업표시줄 위젯에서 확인하세요.
 
-**Windows 10/11 x64 · 트레이 상주 · 항상 위 · 다크/라이트 테마**
+**Windows 10/11 x64 · 포터블 ZIP · 한국어·영어 · 라이트·다크·시스템 테마**
 
-**앱 UI 한국어·영어 지원:** 설정 → 언어에서 시스템/한국어/English를 선택하면 즉시 바뀌고 저장됩니다.
+[최신 Windows x64 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [v1.4.12 변경 사항](docs/releases/v1.4.12.md)
 
-**Gemini 개인 계정(Antigravity)과 Grok Build 구독 한도도 앱 안에서 표시합니다.**
+![네 서비스의 예시 사용량과 리셋까지 남은 시간을 표시한 다크 테마 작업표시줄 위젯](docs/screenshots/taskbar-widget-four-services.png)
 
-[Windows용 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip) · [릴리스 노트](https://github.com/Nectarine-Peach/VibeMeters/releases/latest)
-
-v1.4.11은 Claude와 Codex의 로그인 복구를 개선하고, Gemini의 서버 재시도 시각과 Grok의 조회 중 인증 변경을 처리합니다. [v1.4.11 변경 사항](docs/releases/v1.4.11.md)
-
-<img src="docs/screenshots/provider-reliability/window-four-services-grok-dark.png" alt="Codex, Claude, Gemini, Grok Build 사용량을 함께 표시하는 다크 창" width="360">
-
-네 서비스의 예시 사용량을 표시한 v1.4.11 WPF 화면입니다.
+<img src="docs/screenshots/current/window-four-services-grok-dark.png" alt="네 서비스의 예시 사용량을 표시한 한국어 본체 창" width="360">
 
 ## 지원 계정과 표시 항목
 
@@ -36,11 +30,9 @@ Codex Business는 `spend_control.individual_limit`, Claude Enterprise는 활성�
 
 ## 빠른 시작
 
-현재 소스 빌드에서는 각 한도 옆에 리셋까지 남은 시간이 표시됩니다. 자동 조회를 꺼도 카운트다운은 갱신됩니다. 시각에 마우스를 올리면 현지 날짜와 시간을 볼 수 있습니다.
+**설정 → 표시할 서비스 · 수치 기준**에서 서비스마다 본체 표시, 작업표시줄 위젯, 수치 기준(남은 양·사용한 양)을 각각 선택하세요. 위젯은 기본 모니터 작업표시줄의 빈 공간에 표시되며, 누르면 본체가 열립니다.
 
-**설정 → 표시할 서비스**에서 각 서비스의 작업표시줄 위젯을 켜거나 끌 수 있습니다. 위젯은 본체 테마와 서비스별 사용량 표시 기준을 따릅니다. 각 한도 옆에 다음 리셋까지 남은 시간(예: `4:31`, `10:00`, `2d`)이 표시됩니다. 위젯을 누르면 본체가 열립니다. 위젯은 기본 모니터 작업표시줄 안에 표시됩니다. 각 서비스의 아이콘은 한도 행 왼쪽에 있습니다.
-
-![Codex와 Claude 두 줄 위젯, 예시 데이터](docs/screenshots/taskbar-widget-dark-ko.png)
+한도마다 제목·그래프·백분율·리셋까지 남은 시간이 한 줄에 표시됩니다. 24시간 이하는 `24:00`, `10:00`, `4:31`처럼 시간:분으로, 24시간 초과는 `2d`처럼 일 단위로 표시합니다. 수동 새로고침 모드에서도 남은 시간은 계속 줄어듭니다. 마우스를 올리면 전체 한도 이름과 현지 리셋 시각을 볼 수 있습니다. Gemini는 계정이 제공하는 Argon·Pro·Flash·Flash-Lite 한도를 각각 `A`·`P`·`F`·`FL`로 표시합니다.
 
 **설정 → 계정 연결 → Gemini 계정**에서 한 번에 표시할 계정을 고릅니다. **기본 CLI 계정**은 기존 연결을 유지합니다. **Antigravity**는 공식 CLI에서 현재 로그인한 개인 계정을 사용합니다. **Code Assist 1**과 **Code Assist 2**는 별도로 로그인할 수 있는 회사 계정입니다. 각 슬롯을 선택하고 **Gemini 로그인**을 누른 뒤 해당 Google 계정으로 인증하세요. 이후에는 계정 선택만 바꾸면 됩니다.
 
@@ -89,17 +81,17 @@ Grok도 기본적으로 꺼져 있습니다. 공식 Grok Build CLI의 기존 인
 | 앱 종료 | 트레이 아이콘 우클릭 → **종료** |
 
 - **서비스 선택:** Codex·Claude·Gemini·Grok 중 원하는 조합만 표시합니다. 최소 한 서비스는 유지합니다. Gemini와 Grok은 기본적으로 꺼져 있습니다.
-- **표시 기준:** 서비스별로 남은 양 또는 사용한 양을 선택하며 창과 트레이 막대에 함께 적용합니다.
+- **표시 기준:** 서비스별로 남은 양 또는 사용한 양을 선택하며 본체와 해당 서비스 위젯에 함께 적용합니다.
 - **테마:** 다크·라이트·시스템 중 선택합니다. 메인 창·설정·메뉴·툴팁에 적용합니다.
 - **창 크기:** 표준·미니 창에서 같은 카드 구성과 세로 한도 행을 유지합니다. 최소 220 × 140 논리 픽셀부터 조절하며 한도가 많으면 최소 높이가 늘어납니다. 넓은 창에서는 카드를 가로로 배치합니다. 메인 창에는 스크롤이 없습니다.
-- **동작:** Windows 자동시작, 작업표시줄 표시, 남은 한도 20%·5% 알림을 선택할 수 있습니다. 설정은 즉시 저장합니다.
+- **동작:** Windows 자동시작과 남은 한도 20%·5% 알림을 선택할 수 있습니다. 설정은 즉시 저장합니다.
 
 창 이동·크기 변경은 자동 저장하며, 닫기·Windows 종료·절전 때 마지막 상태를 저장합니다. Windows 자동시작은 저장된 창 크기·위치와 표시 또는 트레이 상태를 복원합니다. 업데이트가 창을 기본 크기로 되돌리지 않으며, 이전 모니터가 없으면 보이는 화면으로 옮깁니다.
 
 
 앱과 문서는 한국어·영어를 지원합니다. 기본값 **시스템**은 Windows UI 언어가 한국어이면 한국어, 그 외에는 English를 선택합니다. 설정의 **언어**에서 시스템/한국어/English를 바꾸면 메인 카드·설정·트레이·툴팁·접근성 이름·설치/로그인/오류 안내가 즉시 바뀌고 기존 설정 파일에 저장됩니다. 언어 전환을 위해 계정에 다시 로그인하거나 사용량을 재조회하지 않습니다. 제품명·공식 API 값·내부 한도 식별자는 유지합니다.
 
-<img src="docs/screenshots/provider-reliability/settings-en-dark.png" alt="언어와 서비스 연결을 보여 주는 영어 설정 화면" width="410">
+<img src="docs/screenshots/current/settings-en-dark.png" alt="언어와 서비스 연결을 보여 주는 영어 설정 화면" width="410">
 
 </details>
 
@@ -108,13 +100,13 @@ Grok도 기본적으로 꺼져 있습니다. 공식 Grok Build CLI의 기존 인
 
 | 표준 다크 | 표준 라이트 |
 | :---: | :---: |
-| <img src="docs/screenshots/provider-reliability/window-standard-dark.png" alt="표준 다크 창" width="360"> | <img src="docs/screenshots/provider-reliability/window-standard-light.png" alt="표준 라이트 창" width="360"> |
+| <img src="docs/screenshots/current/window-standard-dark.png" alt="표준 다크 창" width="360"> | <img src="docs/screenshots/current/window-standard-light.png" alt="표준 라이트 창" width="360"> |
 
 | 네 서비스 최소 폭 | 조회 시각과 상태 |
 | :---: | :---: |
-| <img src="docs/screenshots/provider-reliability/window-four-services-grok-minimum-dark.png" alt="최소 폭에서 네 서비스 사용량을 표시한 창" width="220"> | <img src="docs/screenshots/provider-reliability/window-refresh-schedule-ko.png" alt="마지막 관측과 다음 자동 조회 시각" width="360"> |
+| <img src="docs/screenshots/current/window-four-services-grok-minimum-dark.png" alt="최소 폭에서 네 서비스 사용량을 표시한 창" width="220"> | <img src="docs/screenshots/current/window-refresh-schedule-ko.png" alt="마지막 관측과 다음 자동 조회 시각" width="360"> |
 
-<img src="docs/screenshots/provider-reliability/settings-dark.png" alt="네 서비스의 표시 및 계정 연결 설정" width="410">
+<img src="docs/screenshots/current/settings-dark.png" alt="네 서비스의 표시 및 계정 연결 설정" width="410">
 
 화면은 합성 데이터를 사용한 WPF 렌더입니다. [캡처 방식과 범위](docs/screenshots/README.md)
 
@@ -167,7 +159,7 @@ dotnet build -c Release
 .\dist\VibeMeters-portable-win-x64\VibeMeters.exe
 ```
 
-산출물은 `dist/VibeMeters-portable-win-x64/`와 같은 이름의 ZIP입니다. 기존 산출물은 덮어쓰지 않으며 다시 빌드할 때는 `-OutputDirectory`로 새 경로를 지정하세요. `-Node`로 고정 버전 Node의 경로를 선택할 수 있습니다. runtime 폴더를 함께 배포해야 하며 사용 PC에 .NET·Node·npm 설치는 필요하지 않습니다. 설정과 CLI 인증 저장 위치는 기존과 같습니다. 패키징 경계와 오프라인 검사 방법은 [패키징 안내](docs/packaging.md)를 참고하세요. 배포본과 변경 사항은 [릴리스 페이지](https://github.com/Nectarine-Peach/VibeMeters/releases)에서 확인하세요.
+산출물은 `dist/VibeMeters-portable-win-x64/`와 같은 이름의 ZIP입니다. 빌드가 성공하면 관리 대상 패키지를 교체하고 `dist`에 남은 이전 생성 패키지를 정리합니다. 따로 보관하려면 `-OutputDirectory`로 `dist` 밖의 새 경로를 지정하세요. `-Node`로 고정 버전 Node의 경로를 선택할 수 있습니다. runtime 폴더를 함께 배포해야 하며 사용 PC에 .NET·Node·npm 설치는 필요하지 않습니다. 설정과 CLI 인증 저장 위치는 기존과 같습니다. 패키징 경계와 오프라인 검사 방법은 [패키징 안내](docs/packaging.md)를 참고하세요. 배포본과 변경 사항은 [릴리스 페이지](https://github.com/Nectarine-Peach/VibeMeters/releases)에서 확인하세요.
 
 격리된 제공자·파서·설정 회귀 테스트:
 

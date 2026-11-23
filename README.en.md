@@ -38,13 +38,9 @@ Codex Business uses the supplied `spend_control.individual_limit` and Claude Ent
 
 The current source build shows a countdown beside each quota. It continues to update in manual refresh mode. Hover over a countdown to see the local reset date and time.
 
-Choose **Settings → Taskbar display → Two-row widgets**, then **Services** to add or remove an individual Codex, Claude, Gemini or Grok widget. Codex and Claude are initially selected. Widget selection is independent of the dashboard. Each widget uses the dashboard theme and percentage preference and displays up to two reported quota windows. Click a widget to open the dashboard. Widgets use free space on the primary taskbar and move beside it when space is limited.
+In **Settings → Displayed services**, toggle the taskbar widget for each service. Widgets share the dashboard theme and percentage preference. Click a widget to open the dashboard. When space runs out on the primary taskbar, widgets move beside it.
 
 ![Two-row Codex and Claude widgets with example quotas](docs/screenshots/taskbar-widget-light-en.png)
-
-Choose **Settings → Taskbar display → One per service** for separate buttons with a provider icon and compact quota labels. For example, Codex can show `W 61%` and Claude can show `5H40%/W62%`. The labels use the windows your account reports and your choice of remaining or used percentages. Set Windows’ **Combine taskbar buttons and hide labels** to **Never** to see the numbers. Click a button to open the detailed window.
-
-Choose **One combined button** to keep the summaries together. For numeric icons beside the clock, enable **Show per-service numbers in the notification area** and drag the icons out of the overflow menu.
 
 Under **Settings → Accounts → Gemini account**, choose the account to display. **Default CLI account** uses your existing connection. **Antigravity** uses the personal account currently signed in to the official CLI. **Code Assist 1** and **Code Assist 2** are independent company account slots. Select each slot and use **Gemini sign-in** to connect its Google account. You can then switch between them without signing in again while their sessions are valid.
 
@@ -94,7 +90,6 @@ Choose any combination of Codex, Claude, Gemini and Grok, and set **remaining or
 
 Settings save immediately. Window moves and resizing are saved automatically, with a final save on close, Windows shutdown, or sleep. Windows startup restores the saved size, position, and visible-window or tray state. Updates do not reset the window to a default size; if a previous monitor is missing, the window moves onto an available screen.
 
-The taskbar option provides a normal app icon and minimize behavior, not a quota widget or progress overlay. The minimize button appears in sufficiently wide windows.
 
 Refresh options are **30 seconds, 1, 2, 5, or 15 minutes, or manual**; the default is two minutes. Polling pauses while Windows is locked or sleeping. Hover over quota rows or status indicators for reset times and connection details. A warning indicator can mean cached data, a login problem, or a temporary server restriction.
 

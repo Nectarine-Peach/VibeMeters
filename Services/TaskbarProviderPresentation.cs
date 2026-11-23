@@ -25,7 +25,7 @@ internal static class TaskbarProviderPresentation
         return windows.Length <= 2 ? title : $"{title} +{windows.Length - 2}";
     }
 
-    private static string WindowName(string name)
+    internal static string WindowName(string name)
     {
         if (name == "개인 한도") return Localizer.IsEnglish ? "Individual" : "개인";
         if (name == "월 추가 사용") return Localizer.IsEnglish ? "Extra M" : "추가 M";

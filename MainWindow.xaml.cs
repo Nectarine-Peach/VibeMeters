@@ -178,7 +178,7 @@ public partial class MainWindow : Window
         public double DividerBottom=>Size(0,1);
         public double Gap=>Size(3,11);
         public double CardRadius=>Size(5,9);
-        public double LabelWidth=>Localizer.IsEnglish?Size(34,52):Size(26,42);
+        public double LabelWidth=>Localizer.IsEnglish?Size(32,42):Size(25,34);
         public double ValueWidth=>Size(32,52);
         public double MeterHeight=>Size(3,6);
         public double MeterGap=>Size(4,9);
@@ -360,7 +360,7 @@ public partial class MainWindow : Window
         Typography.SetNumeralAlignment(value,FontNumeralAlignment.Tabular);
         return value;
     }
-    private static string ShortQuotaName(string name)=>name.StartsWith("Build ",StringComparison.Ordinal)||name.StartsWith("공유 ",StringComparison.Ordinal)?name:name.Contains("Argon",StringComparison.OrdinalIgnoreCase)?"Argon":name=="개인 한도"?"개인":name=="월 추가 사용"?"월추가":name.Contains("주")?"주간":name.Contains("5시간")?"5시간":name.Contains("세션")||name.Contains("시간")?"세션":name.Replace("모델","").Trim();
+    private static string ShortQuotaName(string name)=>name.StartsWith("Build ",StringComparison.Ordinal)||name.StartsWith("공유 ",StringComparison.Ordinal)?name:name.Contains("Argon",StringComparison.OrdinalIgnoreCase)?"Argon":name=="개인 한도"?"개인":name=="월 추가 사용"?"월추가":name.Contains("주")?"주간":name.Contains("5시간")?"H":name.Contains("세션")||name.Contains("시간")?"세션":name.Replace("모델","").Trim();
     private static ToolTip WrappedTip(string text)=>new ToolTip { MaxWidth=280,Content=new TextBlock { Text=text,TextWrapping=TextWrapping.Wrap,MaxWidth=254,FontSize=11,LineHeight=17 } };
     private static string ProviderStatus(UsageSnapshot snapshot)
     {

@@ -4,7 +4,7 @@
 
 Codex, Claude, Gemini, Grok의 구독 한도가 얼마나 남았는지, 언제 다시 채워지는지 한 창에서 확인하는 Windows 앱입니다. 자주 확인하는 서비스는 작업표시줄에도 띄울 수 있습니다.
 
-**[Windows용 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip)** · [v1.4.13 변경 사항](docs/releases/v1.4.13.md)
+**[Windows용 ZIP 다운로드](https://github.com/Nectarine-Peach/VibeMeters/releases/latest/download/VibeMeters-win-x64.zip)** · [v1.4.14 변경 사항](docs/releases/v1.4.14.md)
 
 <img src="docs/screenshots/v1.4.13/dashboard-quota-names-ko-dark.png" alt="Codex와 Claude의 5시간·주간 한도, Gemini의 Pro·Flash·Argon 한도, Grok의 Build 주간 한도가 표시된 사용량 창" width="360">
 

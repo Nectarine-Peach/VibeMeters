@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -280,6 +281,7 @@ internal sealed class VisualVerification
     }
 
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowTextW(IntPtr hwnd, StringBuilder text, int length);
@@ -347,8 +349,19 @@ internal sealed class VisualVerification
                 Check("shown taskbar widgets occupy disjoint rectangles",
                     bounds.SelectMany((rect, i) => bounds.Skip(i + 1).Select(other => Rect.Intersect(rect, other))).All(r => r.IsEmpty || r.Width <= 1 || r.Height <= 1));
                 Check("all visible widget HWNDs have equal pixel widths", bounds.Max(rect => rect.Width) - bounds.Min(rect => rect.Width) <= 1);
+                Check("all visible widget HWNDs have equal pixel heights", bounds.Max(rect => rect.Height) - bounds.Min(rect => rect.Height) <= 1);
             }
             else _report.Add("INFO: taskbar offered room for fewer than two visible widgets; no overlap pair to measure.");
+            if (shown.Length > 0)
+            {
+                var handle = new WindowInteropHelper(shown[0]).Handle;
+                ShowWindow(handle, 0 /* SW_HIDE */);
+                var timeout = Stopwatch.StartNew();
+                while (!IsWindowVisible(handle) && timeout.Elapsed < TimeSpan.FromSeconds(4))
+                    await Task.Delay(100);
+                Check("a widget hidden by its native owner is restored by the placement timer",
+                    IsWindowVisible(handle));
+            }
             var deadline = DateTimeOffset.Now.AddSeconds(2);
             _render(codex with { Windows = [new("5시간", 27, deadline)] });
             static TextBlock WidgetReset(Window widget) => Descendants<TextBlock>(widget)
@@ -401,6 +414,14 @@ internal sealed class VisualVerification
             _settings.WidgetProviders = TaskbarWidgetProviders.Codex | TaskbarWidgetProviders.Claude;
             _applySettings();
             Check("restoring selection recreates exactly two widgets", Widgets().Length == 2);
+            var closed = Widgets().Single(w => Equals(w.Tag, UsageProviderKind.Codex));
+            closed.Close();
+            var restoreTimeout = Stopwatch.StartNew();
+            while (Widgets().Length < 2 && restoreTimeout.Elapsed < TimeSpan.FromSeconds(4))
+                await Task.Delay(100);
+            Check("the placement timer recreates a closed selected widget without another usage update",
+                Widgets().Length == 2 && Widgets().Any(w => Equals(w.Tag, closed.Tag) && w != closed &&
+                    IsWindow(new WindowInteropHelper(w).Handle)));
             _settings.WidgetProviders = TaskbarWidgetProviders.None;
             _applySettings();
             Check("disabling widgets clears the taskbar",
@@ -422,7 +443,7 @@ internal sealed class VisualVerification
                     foreach (var preview in previews)
                     {
                         preview.Update([Equals(preview.Tag, UsageProviderKind.Codex) ? codex : claude], _settings);
-                        preview.SetLayout(false, 200, 48);
+                        preview.SetLayout(200, 48);
                         if (!preview.IsVisible) preview.Show();
                         await StableAsync(preview);
                     }
@@ -434,13 +455,20 @@ internal sealed class VisualVerification
                 }
                 var narrow = previews[1];
                 narrow.Update([claude with { Windows = [.. claude.Windows, new("Opus 주간", 60, null)] }], _settings);
-                narrow.SetLayout(true, 132, 160);
+                narrow.SetLayout(132, 160);
                 await StableAsync(narrow);
                 Check("narrow vertical widget shows all three values with its unknown reset",
                     Math.Abs(narrow.ActualWidth - 132) <= 1 && QuotaRows(Tile(narrow)).Length == 3 && TextFits(Root(narrow), Root(narrow)) &&
                     Descendants<TextBlock>(narrow).Any(t => t.Text == "40%" && t.IsVisible) &&
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("Opus") &&
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("40% · Reset N/A"));
+                narrow.SetLayout(148, 32);
+                await StableAsync(narrow);
+                var tile = Tile(narrow);
+                var values = QuotaRows(tile);
+                Check("a short horizontal taskbar caps the widget height and contains all quota rows",
+                    Math.Abs(narrow.ActualHeight - 32) <= 1 && values.Length == 3 &&
+                    values.All(value => new Rect(tile.RenderSize).Contains(Bounds(value, tile))));
             }
             finally { foreach (var preview in previews) preview.Close(); }
             await CheckWidgetAlignmentAsync();
@@ -594,7 +622,7 @@ internal sealed class VisualVerification
                 for (var i = 0; i < views.Length; i++)
                 {
                     views[i].Update([samples[i]], _settings);
-                    views[i].SetLayout(false, 220, 180);
+                    views[i].SetLayout(220, 180);
                 }
                 await StableAsync(views[0]);
                 var marks = views.Select(MeasureWidgetIcon).ToArray();
@@ -604,11 +632,11 @@ internal sealed class VisualVerification
                 _report.Add($"GEOMETRY: {theme} widget icon extents on 96px canvas: {string.Join(", ", marks.Select(mark => mark.Extent))}");
                 if (theme == AppTheme.Light) CaptureWidgetPreview(views, "taskbar-widget-four-services-light.png");
             }
-            foreach (var (layout, vertical, width, height) in new[] {
-                ("horizontal", false, 220d, 180d), ("narrow horizontal", false, 132d, 180d),
-                ("vertical", true, 156d, 180d), ("narrow vertical", true, 134.4d, 180d) })
+            foreach (var (layout, width, height) in new[] {
+                ("horizontal", 220d, 48d), ("narrow horizontal", 132d, 48d),
+                ("vertical", 156d, 180d), ("narrow vertical", 134.4d, 180d) })
             {
-                foreach (var view in views) view.SetLayout(vertical, width, height);
+                foreach (var view in views) view.SetLayout(width, height);
                 await StableAsync(views[0]);
                 foreach (var view in views) view.UpdateLayout();
                 var roots = views.Select(Root).ToArray();
@@ -697,8 +725,8 @@ internal sealed class VisualVerification
                 Check(layout + " aligns the unavailable marker with measured values",
                     unavailableValue.TextAlignment == TextAlignment.Right &&
                     EqualCoordinates(percentages.Select(r => r.Right).Append(Bounds(unavailableValue, roots[3]).Right)));
-                Check(layout + " grows each frame to accommodate its quota count",
-                    views[2].ActualHeight > views[0].ActualHeight && views[0].ActualHeight > views[1].ActualHeight);
+                Check(layout + " keeps the default height across quota counts and unavailable states",
+                    views.All(w => Math.Abs(w.ActualHeight - TaskbarWidgetWindow.DefaultHeight) <= 1));
                 Check(layout + " retains full quota names in tooltips and omits unmeasured percentages",
                     AutomationProperties.GetHelpText(gemini).Contains(longName) && new[] { "P", "F", "A" }.All(label => Descendants<TextBlock>(gemini).Any(t => t.Text == label && t.IsVisible)) &&
                     !Descendants<TextBlock>(grok).Any(t => t.Text.Contains('%')) && roots.All(root => TextFits(root, root)));

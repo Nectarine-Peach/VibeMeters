@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -22,7 +23,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
     private Layout? _lastLayout;
     private Rectangle _free;
     private bool _scanning;
-    private DateTime _nextScan;
+    private long _nextScan;
     private int _generation;
 
     public TaskbarWidgetHost(Action openMain)
@@ -88,11 +89,6 @@ internal sealed class TaskbarWidgetHost : IDisposable
     {
         if (_views.Count == 0) return;
         var layout = ReadLayout();
-        if (layout is null)
-        {
-            foreach (var view in _views.Values.Where(w => w.IsVisible)) view.Hide();
-            return;
-        }
         if (layout != _lastLayout)
         {
             _lastLayout = layout;
@@ -101,7 +97,12 @@ internal sealed class TaskbarWidgetHost : IDisposable
             _nextScan = default;
             _generation++;
         }
-        if (!_scanning && DateTime.UtcNow >= _nextScan) _ = FindFreeAreaAsync(layout);
+        if (layout is null)
+        {
+            foreach (var view in _views.Values.Where(w => w.IsVisible)) view.Hide();
+            return;
+        }
+        if (!_scanning && Environment.TickCount64 >= _nextScan) _ = FindFreeAreaAsync(layout);
         var area = Rectangle.Intersect(_free, layout.Bar);
         bool vertical = layout.Vertical;
         double scale = layout.Scale;
@@ -111,19 +112,21 @@ internal sealed class TaskbarWidgetHost : IDisposable
         int length = 0;
         var fitted = new List<(TaskbarWidgetWindow View, Size Size)>();
         var now = DateTimeOffset.Now;
-        double widthBudget = vertical ? area.Width / scale :
-            Math.Max(TaskbarWidgetWindow.MinimumReadableWidth, (area.Width - gap * (windows.Length + 1)) / (scale * windows.Length));
+        int minimumWidth = (int)Math.Ceiling(TaskbarWidgetWindow.MinimumReadableWidth * scale);
+        int widthBudget = vertical ? area.Width : WidgetLengthBudget(area.Width, windows.Length, gap, minimumWidth);
+        int heightBudget = vertical ? WidgetLengthBudget(area.Height, windows.Length, gap,
+            (int)Math.Ceiling(TaskbarWidgetWindow.MinimumHeight * scale)) : area.Height;
         foreach (var view in windows)
         {
-            if (area.Height <= 0 || area.Width / scale < TaskbarWidgetWindow.MinimumReadableWidth)
+            view.RefreshCountdowns(now);
+            if (heightBudget <= 0 || widthBudget < minimumWidth)
             {
                 if (view.IsVisible) view.Hide();
                 continue;
             }
-            view.RefreshCountdowns(now);
-            view.SetLayout(vertical, widthBudget, area.Height / scale);
-            var size = new Size(Math.Min(area.Width, (int)Math.Ceiling(view.Width * scale)),
-                Math.Min(area.Height, (int)Math.Ceiling(view.Height * scale)));
+            view.SetLayout(widthBudget / scale, heightBudget / scale);
+            var size = new Size(Math.Min(widthBudget, (int)Math.Ceiling(view.Width * scale)),
+                Math.Min(heightBudget, (int)Math.Ceiling(view.Height * scale)));
             int itemLength = vertical ? size.Height : size.Width;
             int candidate = length + (fitted.Count > 0 ? gap : 0) + itemLength;
             if (candidate + 2 * gap > axisLength)
@@ -143,8 +146,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
             var placement = vertical
                 ? (layout.Bar.Left + layout.Bar.Width / 2 < layout.Monitor.Left + layout.Monitor.Width / 2 ? PlacementMode.Right : PlacementMode.Left)
                 : (layout.Bar.Top + layout.Bar.Height / 2 < layout.Monitor.Top + layout.Monitor.Height / 2 ? PlacementMode.Bottom : PlacementMode.Top);
-            // Anchor beyond the whole bar, including when adjacent widgets have
-            // more quota rows and therefore extend farther toward the desktop.
+            // Anchor beyond the whole bar so the tooltip stays clear of adjacent widgets.
             double offset = placement switch
             {
                 PlacementMode.Left => layout.Bar.Left - target.Left,
@@ -158,18 +160,35 @@ internal sealed class TaskbarWidgetHost : IDisposable
         }
     }
 
+    internal static int WidgetLengthBudget(int length, int count, int gap, int minimumLength)
+    {
+        // Reserve the edge gaps and divide in physical pixels. Rounding up a fractional
+        // DIP budget independently for each HWND can make the last widget appear not to fit.
+        int fitting = Math.Min(count, (length - gap) / (minimumLength + gap));
+        return fitting <= 0 ? 0 : (length - (fitting + 1) * gap) / fitting;
+    }
+
     private static void Move(TaskbarWidgetWindow view, Rectangle target, IntPtr taskbar)
     {
         // Owned top-level windows stay above their owner's surface when Explorer takes
         // focus. Changing only our own HWND's owner avoids repeatedly raising it.
         var interop = new WindowInteropHelper(view);
-        if (interop.Owner != taskbar) interop.Owner = taskbar;
         var hwnd = interop.Handle;
+        if (hwnd == IntPtr.Zero) return;
+        try
+        {
+            if (interop.Owner != taskbar) interop.Owner = taskbar;
+        }
+        catch (Win32Exception e) when (e.NativeErrorCode == 1400) { return; } // Explorer replaced the HWND mid-placement.
         bool show = !view.IsVisible;
-        if (!show && Bounds(hwnd) == target) return;
+        if (!show && IsIconic(hwnd)) ShowWindow(hwnd, 4 /* SW_SHOWNOACTIVATE */);
+        bool nativeHidden = !IsWindowVisible(hwnd);
+        if (!show && !nativeHidden && Bounds(hwnd) == target) return;
 
         const uint keepZOrderAndFocus = 0x0004 | 0x0010;
-        SetWindowPos(hwnd, IntPtr.Zero, target.X, target.Y, target.Width, target.Height, keepZOrderAndFocus);
+        // Explorer can hide an owned HWND without changing its WPF Visibility.
+        uint flags = !show && nativeHidden ? keepZOrderAndFocus | 0x0040 /* SWP_SHOWWINDOW */ : keepZOrderAndFocus;
+        SetWindowPos(hwnd, IntPtr.Zero, target.X, target.Y, target.Width, target.Height, flags);
         if (show)
         {
             view.Show();
@@ -178,7 +197,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
         }
     }
 
-    private sealed record Layout(IntPtr Taskbar, Rectangle Bar, Rectangle Monitor, Rectangle Work, bool Vertical, bool Far, double Scale);
+    private sealed record Layout(IntPtr Taskbar, Rectangle Bar, Rectangle Monitor, bool Vertical, bool Far, double Scale);
 
     private static Layout? ReadLayout()
     {
@@ -196,8 +215,11 @@ internal sealed class TaskbarWidgetHost : IDisposable
         var foreground = GetForegroundWindow();
         if (foreground != IntPtr.Zero && foreground != handle)
         {
-            var frame = Bounds(foreground);
-            if (frame.Contains(monitor))
+            // A maximized window's invisible resize borders can cover the monitor
+            // even while the taskbar is usable. Only full-screen content suppresses it.
+            var origin = new Point();
+            if (GetClientRect(foreground, out var client) && ClientToScreen(foreground, ref origin)
+                && new Rectangle(origin, new Size(client.Right, client.Bottom)).Contains(monitor))
             {
                 var className = new StringBuilder(128);
                 GetClassName(foreground, className, className.Capacity);
@@ -205,58 +227,61 @@ internal sealed class TaskbarWidgetHost : IDisposable
             }
         }
         var tray = Bounds(FindWindowEx(handle, IntPtr.Zero, "TrayNotifyWnd", null));
-        bool far = tray.IsEmpty || (vertical ? tray.Top + tray.Height / 2 >= bar.Top + bar.Height / 2
-            : tray.Left + tray.Width / 2 >= bar.Left + bar.Width / 2);
-        return new(handle, bar, monitor, screen.WorkingArea, vertical, far, Math.Max(1, GetDpiForWindow(handle)) / 96.0);
+        bool far = tray.IsEmpty || TrayAtFarEnd(tray, bar, vertical);
+        uint dpi = GetDpiForWindow(handle);
+        if (dpi == 0) return null; // Explorer destroyed the handle while its bounds were being read.
+        return new(handle, bar, monitor, vertical, far, dpi / 96.0);
     }
+
+    private static bool TrayAtFarEnd(Rectangle tray, Rectangle bar, bool vertical) => vertical
+        ? tray.Top + tray.Height / 2 >= bar.Top + bar.Height / 2
+        : tray.Left + tray.Width / 2 >= bar.Left + bar.Width / 2;
 
     private async Task FindFreeAreaAsync(Layout layout)
     {
         _scanning = true;
         var generation = _generation;
+        Rectangle? area = null;
         try
         {
             // UI Automation can cross process boundaries. The dashboard must not wait for Explorer.
-            var area = await Task.Run(() => ReadFreeArea(layout));
-            if (_generation == generation) _scanFailed = false;
-            if (_generation == generation && _views.Count > 0 && area != _free)
-            {
-                _free = area;
-                Place();
-            }
+            area = await Task.Run(() => ReadFreeArea(layout));
         }
-        catch (Exception e) when (e is COMException or ElementNotAvailableException or InvalidOperationException or UnauthorizedAccessException)
+        catch (Exception e) when (e is COMException or ElementNotAvailableException or InvalidOperationException
+            or UnauthorizedAccessException or TimeoutException or Win32Exception)
         {
-            if (_generation == generation)
-            {
-                // A single stale UIA element during a shell focus change is common.
-                // If Explorer remains unreadable on the next scan, stop using its gap.
-                if (_scanFailed) _free = Rectangle.Empty;
-                _scanFailed = true;
-            }
+            // An unavailable UIA element during a shell transition is equivalent to an incomplete tree.
         }
-        finally { _scanning = false; _nextScan = DateTime.UtcNow.AddSeconds(2); }
+        finally { _scanning = false; }
+
+        if (generation != _generation) return;
+        _nextScan = Environment.TickCount64 + (area.HasValue ? 2000 : 1000);
+        var nextArea = area ?? (_scanFailed ? Rectangle.Empty : _free);
+        _scanFailed = !area.HasValue;
+        if (_free == nextArea) return;
+        _free = nextArea;
+        Place();
     }
 
-    private static Rectangle ReadFreeArea(Layout layout)
+    private static Rectangle? ReadFreeArea(Layout layout)
     {
         var rebar = FindWindowEx(layout.Taskbar, IntPtr.Zero, "ReBarWindow32", null);
         var pane = rebar == IntPtr.Zero ? IntPtr.Zero : FindWindowEx(rebar, IntPtr.Zero, "MSTaskSwWClass", null);
         var list = pane == IntPtr.Zero ? IntPtr.Zero : FindWindowEx(pane, IntPtr.Zero, "MSTaskListWClass", null);
-        if (list != IntPtr.Zero)
-        {
-            var classicGap = ReadFreeArea(layout, list);
-            if (classicGap.Width > 0 && classicGap.Height > 0) return classicGap;
-        }
+        Rectangle? classicGap = list == IntPtr.Zero ? null : ReadFreeArea(layout, list);
+        if (classicGap is { Height: > 0 } gap && gap.Width >= TaskbarWidgetWindow.MinimumReadableWidth * layout.Scale)
+            return classicGap;
         // Some versions retain a classic compatibility HWND while the actual controls
         // live in the XAML tree. Inspect it for space before hiding the widgets.
-        return ReadFreeArea(layout, IntPtr.Zero);
+        return ReadFreeArea(layout, IntPtr.Zero) ?? classicGap;
     }
 
-    private static Rectangle ReadFreeArea(Layout layout, IntPtr list)
+    private static Rectangle? ReadFreeArea(Layout layout, IntPtr list)
     {
         bool modern = list == IntPtr.Zero;
         var available = modern ? layout.Bar : Rectangle.Intersect(Bounds(list), layout.Bar);
+        if (available.Width <= 0 || available.Height <= 0) return null;
+        bool far = layout.Far;
         var root = AutomationElement.FromHandle(modern ? layout.Taskbar : list);
         var cached = new CacheRequest();
         cached.Add(AutomationElement.ProcessIdProperty);
@@ -264,6 +289,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
         cached.Add(AutomationElement.ControlTypeProperty);
         cached.Add(AutomationElement.ClassNameProperty);
         cached.Add(AutomationElement.AutomationIdProperty);
+        cached.Add(AutomationElement.IsInvokePatternAvailableProperty);
         using var active = cached.Activate();
         var nodes = root.FindAll(TreeScope.Descendants, System.Windows.Automation.Condition.TrueCondition);
         if (modern)
@@ -273,17 +299,18 @@ internal sealed class TaskbarWidgetHost : IDisposable
             {
                 var frame = nodes.Cast<AutomationElement>().FirstOrDefault(n =>
                     n.Cached.ClassName.EndsWith("SystemTrayFrame", StringComparison.OrdinalIgnoreCase));
-                if (frame == null || frame.Cached.BoundingRectangle.IsEmpty) return Rectangle.Empty;
+                if (frame == null || frame.Cached.BoundingRectangle.IsEmpty) return null;
                 var rect = frame.Cached.BoundingRectangle;
                 tray = Rectangle.FromLTRB((int)rect.Left, (int)rect.Top, (int)Math.Ceiling(rect.Right), (int)Math.Ceiling(rect.Bottom));
             }
-            if (!tray.IntersectsWith(available)) return Rectangle.Empty;
+            if (!tray.IntersectsWith(available)) return null;
+            far = TrayAtFarEnd(tray, layout.Bar, layout.Vertical);
             available = layout.Vertical
-                ? Rectangle.FromLTRB(available.Left, layout.Far ? available.Top : tray.Bottom, available.Right, layout.Far ? tray.Top : available.Bottom)
-                : Rectangle.FromLTRB(layout.Far ? available.Left : tray.Right, available.Top, layout.Far ? tray.Left : available.Right, available.Bottom);
+                ? Rectangle.FromLTRB(available.Left, far ? available.Top : tray.Bottom, available.Right, far ? tray.Top : available.Bottom)
+                : Rectangle.FromLTRB(far ? available.Left : tray.Right, available.Top, far ? tray.Left : available.Right, available.Bottom);
         }
         if (available.Width <= 0 || available.Height <= 0) return Rectangle.Empty;
-        int end = layout.Far ? (layout.Vertical ? available.Top : available.Left) : (layout.Vertical ? available.Bottom : available.Right);
+        var occupiedRects = new List<Rectangle>();
         bool found = false;
         foreach (AutomationElement node in nodes)
         {
@@ -293,7 +320,8 @@ internal sealed class TaskbarWidgetHost : IDisposable
             // Layout containers can cover the entire modern taskbar; only their content
             // or individually interactive buttons may establish or constrain the gap.
             if (modern && (control == ControlType.Pane || control == ControlType.Group || control == ControlType.ToolBar ||
-                control == ControlType.List || control == ControlType.Window)) continue;
+                control == ControlType.List || control == ControlType.Window) &&
+                !Equals(node.GetCachedPropertyValue(AutomationElement.IsInvokePatternAvailableProperty), true)) continue;
             var bounds = node.Cached.BoundingRectangle;
             if (bounds.IsEmpty || bounds.Width <= 0 || bounds.Height <= 0) continue;
             var occupied = Rectangle.Intersect(available, Rectangle.FromLTRB((int)Math.Floor(bounds.Left),
@@ -302,13 +330,34 @@ internal sealed class TaskbarWidgetHost : IDisposable
             if (!modern || ((control == ControlType.Button || control == ControlType.ListItem) &&
                 (className.Contains("TaskList", StringComparison.OrdinalIgnoreCase) ||
                  node.Cached.AutomationId.StartsWith("Appid:", StringComparison.OrdinalIgnoreCase)))) found = true;
-            end = layout.Far ? Math.Max(end, layout.Vertical ? occupied.Bottom : occupied.Right)
-                             : Math.Min(end, layout.Vertical ? occupied.Top : occupied.Left);
+            occupiedRects.Add(occupied);
         }
-        if (!found) return Rectangle.Empty;
-        return layout.Vertical
-            ? Rectangle.FromLTRB(available.Left, layout.Far ? end : available.Top, available.Right, layout.Far ? available.Bottom : end)
-            : Rectangle.FromLTRB(layout.Far ? end : available.Left, available.Top, layout.Far ? available.Right : end, available.Bottom);
+        return found ? LargestFreeArea(available, occupiedRects, layout.Vertical, far) : null;
+    }
+
+    internal static Rectangle LargestFreeArea(Rectangle available, IReadOnlyList<Rectangle> occupied, bool vertical, bool far)
+    {
+        int Start(Rectangle r) => vertical ? r.Top : r.Left;
+        int End(Rectangle r) => vertical ? r.Bottom : r.Right;
+        int cursor = Start(available), bestStart = cursor, bestLength = 0;
+        void ConsiderGap(int end)
+        {
+            int length = end - cursor;
+            if (length > bestLength || (far && length == bestLength))
+            {
+                bestStart = cursor;
+                bestLength = length;
+            }
+        }
+        foreach (var rect in occupied.OrderBy(Start))
+        {
+            ConsiderGap(Start(rect));
+            cursor = Math.Max(cursor, End(rect));
+        }
+        ConsiderGap(End(available));
+        if (bestLength == 0) return Rectangle.Empty;
+        return vertical ? new Rectangle(available.Left, bestStart, available.Width, bestLength)
+                        : new Rectangle(bestStart, available.Top, bestLength, available.Height);
     }
 
     private static Rectangle Bounds(IntPtr handle) => handle != IntPtr.Zero && GetWindowRect(handle, out var r)
@@ -330,7 +379,11 @@ internal sealed class TaskbarWidgetHost : IDisposable
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
     [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out NativeRect rect);
+    [DllImport("user32.dll")] private static extern bool GetClientRect(IntPtr hwnd, out NativeRect rect);
+    [DllImport("user32.dll")] private static extern bool ClientToScreen(IntPtr hwnd, ref Point point);
     [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] private static extern int GetWindowLong(IntPtr hwnd, int index);
     [DllImport("user32.dll", EntryPoint = "SetWindowLongW")] private static extern int SetWindowLong(IntPtr hwnd, int index, int value);

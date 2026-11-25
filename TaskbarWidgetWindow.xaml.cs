@@ -13,14 +13,15 @@ namespace VibeMeters;
 public partial class TaskbarWidgetWindow : Window
 {
     internal const double MinimumReadableWidth = 132;
+    internal const double MinimumHeight = 21;
+    internal const double DefaultHeight = 46;
     private readonly Action _openMain;
     private readonly ToolTip _quotaTip = new();
     private readonly List<(TextBlock Label, DateTimeOffset? Deadline)> _tooltipCountdowns = [];
     private readonly List<(TextBlock Label, DateTimeOffset? Deadline)> _countdowns = [];
     private UsageSnapshot? _snapshot;
     private UsageDisplayMode _mode;
-    private bool _vertical;
-    private double _maxWidth = 220, _maxHeight = 46;
+    private double _maxWidth = 220, _maxHeight = DefaultHeight;
 
     public TaskbarWidgetWindow(Action openMain)
     {
@@ -41,12 +42,11 @@ public partial class TaskbarWidgetWindow : Window
         Render();
     }
 
-    public void SetLayout(bool vertical, double maxWidth, double maxHeight)
+    public void SetLayout(double maxWidth, double maxHeight)
     {
         maxWidth = Math.Max(1, maxWidth);
         maxHeight = Math.Max(1, maxHeight);
-        if (_vertical == vertical && _maxWidth == maxWidth && _maxHeight == maxHeight) return;
-        _vertical = vertical;
+        if (_maxWidth == maxWidth && _maxHeight == maxHeight) return;
         _maxWidth = maxWidth;
         _maxHeight = maxHeight;
         Render();
@@ -77,9 +77,9 @@ public partial class TaskbarWidgetWindow : Window
         // frame and columns, even when a lookup fails or the number of windows changes.
         double tileWidth = Math.Clamp(_maxWidth, MinimumReadableWidth, 176);
         bool compact = tileWidth < 156;
-        double tileHeight = 4 + Math.Max(17, Math.Max(1, visible.Length) * 14);
+        double contentHeight = Math.Max(MinimumHeight, 4 + visible.Length * 14);
         ContentFrame.Width = tileWidth - 2;
-        ContentFrame.Height = tileHeight - 2;
+        ContentFrame.Height = contentHeight - 2;
         ContentFrame.Padding = new Thickness(compact ? 6 : 7, 1, compact ? 6 : 7, 1);
         BrandColumn.Width = new GridLength(compact ? 15 : 18);
         BrandRow.Height = new GridLength(0);
@@ -102,7 +102,7 @@ public partial class TaskbarWidgetWindow : Window
             QuotaRows.Children.Add(unknown);
         }
         Width = Math.Min(_maxWidth, tileWidth);
-        Height = Math.Min(_maxHeight, tileHeight);
+        Height = Math.Min(_maxHeight, DefaultHeight);
         AutomationProperties.SetName(ProviderButton, $"{snapshot.Provider} · {basis}");
         UpdateToolTip(snapshot, basis);
     }

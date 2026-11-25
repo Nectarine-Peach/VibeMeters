@@ -38,6 +38,45 @@ sealed class RegressionSuite
 
     public async Task<int> RunAsync()
     {
+        Test("All four horizontal widgets fit inside fractional and exact pixel budgets", () =>
+        {
+            foreach (var (width, gap, minimum, expected) in new[] {
+                (600, 2, 132, 147), (751, 2, 165, 185), (808, 3, 198, 198), (538, 2, 132, 132) })
+            {
+                int budget = TaskbarWidgetHost.WidgetLengthBudget(width, 4, gap, minimum);
+                Equal(expected, budget);
+                Equal(true, 4 * budget + 5 * gap <= width);
+            }
+        });
+        Test("Horizontal widgets retain readable width when only some fit", () =>
+        {
+            Equal(176, TaskbarWidgetHost.WidgetLengthBudget(537, 4, 2, 132));
+            Equal(132, TaskbarWidgetHost.WidgetLengthBudget(136, 4, 2, 132));
+            Equal(0, TaskbarWidgetHost.WidgetLengthBudget(135, 4, 2, 132));
+        });
+        Test("Four vertical widgets share a constrained gap before any is hidden", () =>
+        {
+            Equal(46, TaskbarWidgetHost.WidgetLengthBudget(194, 4, 2, 21));
+            Equal(45, TaskbarWidgetHost.WidgetLengthBudget(193, 4, 2, 21));
+            Equal(30, TaskbarWidgetHost.WidgetLengthBudget(130, 4, 2, 21));
+            Equal(21, TaskbarWidgetHost.WidgetLengthBudget(94, 4, 2, 21));
+            Equal(0, TaskbarWidgetHost.WidgetLengthBudget(24, 4, 2, 21));
+        });
+        Test("Taskbar widgets use the largest contiguous gap around overlapping controls", () =>
+        {
+            var bar = new System.Drawing.Rectangle(-1000, 0, 1000, 48);
+            System.Drawing.Rectangle Block(int x, int width) => new(x, 0, width, 48);
+            Equal(Block(-950, 600), TaskbarWidgetHost.LargestFreeArea(bar,
+                [Block(-210, 86), Block(-1000, 50), Block(-350, 150)], false, true));
+            Equal(System.Drawing.Rectangle.Empty, TaskbarWidgetHost.LargestFreeArea(bar, [bar], false, true));
+        });
+        Test("Equal vertical taskbar gaps prefer the notification end", () =>
+        {
+            var bar = new System.Drawing.Rectangle(0, 100, 160, 600);
+            var middle = new System.Drawing.Rectangle(0, 300, 160, 200);
+            Equal(new System.Drawing.Rectangle(0, 500, 160, 200), TaskbarWidgetHost.LargestFreeArea(bar, [middle], true, true));
+            Equal(new System.Drawing.Rectangle(0, 100, 160, 200), TaskbarWidgetHost.LargestFreeArea(bar, [middle], true, false));
+        });
         Test("Provider taskbar labels preserve separate windows, used basis and overflow count", () =>
         {
             var s = new UsageSnapshot(UsageProviderKind.Claude, UsageStatus.Ready,

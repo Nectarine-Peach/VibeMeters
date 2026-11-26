@@ -13,6 +13,9 @@ namespace VibeMeters;
 public partial class TaskbarWidgetWindow : Window
 {
     internal const double MinimumReadableWidth = 132;
+    /// <summary>Slim vertical taskbars (Windows 10 defaults to about 120 DIP) stack the logo above the quota rows.</summary>
+    internal const double NarrowMinimumWidth = 96;
+    internal const double StackedBrandHeight = 15;
     internal const double MinimumHeight = 21;
     internal const double DefaultHeight = 46;
     private readonly Action _openMain;
@@ -75,18 +78,25 @@ public partial class TaskbarWidgetWindow : Window
         var visible = windows;
         // Size the tile from the host's available space. Every provider shares the same
         // frame and columns, even when a lookup fails or the number of windows changes.
-        double tileWidth = Math.Clamp(_maxWidth, MinimumReadableWidth, 176);
+        // The host only offers less than the readable width on a slim vertical taskbar,
+        // which has height to spare, so the logo moves above the rows instead of beside them.
+        double tileWidth = Math.Clamp(_maxWidth, NarrowMinimumWidth, 176);
+        bool stacked = tileWidth < MinimumReadableWidth;
         bool compact = tileWidth < 156;
-        double contentHeight = Math.Max(MinimumHeight, 4 + visible.Length * 14);
+        double contentHeight = Math.Max(MinimumHeight, 4 + visible.Length * 14) + (stacked ? StackedBrandHeight : 0);
+        double inset = stacked ? 5 : compact ? 6 : 7;
         ContentFrame.Width = tileWidth - 2;
         ContentFrame.Height = contentHeight - 2;
-        ContentFrame.Padding = new Thickness(compact ? 6 : 7, 1, compact ? 6 : 7, 1);
-        BrandColumn.Width = new GridLength(compact ? 15 : 18);
-        BrandRow.Height = new GridLength(0);
+        ContentFrame.Padding = new Thickness(inset, 1, inset, 1);
+        BrandColumn.Width = new GridLength(stacked ? 0 : compact ? 15 : 18);
+        BrandRow.Height = new GridLength(stacked ? StackedBrandHeight : 0);
         Grid.SetColumn(Brand, 0);
-        Grid.SetRow(Brand, 1);
-        QuotaRows.Margin = new Thickness(compact ? 6 : 7, 0, 0, 0);
-        Logo.Width = Logo.Height = compact ? 15 : 17;
+        Grid.SetRow(Brand, stacked ? 0 : 1);
+        Grid.SetColumnSpan(Brand, stacked ? 2 : 1);
+        Grid.SetColumn(QuotaRows, stacked ? 0 : 1);
+        Grid.SetColumnSpan(QuotaRows, stacked ? 2 : 1);
+        QuotaRows.Margin = new Thickness(stacked ? 0 : inset, 0, 0, 0);
+        Logo.Width = Logo.Height = stacked ? 13 : compact ? 15 : 17;
         Logo.VerticalAlignment = VerticalAlignment.Center;
         Logo.Margin = new Thickness(0);
         for (int i = 0; i < visible.Length; i++)
@@ -97,12 +107,13 @@ public partial class TaskbarWidgetWindow : Window
         }
         if (visible.Length == 0)
         {
-            var unknown = new TextBlock { Text = "—", FontSize = 14, Margin = new Thickness(0,0,compact ? 25 : 29,0), TextAlignment = TextAlignment.Right };
-            unknown.SetResourceReference(TextBlock.ForegroundProperty, "MutedText");
+            var unknown = RowText("—", "MutedText", TextAlignment.Right);
+            unknown.FontSize = 14;
+            unknown.Margin = new Thickness(0, 0, ResetWidth(compact), 0);
             QuotaRows.Children.Add(unknown);
         }
         Width = Math.Min(_maxWidth, tileWidth);
-        Height = Math.Min(_maxHeight, DefaultHeight);
+        Height = Math.Min(_maxHeight, stacked ? Math.Max(DefaultHeight, contentHeight) : DefaultHeight);
         AutomationProperties.SetName(ProviderButton, $"{snapshot.Provider} · {basis}");
         UpdateToolTip(snapshot, basis);
     }
@@ -120,35 +131,57 @@ public partial class TaskbarWidgetWindow : Window
         if (_snapshot is { } snapshot) Logo.Source = TaskbarProviderPresentation.Icon(snapshot.Provider);
     }
 
+    private const double RowHeight = 14, RowFontSize = 10, ResetGap = 5;
+    private static double ValueWidth(bool compact) => compact ? 26 : 28;
+    private static double ResetWidth(bool compact) => compact ? 29 : 31;
+
+    /// <summary>Every row text shares one size and line box, so the label, percentage and reset sit on a common baseline.</summary>
+    private static TextBlock RowText(string text, string color, TextAlignment alignment)
+    {
+        var block = new TextBlock { Text = text, FontSize = RowFontSize, LineHeight = RowHeight,
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight, TextAlignment = alignment, VerticalAlignment = VerticalAlignment.Center };
+        block.SetResourceReference(TextBlock.ForegroundProperty, color);
+        return block;
+    }
+
+    /// <summary>Short graph title. Business individual limits and Enterprise extra usage are monthly budgets.</summary>
+    internal static string GraphLabel(UsageProviderKind kind, string windowName)
+    {
+        if (windowName is "개인 한도" or "월 추가 사용") return "M";
+        var label = TaskbarProviderPresentation.WindowName(windowName);
+        if (label == "5H") label = "H";
+        if (kind == UsageProviderKind.Gemini) label = TaskbarProviderPresentation.GeminiGraphLabel(windowName) ?? label;
+        return label;
+    }
+
     private Grid QuotaRow(UsageProviderKind kind, UsageWindow window, bool compact)
     {
         const double labelWidth = 12;
-        var row = new Grid { Height = 14 };
+        var row = new Grid { Height = RowHeight };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(labelWidth) });
         row.ColumnDefinitions.Add(new ColumnDefinition());
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 28 : 30) });
-        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(compact ? 25 : 29) });
-        var label = TaskbarProviderPresentation.WindowName(window.Name);
-        if (label == "5H") label = "H";
-        if (kind == UsageProviderKind.Gemini) label = TaskbarProviderPresentation.GeminiGraphLabel(window.Name) ?? label;
-        var name = new TextBlock { Text = label, MaxWidth = labelWidth, ClipToBounds = true, FontSize = 9.5, TextAlignment = TextAlignment.Left, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-        name.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ValueWidth(compact)) });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(ResetWidth(compact)) });
+        var name = RowText(GraphLabel(kind, window.Name), "SecondaryText", TextAlignment.Left);
+        name.MaxWidth = labelWidth;
+        name.ClipToBounds = true;
+        name.TextTrimming = TextTrimming.CharacterEllipsis;
         row.Children.Add(name);
         double amount = _mode == UsageDisplayMode.Used ? Math.Clamp(window.UsedPercent, 0, 100) : window.RemainingPercent;
         var meter = new ProgressBar { Minimum = 0, Maximum = 100, Value = amount, VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(1,0,2,0) };
+            Margin = new Thickness(1,0,4,0) };
         meter.SetResourceReference(ProgressBar.ForegroundProperty, window.RemainingPercent <= 10 ? "CriticalText" : kind + "Accent");
         Grid.SetColumn(meter,1);
         row.Children.Add(meter);
-        var value = new TextBlock { Text = $"{amount.ToString("0", CultureInfo.InvariantCulture)}%", FontSize = 10.5,
-            FontWeight = FontWeights.SemiBold, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        value.SetResourceReference(TextBlock.ForegroundProperty, window.RemainingPercent <= 10 ? "CriticalText" : "PrimaryText");
+        var value = RowText($"{amount.ToString("0", CultureInfo.InvariantCulture)}%",
+            window.RemainingPercent <= 10 ? "CriticalText" : "PrimaryText", TextAlignment.Right);
+        value.FontWeight = FontWeights.SemiBold;
         Typography.SetNumeralAlignment(value, FontNumeralAlignment.Tabular);
         Grid.SetColumn(value, 2);
         row.Children.Add(value);
-        var reset = new TextBlock { FontSize = 9.5, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
-            Text = UsageResetText.Compact(window.ResetsAt, DateTimeOffset.Now) };
-        reset.SetResourceReference(TextBlock.ForegroundProperty, "SecondaryText");
+        // A fixed gap after the right-aligned percentage keeps every countdown starting at the same x.
+        var reset = RowText(UsageResetText.Compact(window.ResetsAt, DateTimeOffset.Now), "SecondaryText", TextAlignment.Left);
+        reset.Margin = new Thickness(ResetGap, 0, 0, 0);
         Typography.SetNumeralAlignment(reset, FontNumeralAlignment.Tabular);
         AutomationProperties.SetAutomationId(reset, "WidgetReset");
         AutomationProperties.SetName(reset, UsageResetText.Countdown(window.ResetsAt, DateTimeOffset.Now));

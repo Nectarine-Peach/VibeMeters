@@ -462,6 +462,16 @@ internal sealed class VisualVerification
                     Descendants<TextBlock>(narrow).Any(t => t.Text == "40%" && t.IsVisible) &&
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("Opus") &&
                     AutomationProperties.GetHelpText(Tile(narrow)).Contains("40% · Reset N/A"));
+                narrow.SetLayout(118, 400);
+                await StableAsync(narrow);
+                var slimRows = QuotaRows(Tile(narrow));
+                var slimLogo = Bounds((FrameworkElement)narrow.FindName("Logo"), Root(narrow));
+                var slimMeters = Descendants<ProgressBar>(narrow).Select(m => Bounds(m, Root(narrow))).ToArray();
+                Check("a slim vertical taskbar stacks the logo above every readable quota row",
+                    Math.Abs(narrow.ActualWidth - 118) <= 1 && slimRows.Length == 3 && TextFits(Root(narrow), Root(narrow)) &&
+                    slimRows.All(value => Bounds(value, Root(narrow)).Top >= slimLogo.Bottom) &&
+                    slimMeters.Length == 3 && slimMeters.All(r => r.Width >= 15) &&
+                    narrow.ActualHeight >= TaskbarWidgetWindow.DefaultHeight + TaskbarWidgetWindow.StackedBrandHeight - 1);
                 narrow.SetLayout(148, 32);
                 await StableAsync(narrow);
                 var tile = Tile(narrow);
@@ -697,7 +707,11 @@ internal sealed class VisualVerification
                 }
                 Check(layout + " leaves a small gap between the left logo and every quota row", logoPrecedesRows);
                 Check(layout + " aligns the actual one-letter titles and leaves space before each graph",
-                    singleLetterStarts.Count == 5 && EqualCoordinates(singleLetterStarts) && balancedSpacing);
+                    singleLetterStarts.Count == 6 && EqualCoordinates(singleLetterStarts) && balancedSpacing);
+                Check(layout + " labels monthly extra usage M and starts every countdown at one column",
+                    Descendants<TextBlock>(roots[1]).Any(t => t.Text == "M" && t.IsVisible) &&
+                    EqualCoordinates(resets.Select(r => r.Left)) &&
+                    EqualCoordinates(Enumerable.Range(0, labels.Count).Select(i => resets[i].Left - percentages[i].Right)));
                 Check(layout + " aligns label origins, meter tracks and percentage right edges across providers",
                     labels.Count == 6 && rightAligned && EqualCoordinates(labels.Select(r => r.Left)) &&
                     EqualCoordinates(meters.Select(r => r.Left)) && EqualCoordinates(meters.Select(r => r.Right)) &&

@@ -112,7 +112,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
         int length = 0;
         var fitted = new List<(TaskbarWidgetWindow View, Size Size)>();
         var now = DateTimeOffset.Now;
-        int minimumWidth = (int)Math.Ceiling(TaskbarWidgetWindow.MinimumReadableWidth * scale);
+        int minimumWidth = (int)Math.Ceiling(MinimumWidth(vertical) * scale);
         int widthBudget = vertical ? area.Width : WidgetLengthBudget(area.Width, windows.Length, gap, minimumWidth);
         int heightBudget = vertical ? WidgetLengthBudget(area.Height, windows.Length, gap,
             (int)Math.Ceiling(TaskbarWidgetWindow.MinimumHeight * scale)) : area.Height;
@@ -159,6 +159,10 @@ internal sealed class TaskbarWidgetHost : IDisposable
             cursor += (vertical ? size.Height : size.Width) + gap;
         }
     }
+
+    /// <summary>A vertical taskbar has height to spare, so its widgets may stack the logo above narrower rows.</summary>
+    internal static double MinimumWidth(bool vertical) =>
+        vertical ? TaskbarWidgetWindow.NarrowMinimumWidth : TaskbarWidgetWindow.MinimumReadableWidth;
 
     internal static int WidgetLengthBudget(int length, int count, int gap, int minimumLength)
     {
@@ -269,7 +273,8 @@ internal sealed class TaskbarWidgetHost : IDisposable
         var pane = rebar == IntPtr.Zero ? IntPtr.Zero : FindWindowEx(rebar, IntPtr.Zero, "MSTaskSwWClass", null);
         var list = pane == IntPtr.Zero ? IntPtr.Zero : FindWindowEx(pane, IntPtr.Zero, "MSTaskListWClass", null);
         Rectangle? classicGap = list == IntPtr.Zero ? null : ReadFreeArea(layout, list);
-        if (classicGap is { Height: > 0 } gap && gap.Width >= TaskbarWidgetWindow.MinimumReadableWidth * layout.Scale)
+        if (classicGap is { Height: > 0 } gap && gap.Width >= MinimumWidth(layout.Vertical) * layout.Scale &&
+            (!layout.Vertical || gap.Height >= TaskbarWidgetWindow.MinimumHeight * layout.Scale))
             return classicGap;
         // Some versions retain a classic compatibility HWND while the actual controls
         // live in the XAML tree. Inspect it for space before hiding the widgets.

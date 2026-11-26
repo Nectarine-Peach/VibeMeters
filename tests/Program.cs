@@ -62,6 +62,19 @@ sealed class RegressionSuite
             Equal(21, TaskbarWidgetHost.WidgetLengthBudget(94, 4, 2, 21));
             Equal(0, TaskbarWidgetHost.WidgetLengthBudget(24, 4, 2, 21));
         });
+        Test("Slim vertical taskbars accept narrower widgets while horizontal ones keep the readable width", () =>
+        {
+            Equal(96d, TaskbarWidgetHost.MinimumWidth(true));
+            Equal(132d, TaskbarWidgetHost.MinimumWidth(false));
+        });
+        Test("Widget graph titles mark monthly business and enterprise budgets M", () =>
+        {
+            Equal("M", VibeMeters.TaskbarWidgetWindow.GraphLabel(UsageProviderKind.Codex, "개인 한도"));
+            Equal("M", VibeMeters.TaskbarWidgetWindow.GraphLabel(UsageProviderKind.Claude, "월 추가 사용"));
+            Equal("H", VibeMeters.TaskbarWidgetWindow.GraphLabel(UsageProviderKind.Claude, "5시간"));
+            Equal("W", VibeMeters.TaskbarWidgetWindow.GraphLabel(UsageProviderKind.Codex, "주간"));
+            Equal("P", VibeMeters.TaskbarWidgetWindow.GraphLabel(UsageProviderKind.Gemini, "Gemini 3.1 Pro"));
+        });
         Test("Taskbar widgets use the largest contiguous gap around overlapping controls", () =>
         {
             var bar = new System.Drawing.Rectangle(-1000, 0, 1000, 48);

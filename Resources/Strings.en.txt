@@ -276,3 +276,41 @@ Gemini 로그인을 완료하지 못했습니다.|Gemini sign-in did not complet
 Gemini 계정|Gemini account
 
 위젯|Widget
+CLI 설치 및 업데이트|CLI installation and updates
+공식 CLI를 설치하거나 기존 설치를 업데이트합니다. 로그인은 계정 연결에서 진행하세요.|Install an official CLI or update an existing installation. Sign in under Account connections.
+Codex CLI 설치 또는 업데이트|Install or update Codex CLI
+Claude CLI 설치 또는 업데이트|Install or update Claude CLI
+Antigravity CLI 설치 또는 업데이트|Install or update Antigravity CLI
+설치 상태 확인 중|Checking installation
+설치 상태를 확인하지 못했습니다. 다시 확인해 주세요.|Could not check the installation. Please try again.
+설치되지 않음|Not installed
+설치됨 · 버전 확인 실패|Installed · Version check failed
+설치됨 · |Installed ·\s
+확인 중|Checking
+다시 확인|Check again
+업데이트|Update
+설치|Install
+CLI 작업을 준비합니다…|Preparing CLI maintenance…
+작업을 중지하고 있습니다…|Stopping…
+공식 CLI를 설치하고 있습니다.|Installing the official CLI.
+기존 CLI를 업데이트하고 있습니다.|Updating the existing CLI.
+이 CLI의 설치 또는 업데이트가 이미 진행 중입니다.|Installation or update is already running for this CLI.
+작업을 취소했습니다. 일부 설치 파일이 남을 수 있습니다.|Cancelled. Some installation files may remain.
+작업 대기 시간(10분)이 지났습니다. 네트워크와 설치 정책을 확인해 주세요.|The operation timed out after 10 minutes. Check your network and installation policy.
+CLI 작업을 실행하지 못했습니다. 설치 권한과 Windows 또는 회사 정책을 확인해 주세요.|Could not run CLI maintenance. Check installation permissions and Windows or company policy.
+작업이 종료됐지만 CLI 실행과 버전을 확인하지 못했습니다. 설치 정책과 PATH를 확인한 뒤 다시 시도해 주세요.|The operation ended, but CLI execution and its version could not be verified. Check installation policy and PATH, then try again.
+업데이트 후 실행 경로가 달라졌습니다. 중복 CLI 설치와 PATH를 확인해 주세요.|The executable path changed after updating. Check duplicate CLI installations and PATH.
+적용할 업데이트 없음 · |No applicable updates ·\s
+업데이트 명령 완료 · |Update command completed ·\s
+설치 완료 · |Installed ·\s
+CLI 작업이 실패했습니다. 네트워크와 기존 CLI 설치 방식을 확인한 뒤 다시 시도해 주세요.|CLI maintenance failed. Check your network and existing installation method, then try again.
+기존 CLI 설치 방식을 확인하지 못했습니다. 해당 CLI의 공식 업데이트 방법을 사용해 주세요.|The existing installation method could not be identified. Use the CLI's official update method.
+WinGet을 찾지 못했습니다. 앱 설치 관리자에서 WinGet을 복구해 주세요.|WinGet was not found. Repair WinGet through App Installer.
+npm을 찾지 못했습니다. 기존 Node.js 설치를 확인해 주세요.|npm was not found. Check your existing Node.js installation.
+기존 CLI 설치 형식을 자동으로 바꾸지 않았습니다. 해당 CLI의 공식 수동 업데이트 안내를 확인해 주세요.|The existing CLI installation format was not changed automatically. Follow the CLI's official manual update instructions.
+일반|General
+계정 · CLI|Accounts · CLI
+일반 설정|General settings
+계정과 CLI 설정|Account and CLI settings
+설정 분류|Settings categories
+표시 방식과 계정 연결을 설정하세요.|Manage display preferences and account connections.

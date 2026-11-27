@@ -7,9 +7,12 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
@@ -55,6 +58,11 @@ internal sealed class VisualVerification
         _report.Add("ISOLATION: --smoke-test uses its own mutex, in-memory settings, no provider instances and no credential watchers.");
         _report.Add("DATA: Synthetic Codex remaining 61%; Claude remaining 100% / 55%; Gemini remaining 83% / 94%; Grok Build remaining 68%. These are not account measurements.");
         _report.Add("CAPTURE: RenderTargetBitmap of the shown window's client root at its current monitor DPI; excludes native desktop/compositor and tray pixels.");
+        bool scrollOnly = Environment.GetCommandLineArgs().Contains("--settings-scroll-only");
+        bool layoutOnly = Environment.GetCommandLineArgs().Contains("--settings-layout-only");
+        bool settingsOnly = scrollOnly || layoutOnly || Environment.GetCommandLineArgs().Contains("--settings-only");
+        bool focused = settingsOnly || Environment.GetCommandLineArgs().Contains("--taskbar-cli-only");
+        if (focused) _report.Add("SCOPE: related settings/CLI controls and taskbar/native-placement verification only. The earlier full report preserves unrelated successful checks.");
         try
         {
             _settings.Language=AppLanguage.Korean;
@@ -72,6 +80,8 @@ internal sealed class VisualVerification
             Check("shown HWND and presentation source",_window.IsVisible&&_window.IsLoaded&&new WindowInteropHelper(_window).Handle!=IntPtr.Zero&&PresentationSource.FromVisual(_window)!=null);
             Check("manual refresh diagnostics isolation",_settings.RefreshIntervalSeconds==0);
 
+            if (!focused)
+            {
             await CaptureScenario("standard dark",360,267,"window-standard-dark.png");
             Check("controlled demonstration percentages",Rows(Cards()[0]).Select(ValueText).SequenceEqual(new[]{"61%"})&&Rows(Cards()[1]).Select(ValueText).SequenceEqual(new[]{"100%","55%"}));
             await CaptureScenario("mini dark",274,174,"window-mini-dark.png");
@@ -81,7 +91,10 @@ internal sealed class VisualVerification
 
             await CheckWindowActionsAsync();
             await CheckRefreshStatusAsync();
+            }
             await ResizeAsync(360,267);
+            var cli = new StubCliMaintenance();
+            _window.CliMaintenance = cli;
             var beforeSettingsSize=new Size(_window.ActualWidth,_window.ActualHeight);
             Click((Button)_window.FindName("SettingsButton"));
             await StableAsync(_window);
@@ -91,23 +104,16 @@ internal sealed class VisualVerification
             if(settings!=null)
             {
                 await StableAsync(settings);
-                Check("settings contains no scroll viewers", !Descendants<ScrollViewer>(settings).Any());
-                var previousHeight = settings.Height;
-                settings.Height = settings.MinHeight;
-                await StableAsync(settings);
-                var footer = Descendants<TextBlock>(settings).Single(text => text.Text.StartsWith("자동 저장"));
-                var status = (TextBlock)settings.FindName("LoginStatusText");
-                var lastLogin = (Button)settings.FindName("GrokLoginButton");
-                var frame = Root(settings);
-                Check("last login button and status fit above the footer at minimum settings height",
-                    lastLogin.ActualHeight > 0 && status.ActualHeight > 0 &&
-                    Bounds(lastLogin, frame).Bottom <= Bounds(status, frame).Top + 1 &&
-                    Bounds(status, frame).Bottom <= Bounds(footer, frame).Top + 1);
-                settings.Height = previousHeight;
-                await StableAsync(settings);
+                if (layoutOnly)
+                {
+                    await PrimeCompletedCliStatesAsync(settings);
+                    await CheckSettingsTabsLayoutAsync(settings);
+                }
+                else if (!scrollOnly)
+                {
+                await CheckSettingsTabsLayoutAsync(settings);
                 Check("settings has all service selection and mode controls",new[]{"CodexCheck","ClaudeCheck","GeminiCheck","GrokCheck","CodexModeCombo","ClaudeModeCombo","GeminiModeCombo","GrokModeCombo","ThemeCombo","IntervalCombo"}.All(name=>settings.FindName(name)!=null));
                 Capture(settings,"settings-dark.png");
-                Check("settings labels fit the client",TextFits(Root(settings),Root(settings)));
                 var language = (ComboBox)settings.FindName("LanguageCombo");
                 SelectTag(language, "English");
                 await StableAsync(settings);
@@ -115,10 +121,19 @@ internal sealed class VisualVerification
                 SelectTag(language, "Korean");
                 await StableAsync(settings);
                 await CheckSettingsInteractionsAsync(settings);
+                await CheckCliMaintenanceAsync(settings, cli);
+                }
+                await CheckSettingsConstraintsAsync(settings, cli);
                 settings.Close();
                 await StableAsync(_window);
-                await CheckTaskbarWidgetAsync();
+                if (!settingsOnly)
+                {
+                    await CheckTaskbarWidgetAsync();
+                    await CheckNativeOrderRecoveryAsync();
+                }
             }
+
+            if (focused) return _failures;
 
             SetTheme(AppTheme.Light);
             await CaptureScenario("standard light",360,267,"window-standard-light.png");
@@ -248,13 +263,131 @@ internal sealed class VisualVerification
         }
     }
 
+    private async Task CheckSettingsTabsLayoutAsync(SettingsWindow settings)
+    {
+        var tabs = (TabControl)settings.FindName("SettingsTabs");
+        var language = (ComboBox)settings.FindName("LanguageCombo");
+        var theme = (ComboBox)settings.FindName("ThemeCombo");
+        Check("settings uses two native tabs without removing named settings controls", tabs.Items.Count == 2 &&
+            tabs.Items.OfType<TabItem>().All(tab => !string.IsNullOrWhiteSpace(AutomationProperties.GetName(tab))));
+        foreach (var palette in new[] { "Dark", "Light" })
+        foreach (var locale in new[] { "Korean", "English" })
+        {
+            tabs.SelectedIndex = 0; await StableAsync(settings);
+            SelectTag(language, locale); SelectTag(theme, palette); await StableAsync(settings);
+            foreach (int index in new[] { 0, 1 })
+            {
+                tabs.SelectedIndex = index; await StableAsync(settings);
+                var scroll = (ScrollViewer)settings.FindName(index == 0 ? "SettingsScroll" : "AccountSettingsScroll");
+                Check($"{palette} {locale} settings tab {index} fits without scrolling at its default size",
+                    scroll.ScrollableHeight <= 0.5 && scroll.ComputedVerticalScrollBarVisibility == Visibility.Collapsed &&
+                    scroll.ScrollableWidth <= 0.5 && TextFits(Root(settings), Root(settings)));
+                Capture(settings, $"settings-{(index == 0 ? "general" : "accounts")}-{palette.ToLowerInvariant()}-{(locale == "Korean" ? "ko" : "en")}.png");
+            }
+            var background = (Brush)Application.Current.Resources["WindowBackground"];
+            Check($"{palette} settings tab labels and focus use contrast above their required limits",
+                ContrastRatio((Brush)Application.Current.Resources["PrimaryText"], background) >= 4.5 &&
+                ContrastRatio((Brush)Application.Current.Resources["SecondaryText"], background) >= 4.5 &&
+                ContrastRatio((Brush)Application.Current.Resources["MutedText"], background) >= 3);
+        }
+        var nativeHeader = (TabItem)tabs.Items[0];
+        var peer = new TabItemAutomationPeer(nativeHeader, new TabControlAutomationPeer(tabs));
+        var selection = (ISelectionItemProvider)peer.GetPattern(PatternInterface.SelectionItem);
+        selection.Select(); await StableAsync(settings);
+        Check("native tab selection exposes the accessibility selection pattern", peer.GetAutomationControlType() == AutomationControlType.TabItem && tabs.SelectedIndex == 0);
+        bool focused = nativeHeader.Focus();
+        if (focused)
+        {
+            nativeHeader.UpdateLayout();
+            var focusFrame = (Border)nativeHeader.Template.FindName("TabFrame", nativeHeader);
+            Check("focused tab displays an explicit high contrast outline", nativeHeader.IsKeyboardFocused &&
+                (focusFrame.BorderBrush as SolidColorBrush)?.Color == ((SolidColorBrush)Application.Current.Resources["PrimaryText"]).Color);
+        }
+        else _report.Add("KEYBOARD: native TabControl/TabItem navigation is retained; this desktop session did not grant actual header keyboard focus. Physical Ctrl+Tab and arrow input were not synthesized.");
+        tabs.SelectedIndex = 0;
+        SelectTag(language, "Korean"); SelectTag(theme, "Dark"); await StableAsync(settings);
+    }
+
+    private async Task CheckSettingsConstraintsAsync(SettingsWindow settings, StubCliMaintenance cli)
+    {
+        var tabs = (TabControl)settings.FindName("SettingsTabs");
+        double normalHeight = settings.Height;
+        settings.Height = settings.MinHeight;
+        foreach (int index in new[] { 0, 1 })
+        {
+            tabs.SelectedIndex = index; await StableAsync(settings);
+            var scroll = (ScrollViewer)settings.FindName(index == 0 ? "SettingsScroll" : "AccountSettingsScroll");
+            Check($"minimum settings tab {index} has vertical fallback without horizontal scrolling",
+                scroll.ScrollableHeight > 0 && scroll.ComputedVerticalScrollBarVisibility == Visibility.Visible && scroll.ScrollableWidth <= 0.5);
+            var bar = Descendants<ScrollBar>(scroll).Single(item => item.Orientation == Orientation.Vertical);
+            var track = (Track)bar.Template.FindName("PART_Track", bar);
+            var grip = (Border)track.Thumb.Template.FindName("Grip", track.Thumb);
+            _report.Add($"SCROLLBAR VALUES: tab={index}, localWidth={bar.ReadLocalValue(FrameworkElement.WidthProperty)}, width={bar.ActualWidth}, minWidth={bar.MinWidth}, maxWidth={bar.MaxWidth}, desired={bar.DesiredSize.Width}, thumb={track.Thumb.ActualWidth}, grip={grip.ActualWidth}, peer={new ScrollBarAutomationPeer(bar).GetAutomationControlType()}, pageUp={track.DecreaseRepeatButton.Command}, pageDown={track.IncreaseRepeatButton.Command}");
+            Check($"minimum settings tab {index} keeps a native 14px scrollbar hit area around its 6px thumb",
+                Close(bar.ActualWidth, 14) && Close(track.Thumb.ActualWidth, 14) && Close(grip.ActualWidth, 6) &&
+                new ScrollBarAutomationPeer(bar).GetAutomationControlType() == AutomationControlType.ScrollBar &&
+                track.DecreaseRepeatButton.Command == ScrollBar.PageUpCommand && track.IncreaseRepeatButton.Command == ScrollBar.PageDownCommand);
+            scroll.ScrollToTop(); await StableAsync(settings);
+            ScrollBar.PageDownCommand.Execute(null, bar); await StableAsync(settings);
+            Check($"minimum settings tab {index} responds to native page-down scrolling", scroll.VerticalOffset > 0);
+            scroll.ScrollToTop(); await StableAsync(settings);
+            track.Thumb.RaiseEvent(new DragStartedEventArgs(0, 0));
+            track.Thumb.RaiseEvent(new DragDeltaEventArgs(0, 20));
+            track.Thumb.RaiseEvent(new DragCompletedEventArgs(0, 20, false));
+            await StableAsync(settings);
+            Check($"minimum settings tab {index} responds to native thumb drag events", scroll.VerticalOffset > 0);
+            scroll.ScrollToBottom(); await StableAsync(settings);
+            var last = (FrameworkElement)settings.FindName(index == 0 ? "NotifyCheck" : "AntigravityCliStatus");
+            var footer = Descendants<TextBlock>(settings).Single(text => text.Text.StartsWith("자동 저장"));
+            Check($"minimum settings tab {index} can reveal its last setting above the footer",
+                Bounds(last, Root(settings)).Bottom <= Bounds(footer, Root(settings)).Top + 1 && last.ActualHeight > 0);
+            Capture(settings, $"settings-minimum-{(index == 0 ? "general" : "accounts")}-dark-ko.png");
+        }
+        settings.Height = normalHeight; tabs.SelectedIndex = 1; await StableAsync(settings);
+        cli.FailureMessage = string.Join(" ", Enumerable.Repeat("CLI 작업이 실패했습니다. 네트워크와 기존 CLI 설치 방식을 확인한 뒤 다시 시도해 주세요.", 8));
+        cli.FailNext = true;
+        Click((Button)settings.FindName("ClaudeCliButton")); await StableAsync(settings);
+        var accountScroll = (ScrollViewer)settings.FindName("AccountSettingsScroll");
+        Check("a long CLI error remains readable through overflow fallback without shrinking controls", accountScroll.ScrollableHeight > 0 &&
+            ((Button)settings.FindName("ClaudeCliButton")).FontSize == 12 && accountScroll.ScrollableWidth <= 0.5);
+        accountScroll.ScrollToBottom(); await StableAsync(settings);
+        Capture(settings, "settings-long-error-dark-ko.png");
+        cli.FailureMessage = null;
+        Click((Button)settings.FindName("ClaudeCliButton")); await StableAsync(settings);
+        Check("successful retry restores a scroll-free account page", accountScroll.ScrollableHeight <= 0.5);
+        _report.Add("SETTINGS: default General/Accounts pages are checked in both locales and themes; only constrained height or long errors use the themed native fallback. Native TabControl retains built-in Ctrl+Tab/arrow behavior.");
+    }
+
+    private static double ContrastRatio(Brush foreground, Brush background)
+    {
+        static double Linear(byte value) { double s = value / 255d; return s <= 0.03928 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4); }
+        static double Luminance(Color color) => 0.2126 * Linear(color.R) + 0.7152 * Linear(color.G) + 0.0722 * Linear(color.B);
+        double first = Luminance(((SolidColorBrush)foreground).Color), second = Luminance(((SolidColorBrush)background).Color);
+        return (Math.Max(first, second) + 0.05) / (Math.Min(first, second) + 0.05);
+    }
+
+    private async Task PrimeCompletedCliStatesAsync(SettingsWindow settings)
+    {
+        ((TabControl)settings.FindName("SettingsTabs")).SelectedIndex = 1; await StableAsync(settings);
+        foreach (var name in new[] { "CodexCliButton", "ClaudeCliButton", "AntigravityCliButton" })
+        {
+            Click((Button)settings.FindName(name)); await StableAsync(settings);
+        }
+        Check("all three normal CLI completion rows retain their result and installed version",
+            new[] { "CodexCliStatus", "ClaudeCliStatus", "AntigravityCliStatus" }.All(name =>
+                ((TextBlock)settings.FindName(name)).Text.Contains('\n') && ((TextBlock)settings.FindName(name)).Text.Contains("2.1.323")));
+    }
+
     private async Task CheckSettingsInteractionsAsync(SettingsWindow settings)
     {
+        var tabs = (TabControl)settings.FindName("SettingsTabs");
+        tabs.SelectedIndex = 1; await StableAsync(settings);
         var account = (ComboBox)settings.FindName("GeminiProfileCombo");
         SelectTag(account, "CodeAssist2");
         Check("Gemini profile selection persists across settings windows", _settings.GeminiProfile == GeminiProfile.CodeAssist2 &&
             JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(_settings))?.GeminiProfile == GeminiProfile.CodeAssist2);
         SelectTag(account, "Default");
+        tabs.SelectedIndex = 0; await StableAsync(settings);
         var theme=(ComboBox)settings.FindName("ThemeCombo");
         SelectTag(theme,"Light");await StableAsync(_window);
         Check("settings light selection updates application",_settings.Theme==AppTheme.Light&&!ThemeService.IsDark);
@@ -280,6 +413,135 @@ internal sealed class VisualVerification
                 JsonSerializer.Serialize(_settings))!.IsWidgetSelected(UsageProviderKind.Grok));
     }
 
+    private async Task CheckCliMaintenanceAsync(SettingsWindow settings, StubCliMaintenance cli)
+    {
+        var tabs = (TabControl)settings.FindName("SettingsTabs");
+        tabs.SelectedIndex = 1; await StableAsync(settings);
+        var scroll = (ScrollViewer)settings.FindName("AccountSettingsScroll");
+        scroll.ScrollToBottom(); await StableAsync(settings);
+        var codex = (Button)settings.FindName("CodexCliButton");
+        var claude = (Button)settings.FindName("ClaudeCliButton");
+        var agy = (Button)settings.FindName("AntigravityCliButton");
+        var codexStatus = (TextBlock)settings.FindName("CodexCliStatus");
+        var claudeStatus = (TextBlock)settings.FindName("ClaudeCliStatus");
+        int logins = 0; settings.LoginRequested += _ => logins++;
+        Check("CLI management distinguishes missing Codex from installed Claude and Antigravity",
+            codex.Content as string == "설치" && claude.Content as string == "업데이트" && agy.Content as string == "업데이트");
+        Check("CLI buttons retain native keyboard focus and accessible names", new[] { codex, claude, agy }.All(button =>
+            button.Focusable && button.FocusVisualStyle != null && !string.IsNullOrWhiteSpace(AutomationProperties.GetName(button))));
+        Click(codex); await StableAsync(settings);
+        Check("one Codex install click completes and changes its next action to update",
+            cli.Calls.SequenceEqual([(UsageProviderKind.Codex, false)]) && codex.Content as string == "업데이트" && codexStatus.Text.Contains("설치 완료"));
+        Click(agy); await StableAsync(settings);
+        Check("one Antigravity update click uses the update operation", cli.Calls.Last() == (UsageProviderKind.Gemini, true));
+        cli.FailNext = true;
+        Click(claude); await StableAsync(settings);
+        Check("failed CLI maintenance remains visible and can be retried", claude.IsEnabled && claudeStatus.Text.Contains("실패"));
+        Click(claude); await StableAsync(settings);
+        Check("retrying CLI maintenance updates the installed version", claudeStatus.Text.Contains("업데이트 명령 완료"));
+        cli.Hold = true;
+        int before = cli.Calls.Count;
+        Click(claude); await StableAsync(settings);
+        Check("running CLI maintenance exposes a cancel action and progress", claude.Content as string == "취소" && claudeStatus.Text.Contains("업데이트"));
+        tabs.SelectedIndex = 0; await StableAsync(settings);
+        tabs.SelectedIndex = 1; await StableAsync(settings);
+        Check("switching settings tabs retains the same running CLI operation and cancel action",
+            cli.Calls.Count == before + 1 && claude.Content as string == "취소" && claudeStatus.Text.Contains("업데이트"));
+        Click(claude);
+        await Task.Delay(100); await StableAsync(settings);
+        Check("a second click cancels the existing operation instead of starting a duplicate",
+            cli.Calls.Count == before + 1 && claude.IsEnabled && claude.Content as string == "업데이트" && claudeStatus.Text.Contains("취소"));
+        cli.Hold = false;
+        Check("install and update never trigger account sign-in", logins == 0);
+        scroll.ScrollToBottom(); await StableAsync(settings);
+        Capture(settings, "settings-cli-dark-ko.png");
+        var language = (ComboBox)settings.FindName("LanguageCombo");
+        tabs.SelectedIndex = 0; await StableAsync(settings);
+        SelectTag(language, "English"); await StableAsync(settings);
+        tabs.SelectedIndex = 1; await StableAsync(settings);
+        scroll.ScrollToBottom(); await StableAsync(settings);
+        Check("CLI controls and status localize to English", codex.Content as string == "Update" && codexStatus.Text.Contains("Installed"));
+        Capture(settings, "settings-cli-dark-en.png");
+        tabs.SelectedIndex = 0; await StableAsync(settings);
+        SelectTag(language, "Korean");
+        var previousTheme = _settings.Theme;
+        SelectTag((ComboBox)settings.FindName("ThemeCombo"), "Light"); await StableAsync(settings);
+        tabs.SelectedIndex = 1; await StableAsync(settings); scroll.ScrollToBottom();
+        Capture(settings, "settings-cli-light-ko.png");
+        var content = (FrameworkElement)scroll.Content;
+        Check("CLI content fits its scroll container in light mode", TextFits(content, content) && scroll.ExtentWidth <= scroll.ViewportWidth + 1);
+        tabs.SelectedIndex = 0; await StableAsync(settings);
+        SelectTag((ComboBox)settings.FindName("ThemeCombo"), previousTheme.ToString()); await StableAsync(settings);
+        tabs.SelectedIndex = 1; await StableAsync(settings);
+
+        var closingCli = new StubCliMaintenance { Hold = true };
+        var closing = new SettingsWindow(new AppSettings(), closingCli) { Owner = settings };
+        closing.Show(); await StableAsync(closing);
+        ((TabControl)closing.FindName("SettingsTabs")).SelectedIndex = 1; await StableAsync(closing);
+        Click((Button)closing.FindName("AntigravityCliButton"));
+        closing.Close(); await Task.Delay(100);
+        Check("closing settings cancels its CLI work without opening sign-in", closingCli.Cancelled == 1);
+        _report.Add("CLI: all install/update/cancel/failure clicks used an in-memory maintenance stub. No CLI installer, updater, login, account request or settings-file write was executed.");
+    }
+
+    private sealed class StubCliMaintenance : ICliMaintenance
+    {
+        private readonly Dictionary<UsageProviderKind, CliInstallation> _installed = new()
+        {
+            [UsageProviderKind.Codex] = new(null, null),
+            [UsageProviderKind.Claude] = new(@"C:\synthetic\claude.exe", "2.1.323"),
+            [UsageProviderKind.Gemini] = new(@"C:\synthetic\agy.exe", "1.4.7")
+        };
+        internal readonly List<(UsageProviderKind Kind, bool Update)> Calls = new();
+        internal bool FailNext, Hold;
+        internal string? FailureMessage;
+        internal int Cancelled;
+        public Task<CliInstallation> InspectAsync(UsageProviderKind kind, CancellationToken token) => Task.FromResult(_installed[kind]);
+        public async Task<CliInstallResult> InstallAsync(UsageProviderKind kind, bool update, CancellationToken token, IProgress<string> progress)
+        {
+            Calls.Add((kind, update));
+            progress.Report(update ? "기존 CLI를 업데이트하고 있습니다." : "공식 CLI를 설치하고 있습니다.");
+            if (Hold)
+            {
+                try { await Task.Delay(Timeout.Infinite, token); }
+                catch (OperationCanceledException) { Cancelled++; throw; }
+            }
+            if (FailNext) { FailNext = false; return new(false, FailureMessage ?? "CLI 작업이 실패했습니다. 네트워크와 기존 CLI 설치 방식을 확인한 뒤 다시 시도해 주세요."); }
+            _installed[kind] = new(@"C:\synthetic\" + OfficialCliInstaller.Command(kind) + ".exe", "2.1.323");
+            return new(true, (update ? "업데이트 명령 완료 · " : "설치 완료 · ") + "2.1.323");
+        }
+    }
+
+    private async Task CheckNativeOrderRecoveryAsync()
+    {
+        var owner = new Window { Width = 180, Height = 80, ShowInTaskbar = false, ShowActivated = false, Topmost = true };
+        var widget = new TaskbarWidgetWindow(() => { }) { ShowInTaskbar = false, ShowActivated = false, Topmost = true };
+        var ownerHandle = new WindowInteropHelper(owner).EnsureHandle();
+        var handle = new WindowInteropHelper(widget).EnsureHandle();
+        try
+        {
+            widget.Update([Demo(UsageProviderKind.Claude)], _settings);
+            var target = new System.Drawing.Rectangle(20, 20, 160, 46);
+            TaskbarWidgetHost.Move(widget, target, ownerHandle);
+            await StableAsync(widget);
+            Check("synthetic placement starts with the same initialized native handle as production", handle != IntPtr.Zero && IsWindow(handle));
+            var foreground = GetForegroundWindow();
+            SetWindowPos(handle, new IntPtr(-2) /* HWND_NOTOPMOST */, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0010);
+            Check("synthetic native demotion preserves WPF Topmost while dropping the native band", widget.Topmost && (GetWindowLongW(handle, -20) & 8) == 0);
+            TaskbarWidgetHost.Move(widget, target, ownerHandle);
+            bool hasBounds = GetWindowRect(handle, out var rect);
+            _report.Add($"Z-ORDER VALUES: hwnd={handle}, ex=0x{GetWindowLongW(handle, -20):x}, foreground={foreground}->{GetForegroundWindow()}, bounds={rect.Left},{rect.Top},{rect.Right},{rect.Bottom}, target={target}, GetWindowRect={hasBounds}");
+            Check("placement repairs native topmost without moving or activating an unchanged widget",
+                (GetWindowLongW(handle, -20) & 8) != 0 && GetForegroundWindow() == foreground &&
+                hasBounds && rect.Left == target.Left && rect.Top == target.Top &&
+                rect.Right == target.Right && rect.Bottom == target.Bottom);
+            _report.Add("Z-ORDER: demotion/recovery uses an independent synthetic owner; Explorer's native band is not changed. Placement uses SWP_NOACTIVATE. This is not a real foreground-switch reproduction.");
+        }
+        finally { widget.Close(); owner.Close(); }
+    }
+
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
@@ -395,7 +657,12 @@ internal sealed class VisualVerification
                 (SystemParameters.HighContrast || (QuotaRows(claudeChip).First().Foreground as SolidColorBrush)?.Color != darkText));
             _render(claude with { Status = UsageStatus.RateLimited });
             claudeChip = Tile(view);
-            Check("failed widget lookup clears stale measurements", QuotaRows(claudeChip).Length == 0 &&
+            Check("widget keeps the previous values the dashboard still shows during a wait and marks them",
+                QuotaRows(claudeChip).Any(t => t.Text.Contains("45%")) &&
+                AutomationProperties.GetHelpText(claudeChip).Contains("Previous values"));
+            _render(claude with { Status = UsageStatus.RateLimited, Windows = [] });
+            claudeChip = Tile(view);
+            Check("failed widget lookup clears measurements the provider dropped", QuotaRows(claudeChip).Length == 0 &&
                 Descendants<TextBlock>((DependencyObject)claudeChip.Content).Any(t => t.Text.Contains('—')));
             Click((Button)_window.FindName("HideButton"));
             Click(claudeChip);
@@ -539,8 +806,10 @@ internal sealed class VisualVerification
                 else
                 {
                     var status = Localizer.T("요청 제한 대기");
-                    Check(theme + " rate-limited tooltip explains the status without drawing stale quota rows",
-                        Contains(status) && Contains(snapshot.Message!) && details.Contains(status) && !Contains("59%") && !Contains(model));
+                    var previous = Localizer.T(" · 이전 확인값 표시").Trim(' ', '·');
+                    Check(theme + " rate-limited tooltip explains the status and marks the retained values as previous",
+                        Contains(status) && Contains(previous) && Contains(snapshot.Message!) && details.Contains(status) &&
+                        details.Contains(previous) && Contains("59%") && Contains(model));
                 }
             }
             finally { tip.IsOpen = false; }
@@ -607,7 +876,7 @@ internal sealed class VisualVerification
             Demo(UsageProviderKind.Codex) with { Windows = [new("5시간", 27, now.AddMinutes(271)), new("주간", 39, now.AddDays(3.5))] },
             Demo(UsageProviderKind.Claude) with { Windows = [new("월 추가 사용", 41, null)] },
             Demo(UsageProviderKind.Gemini) with { Windows = [new(longName, 17, now.AddHours(10)), new("Flash", 6, now.AddMinutes(30)), new("4 Argon 주간", 20, now.AddDays(2.5))] },
-            Demo(UsageProviderKind.Grok) with { Status = UsageStatus.Unavailable }
+            Demo(UsageProviderKind.Grok) with { Status = UsageStatus.Unavailable, Windows = [] }
         };
         var views = samples.Select(s => new TaskbarWidgetWindow(() => { }) { Tag = s.Provider }).ToArray();
         static bool EqualCoordinates(IEnumerable<double> coordinates)

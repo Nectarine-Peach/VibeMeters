@@ -1,6 +1,6 @@
 # VibeMeters 화면 안내
 
-다음 화면은 예시 계정의 사용량을 보여 줍니다. 사용량 창과 툴팁은 v1.4.13에서 캡처했습니다.
+다음 화면은 예시 계정과 합성 상태를 보여 줍니다. 사용량 창과 툴팁은 v1.4.13, 두 탭으로 나뉜 설정은 v1.4.15에서 캡처했습니다.
 
 ## 사용량 창
 
@@ -28,11 +28,21 @@
 
 ## 표시 설정
 
-설정에서 사용량 창에 표시할 서비스와 작업표시줄에 표시할 위젯을 각각 선택합니다. 아래 예시는 사용량 창에서 네 서비스를 모두 보고, 작업표시줄에는 Codex와 Claude만 표시하는 설정입니다.
+**설정 → 일반**에서 사용량 창에 표시할 서비스와 작업표시줄 위젯을 각각 선택하고, 언어·테마·새로고침·알림을 바꿉니다.
 
-<img src="current/settings-dark.png" alt="Codex와 Claude의 위젯이 켜진 한국어 설정 창" width="410">
+<img src="v1.4.15/settings-general-dark-ko.png" alt="서비스 표시, 위젯, 언어, 테마와 새로고침을 설정하는 일반 탭" width="410">
 
-다른 언어와 테마로 보기 · [한국어 라이트](current/settings-light.png) · [English dark](current/settings-en-dark.png) · [English light](current/settings-en-light.png)
+다른 언어와 테마로 보기 · [한국어 라이트](v1.4.15/settings-general-light-ko.png) · [English dark](v1.4.15/settings-general-dark-en.png) · [English light](v1.4.15/settings-general-light-en.png)
+
+## 계정 연결과 CLI 관리
+
+**설정 → 계정 · CLI**에서 계정을 연결하고 Codex CLI·Claude Code·Antigravity CLI를 설치하거나 업데이트합니다. 기본 크기에서는 두 탭 모두 스크롤 없이 표시하며, 창을 줄이거나 오류 안내가 길어지면 해당 탭 안에서만 스크롤합니다.
+
+<img src="v1.4.15/settings-accounts-dark-ko.png" alt="계정 로그인과 세 CLI의 설치·업데이트를 관리하는 계정·CLI 탭, 합성 완료 상태" width="410">
+
+다른 언어와 테마로 보기 · [한국어 라이트](v1.4.15/settings-accounts-light-ko.png) · [English dark](v1.4.15/settings-accounts-dark-en.png) · [English light](v1.4.15/settings-accounts-light-en.png)
+
+설정 8개 이미지는 실제 WPF 컨트롤을 **410×640 DIP / 96 DPI**로 렌더링한 합성 예시입니다. CLI 버전과 설치·업데이트 완료 문구는 검증용 값이며 실제 설치 상태를 나타내지 않습니다. 실제 CLI 설치·로그인·사용자 설정 쓰기는 실행하지 않았습니다. [캡처 정보와 SHA256](v1.4.15/capture.json) · [검증 범위](../../VERIFICATION.md)
 
 ## 이전 버전 캡처 기록
 

@@ -72,10 +72,7 @@ public partial class TaskbarWidgetWindow : Window
         string basis = Localizer.T(_mode == UsageDisplayMode.Used ? "사용" : "남음");
         Title = $"{snapshot.Provider} · {basis} · VibeMeters";
 
-        var windows = snapshot.Status == UsageStatus.Ready
-            ? snapshot.Windows.Where(w => double.IsFinite(w.UsedPercent)).ToArray()
-            : [];
-        var visible = windows;
+        var visible = MeasuredWindows(snapshot);
         // Size the tile from the host's available space. Every provider shares the same
         // frame and columns, even when a lookup fails or the number of windows changes.
         // The host only offers less than the readable width on a slim vertical taskbar,
@@ -219,8 +216,7 @@ public partial class TaskbarWidgetWindow : Window
         title.FontWeight = FontWeights.SemiBold;
         panel.Children.Add(title);
         var lines = new List<string> { $"{heading} · {basis}" };
-        var windows = snapshot.Status == UsageStatus.Ready
-            ? snapshot.Windows.Where(w => double.IsFinite(w.UsedPercent)).ToArray() : [];
+        var windows = MeasuredWindows(snapshot);
         if (windows.Length > 0)
         {
             var table = new Grid { Margin = new Thickness(0, 8, 0, 0) };
@@ -274,17 +270,29 @@ public partial class TaskbarWidgetWindow : Window
             panel.Children.Add(note);
             lines.Add(text);
         }
-        if (windows.Length == 0)
-            AddNote(Localizer.T(snapshot.Status switch {
+        if (windows.Length == 0 || snapshot.Status != UsageStatus.Ready)
+        {
+            var status = Localizer.T(snapshot.Status switch {
                 UsageStatus.Ready => "연결됨 · 비율 미제공", UsageStatus.AuthenticationRequired => "로그인 필요",
                 UsageStatus.NotConnected => "연결 필요", UsageStatus.AuthenticationRetry => "인증 재시도 대기",
                 UsageStatus.AuthenticationRecovering => "인증 갱신 확인 중", UsageStatus.RateLimited => "요청 제한 대기",
-                _ => "확인 불가" }), "PrimaryText");
+                _ => "확인 불가" });
+            // Match the dashboard: values the provider still retains are shown and marked as previous.
+            if (windows.Length > 0) status += Localizer.T(" · 이전 확인값 표시");
+            AddNote(status, "PrimaryText");
+        }
         if (!string.IsNullOrWhiteSpace(snapshot.Message)) AddNote(Localizer.T(snapshot.Message), "SecondaryText");
         AddNote(UsageRefreshText.Summary(snapshot), "SecondaryText");
         _quotaTip.Content = panel;
         AutomationProperties.SetHelpText(ProviderButton, string.Join("\n", lines));
     }
+
+    /// <summary>
+    /// The dashboard shows whatever measurements a snapshot still carries, including previous values during
+    /// a rate-limit wait or retry. Providers already drop values that are stale, expired or from another login.
+    /// </summary>
+    internal static UsageWindow[] MeasuredWindows(UsageSnapshot snapshot) =>
+        snapshot.Windows.Where(w => double.IsFinite(w.UsedPercent)).ToArray();
 
     private static TextBlock TipText(string text, string color, double size)
     {

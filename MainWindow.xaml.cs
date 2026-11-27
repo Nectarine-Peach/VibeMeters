@@ -21,6 +21,7 @@ public partial class MainWindow : Window
     private readonly List<(TextBlock Label, DateTimeOffset Reset)> _resetLabels = new();
     private readonly DispatcherTimer _resetTimer = new(DispatcherPriority.Background);
     private SettingsWindow? _settingsWindow;
+    internal ICliMaintenance CliMaintenance { get; set; } = new CliMaintenance();
     private string _statusSource = "";
     public bool IsCompactLayout { get; private set; }
     public string CurrentLayout => IsCompactLayout ? "micro" : ActualWidth >= 520 ? "wide" : "normal";
@@ -448,7 +449,7 @@ public partial class MainWindow : Window
     private void Settings_Click(object sender,RoutedEventArgs e)
     {
         if(_settingsWindow!=null) { _settingsWindow.Activate(); return; }
-        _settingsWindow=new SettingsWindow(Settings) { Owner=this };
+        _settingsWindow=new SettingsWindow(Settings, CliMaintenance) { Owner=this };
         _settingsWindow.SettingsChanged+=()=> { Topmost=Settings.AlwaysOnTop; RenderLayout(); SettingsChanged?.Invoke(); };
         _settingsWindow.LoginRequested+=kind=>LoginRequested?.Invoke(kind);
         _settingsWindow.Closed+=(_,_)=>_settingsWindow=null;

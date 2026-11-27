@@ -186,9 +186,47 @@ public sealed class ClaudeCredentialRefresher : IClaudeCredentialRefresher
             start.Environment.Remove(key);
     }
 
+    /// <summary>
+    /// An npm shim starts Node through PowerShell, which security software can slow to well over ten
+    /// seconds. A three-second probe then failed every recovery before the CLI could renew the token.
+    /// </summary>
+    internal static readonly TimeSpan VersionProbeTimeout = TimeSpan.FromSeconds(30);
+    private static readonly Dictionary<string, (DateTime Stamp, ClaudeCliResult Result)> VerifiedVersions = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Reuses a successful version probe until the executable file changes (for example, an update).</summary>
+    internal static bool TryGetVerifiedVersion(string executable, DateTime stamp, out ClaudeCliResult result)
+    {
+        lock (VerifiedVersions)
+        {
+            if (VerifiedVersions.TryGetValue(executable, out var cached) && cached.Stamp == stamp) { result = cached.Result; return true; }
+        }
+        result = null!;
+        return false;
+    }
+
+    internal static void RememberVerifiedVersion(string executable, DateTime stamp, ClaudeCliResult result)
+    {
+        if (result.ExitCode != 0 || !IsSupportedVersion(result.Output)) return;
+        lock (VerifiedVersions) VerifiedVersions[executable] = (stamp, result);
+    }
+
     private sealed class OfficialClaudeCommandRunner(string directory, string executable) : IClaudeCommandRunner
     {
         public async Task<ClaudeCliResult?> RunAsync(string[] arguments)
+        {
+            var versionProbe = arguments is ["--version"];
+            DateTime stamp = default;
+            if (versionProbe)
+            {
+                try { stamp = File.GetLastWriteTimeUtc(executable); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+                if (stamp != default && TryGetVerifiedVersion(executable, stamp, out var verified)) return verified;
+            }
+            var result = await RunProcessAsync(arguments).ConfigureAwait(false);
+            if (versionProbe && stamp != default && result is not null) RememberVerifiedVersion(executable, stamp, result);
+            return result;
+        }
+
+        private async Task<ClaudeCliResult?> RunProcessAsync(string[] arguments)
         {
             var start = OfficialCliProcess.CreateStartInfoForExecutable(executable, arguments);
             ConfigureEnvironment(start, directory);
@@ -201,7 +239,7 @@ public sealed class ClaudeCredentialRefresher : IClaudeCredentialRefresher
 
             // The caller gives up much sooner; allow time for rotation and an atomic file
             // save, while ensuring a hung process cannot occupy the shared slot forever.
-            using var probeTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(arguments is ["--version"] ? 3 : 90));
+            using var probeTimeout = new CancellationTokenSource(arguments is ["--version"] ? VersionProbeTimeout : TimeSpan.FromSeconds(90));
             var cancellationToken = probeTimeout.Token;
             var output = DrainAsync(process.StandardOutput, cancellationToken);
             var error = DrainAsync(process.StandardError, cancellationToken);

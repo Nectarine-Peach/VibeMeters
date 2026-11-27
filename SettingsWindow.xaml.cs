@@ -1,5 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -13,10 +17,17 @@ public partial class SettingsWindow : Window
 {
     private readonly AppSettings _settings;
     private bool _initialized;
+    private readonly ICliMaintenance _cli;
+    private readonly CancellationTokenSource _cliLifetime = new();
+    private readonly Dictionary<UsageProviderKind, CliInstallation> _cliInstallations = new();
+    private readonly Dictionary<UsageProviderKind, CancellationTokenSource> _cliWork = new();
+    private bool _cliLoaded, _closed;
     public event Action? SettingsChanged;
     public event Action<UsageProviderKind>? LoginRequested;
-    public SettingsWindow(AppSettings settings)
+    public SettingsWindow(AppSettings settings) : this(settings, new CliMaintenance()) { }
+    internal SettingsWindow(AppSettings settings, ICliMaintenance cli)
     {
+        _cli = cli;
         _settings=settings;
         InitializeComponent();
         Localizer.Track(this);
@@ -44,6 +55,81 @@ public partial class SettingsWindow : Window
         SetDisplayMode(GrokModeCombo,settings.GetDisplayMode(UsageProviderKind.Grok));
         _initialized=true;
         PreviewKeyDown+=(_,e)=> { if(e.Key==Key.Escape) { Close(); e.Handled=true; } };
+        Loaded += async (_, _) =>
+        {
+            if (_cliLoaded) return;
+            _cliLoaded = true;
+            await Task.WhenAll(new[] { UsageProviderKind.Codex, UsageProviderKind.Claude, UsageProviderKind.Gemini }
+                .Select(kind => RefreshCliAsync(kind)));
+        };
+        Closed += (_, _) => { _closed = true; _cliLifetime.Cancel(); _cliLifetime.Dispose(); };
+    }
+
+    private (Button Button, TextBlock Status) CliControls(UsageProviderKind kind) => kind switch
+    {
+        UsageProviderKind.Codex => (CodexCliButton, CodexCliStatus),
+        UsageProviderKind.Claude => (ClaudeCliButton, ClaudeCliStatus),
+        _ => (AntigravityCliButton, AntigravityCliStatus)
+    };
+
+    private async Task RefreshCliAsync(UsageProviderKind kind, string? result = null)
+    {
+        try
+        {
+            var installation = await _cli.InspectAsync(kind, _cliLifetime.Token);
+            if (_closed) return;
+            _cliInstallations[kind] = installation;
+            var (button, status) = CliControls(kind);
+            button.Content = installation.Executable is null ? "설치" : "업데이트";
+            button.IsEnabled = true;
+            status.Text = result is null ? installation.Description : result + "\n" + installation.Description;
+            status.ToolTip = installation.Executable ?? OfficialCliInstaller.Source(kind);
+            Localizer.Apply(this);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) when (ex is InvalidOperationException or System.IO.IOException or UnauthorizedAccessException)
+        {
+            if (_closed) return;
+            var (button, status) = CliControls(kind);
+            button.Content = "다시 확인"; button.IsEnabled = true;
+            status.Text = "설치 상태를 확인하지 못했습니다. 다시 확인해 주세요.";
+            Localizer.Apply(this);
+        }
+    }
+
+    private async void CliAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (_closed || sender is not Button button || !button.IsEnabled || !Enum.TryParse<UsageProviderKind>(button.Tag?.ToString(), out var kind)) return;
+        if (_cliWork.TryGetValue(kind, out var running))
+        {
+            running.Cancel(); button.IsEnabled = false;
+            CliControls(kind).Status.Text = "작업을 중지하고 있습니다…";
+            Localizer.Apply(this); return;
+        }
+        if (!_cliInstallations.TryGetValue(kind, out var installation)) { await RefreshCliAsync(kind); return; }
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(_cliLifetime.Token);
+        _cliWork.Add(kind, cancellation);
+        button.Content = "취소";
+        var status = CliControls(kind).Status;
+        status.Text = "CLI 작업을 준비합니다…";
+        Localizer.Apply(this);
+        string message;
+        try
+        {
+            var progress = new Progress<string>(text =>
+            {
+                if (_closed || cancellation.IsCancellationRequested ||
+                    !_cliWork.TryGetValue(kind, out var current) || !ReferenceEquals(current, cancellation)) return;
+                status.Text = text; Localizer.Apply(this);
+            });
+            var result = await _cli.InstallAsync(kind, installation.Executable is not null, cancellation.Token, progress);
+            message = result.Message;
+        }
+        catch (OperationCanceledException) { message = "작업을 취소했습니다. 일부 설치 파일이 남을 수 있습니다."; }
+        catch (Exception ex) when (ex is InvalidOperationException or System.IO.IOException or UnauthorizedAccessException)
+        { message = "CLI 작업을 실행하지 못했습니다. 설치 권한과 Windows 또는 회사 정책을 확인해 주세요."; }
+        finally { _cliWork.Remove(kind); }
+        if (!_closed) { button.IsEnabled = false; await RefreshCliAsync(kind, message); }
     }
     private void Preference_Click(object sender,RoutedEventArgs e)
     {

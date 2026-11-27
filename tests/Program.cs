@@ -38,6 +38,146 @@ sealed class RegressionSuite
 
     public async Task<int> RunAsync()
     {
+        Test("Centered Windows 11 controls leave widgets on the notification side even when Start's left gap is larger", () =>
+        {
+            var bar = new System.Drawing.Rectangle(-1920, 1152, 1600, 48);
+            Equal(new System.Drawing.Rectangle(-720, 1152, 400, 48), TaskbarWidgetHost.NotificationEndFreeArea(bar,
+                [new(-1320, 1152, 600, 48)], false, true));
+            var narrow = TaskbarWidgetHost.NotificationEndFreeArea(bar, [new(-1320, 1152, 900, 48)], false, true);
+            Equal(100, narrow.Width);
+            Equal(0, TaskbarWidgetHost.WidgetLengthBudget(narrow.Width, 3, 2, 132));
+        });
+        Test("Notification-side gaps respect vertical and near-end trays and clip out-of-bar controls", () =>
+        {
+            var vertical = new System.Drawing.Rectangle(1819, 0, 101, 1100);
+            Equal(new System.Drawing.Rectangle(1819, 900, 101, 200), TaskbarWidgetHost.NotificationEndFreeArea(vertical,
+                [new(1819, -30, 101, 930), new(0, 0, 20, 20)], true, true));
+            Equal(new System.Drawing.Rectangle(1819, 0, 101, 100), TaskbarWidgetHost.NotificationEndFreeArea(vertical,
+                [new(1819, 100, 101, 900)], true, false));
+            Equal(new System.Drawing.Rectangle(0, 0, 100, 48), TaskbarWidgetHost.NotificationEndFreeArea(new(0, 0, 1600, 48),
+                [new(100, 0, 500, 48)], false, false));
+        });
+        Test("A transient shell scan can reuse recent geometry for at most six seconds", () =>
+        {
+            True(TaskbarWidgetHost.ReuseRecentArea(7000, 1000));
+            True(!TaskbarWidgetHost.ReuseRecentArea(7001, 1000));
+            True(!TaskbarWidgetHost.ReuseRecentArea(1000, 0));
+            True(!TaskbarWidgetHost.ReuseRecentArea(999, 1000));
+        });
+        Test("CLI version parsing keeps only a version instead of raw diagnostics", () =>
+        {
+            Equal("0.99.1", OfficialCliInstaller.ParseVersion("codex-cli 0.99.1\n"));
+            Equal("2.1.323", OfficialCliInstaller.ParseVersion("2.1.323 (Claude Code)"));
+            Equal("1.4.7", OfficialCliInstaller.ParseVersion("Antigravity CLI v1.4.7"));
+            Equal<string?>(null, OfficialCliInstaller.ParseVersion("secret-token not installed"));
+            Equal<string?>(null, OfficialCliInstaller.ParseVersion("warning: runtime 1.2.3"));
+        });
+        foreach (var kind in new[] { UsageProviderKind.Codex, UsageProviderKind.Claude, UsageProviderKind.Gemini })
+        {
+            await TestAsync(kind + " button installer verifies execution/version without starting login", async () =>
+            {
+                string path = @"C:\fake-cli\" + OfficialCliInstaller.Command(kind) + ".exe";
+                int finds = 0, commands = 0;
+                var runtime = new CliInstallerRuntime(_ => ++finds == 1 ? null : path, (start, _) =>
+                {
+                    commands++;
+                    if (commands == 1)
+                    {
+                        True(start.ArgumentList.Contains("-EncodedCommand"));
+                        var script = Encoding.Unicode.GetString(Convert.FromBase64String(start.ArgumentList.Last()));
+                        True(script.Contains(OfficialCliInstaller.Source(kind)));
+                    }
+                    else
+                    {
+                        Equal(path, start.FileName); True(start.ArgumentList.SequenceEqual(["--version"]));
+                        Equal("true", start.Environment["AGY_CLI_DISABLE_AUTO_UPDATE"]);
+                        Equal("1", start.Environment["DISABLE_AUTOUPDATER"]);
+                    }
+                    return Task.FromResult(new CliCommandResult(0, commands == 1 ? "installed" : "1.4.7"));
+                });
+                var result = await OfficialCliInstaller.InstallAsync(kind, CancellationToken.None, new Progress<string>(), runtime: runtime);
+                True(result.Success); True(result.Message.Contains("1.4.7")); Equal(2, commands);
+            });
+        }
+        await TestAsync("Native Antigravity and Claude updates use the same executable and then verify it", async () =>
+        {
+            foreach (var kind in new[] { UsageProviderKind.Claude, UsageProviderKind.Gemini })
+            {
+                string path = @"C:\fake-cli\" + OfficialCliInstaller.Command(kind) + ".exe";
+                int commands = 0;
+                var runtime = new CliInstallerRuntime(_ => path, (start, _) =>
+                {
+                    Equal(path, start.FileName);
+                    Equal(++commands == 1 ? "update" : "--version", start.ArgumentList.Single());
+                    return Task.FromResult(new CliCommandResult(0, "2.1.323"));
+                });
+                True((await OfficialCliInstaller.InstallAsync(kind, CancellationToken.None, new Progress<string>(), true, runtime)).Success);
+                Equal(2, commands);
+            }
+        });
+        await TestAsync("Installer failure, unverified version and changed executable never report success", async () =>
+        {
+            foreach (int failure in new[] { 0, 1, 2 })
+            {
+                int commands = 0, finds = 0;
+                var runtime = new CliInstallerRuntime(_ => ++finds == 2 && failure == 2 ? @"C:\changed\claude.exe" : @"C:\fake\claude.exe",
+                    (_, _) => Task.FromResult(++commands == 1
+                        ? new CliCommandResult(failure == 0 ? 1 : 0, "secret-diagnostic-token")
+                        : new CliCommandResult(0, failure == 1 ? "not a version" : "2.1.323")));
+                var result = await OfficialCliInstaller.InstallAsync(UsageProviderKind.Claude, CancellationToken.None, new Progress<string>(), true, runtime);
+                True(!result.Success); True(!result.Message.Contains("secret-diagnostic-token"));
+            }
+        });
+        await TestAsync("Pre-cancelled install returns cancellation without launching a command", async () =>
+        {
+            using var cancellation = new CancellationTokenSource(); cancellation.Cancel();
+            var runtime = new CliInstallerRuntime(_ => null, (_, _) => throw new Exception("No child process allowed"));
+            var result = await OfficialCliInstaller.InstallAsync(UsageProviderKind.Claude, cancellation.Token, new Progress<string>(), runtime: runtime);
+            True(!result.Success && result.Message.Contains("취소"));
+        });
+        await TestAsync("Concurrent CLI updates share a gate and cancellation releases it", async () =>
+        {
+            using var cancellation = new CancellationTokenSource();
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var runtime = new CliInstallerRuntime(_ => @"C:\fake\agy.exe", async (_, token) =>
+            { entered.SetResult(); await Task.Delay(Timeout.Infinite, token); return new(0, "1.4.7"); });
+            var first = OfficialCliInstaller.InstallAsync(UsageProviderKind.Gemini, cancellation.Token, new Progress<string>(), true, runtime);
+            await entered.Task;
+            var second = await OfficialCliInstaller.InstallAsync(UsageProviderKind.Gemini, CancellationToken.None, new Progress<string>(), true, runtime);
+            True(!second.Success && second.Message.Contains("이미 진행"));
+            cancellation.Cancel(); True(!(await first).Success);
+            var succeeding = new CliInstallerRuntime(_ => @"C:\fake\agy.exe", (_, _) => Task.FromResult(new CliCommandResult(0, "1.4.7")));
+            True((await OfficialCliInstaller.InstallAsync(UsageProviderKind.Gemini, CancellationToken.None, new Progress<string>(), true, succeeding)).Success);
+        });
+        Test("WinGet managed installations use their package manager instead of self-update", () =>
+        {
+            var start = OfficialCliInstaller.CreateStartInfo(UsageProviderKind.Gemini,
+                @"C:\Users\test\AppData\Local\Microsoft\WinGet\Links\agy.exe", winget: @"C:\fake\winget.exe");
+            True(start.ArgumentList.Contains("Google.AntigravityCLI")); True(start.ArgumentList.Contains("upgrade"));
+            True(!start.ArgumentList.Contains("update"));
+        });
+        Test("npm updates preserve the actual global prefix and reject unknown shims", () =>
+        {
+            var prefix = Path.Combine(Path.GetTempPath(), "vibemeters-cli-plan-" + Guid.NewGuid().ToString("N"));
+            string manifest = Path.Combine(prefix, "node_modules", "@openai", "codex", "package.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(manifest)!);
+            try
+            {
+                File.WriteAllText(manifest, "{}");
+                var start = OfficialCliInstaller.CreateStartInfo(UsageProviderKind.Codex, Path.Combine(prefix, "codex.cmd"), npm: @"C:\fake\npm.exe");
+                True(start.ArgumentList.Contains(prefix)); True(start.ArgumentList.Contains("@openai/codex@latest"));
+                try { OfficialCliInstaller.CreateStartInfo(UsageProviderKind.Claude, Path.Combine(prefix, "claude.cmd")); throw new Exception("Unknown shim accepted"); }
+                catch (InvalidOperationException) { }
+            }
+            finally
+            {
+                File.Delete(manifest);
+                Directory.Delete(Path.GetDirectoryName(manifest)!);
+                Directory.Delete(Path.GetDirectoryName(Path.GetDirectoryName(manifest)!)!);
+                Directory.Delete(Path.Combine(prefix, "node_modules"));
+                Directory.Delete(prefix);
+            }
+        });
         Test("All four horizontal widgets fit inside fractional and exact pixel budgets", () =>
         {
             foreach (var (width, gap, minimum, expected) in new[] {
@@ -66,6 +206,26 @@ sealed class RegressionSuite
         {
             Equal(96d, TaskbarWidgetHost.MinimumWidth(true));
             Equal(132d, TaskbarWidgetHost.MinimumWidth(false));
+        });
+        Test("Claude version probe tolerates slow npm shims and is reused until the CLI file changes", () =>
+        {
+            Equal(true, ClaudeCredentialRefresher.VersionProbeTimeout >= TimeSpan.FromSeconds(20));
+            var path = @"C:\probe-test\claude-" + Guid.NewGuid().ToString("N") + ".cmd";
+            var stamp = new DateTime(2026, 11, 27, 0, 0, 0, DateTimeKind.Utc);
+            ClaudeCredentialRefresher.RememberVerifiedVersion(path, stamp, new(1, "2.1.323 (Claude Code)"));
+            Equal(false, ClaudeCredentialRefresher.TryGetVerifiedVersion(path, stamp, out _));
+            ClaudeCredentialRefresher.RememberVerifiedVersion(path, stamp, new(0, "2.1.300 (Claude Code)"));
+            Equal(false, ClaudeCredentialRefresher.TryGetVerifiedVersion(path, stamp, out _));
+            ClaudeCredentialRefresher.RememberVerifiedVersion(path, stamp, new(0, "2.1.323 (Claude Code)"));
+            Equal(true, ClaudeCredentialRefresher.TryGetVerifiedVersion(path, stamp, out var cached) && cached.Output.StartsWith("2.1.323"));
+            Equal(false, ClaudeCredentialRefresher.TryGetVerifiedVersion(path, stamp.AddSeconds(1), out _));
+        });
+        Test("Widget shows the previous values the dashboard still shows while a lookup waits", () =>
+        {
+            var previous = new UsageSnapshot(UsageProviderKind.Claude, UsageStatus.RateLimited,
+                [new UsageWindow("5시간", 60, null), new UsageWindow("주간", double.NaN, null)], DateTimeOffset.Now);
+            Equal(1, VibeMeters.TaskbarWidgetWindow.MeasuredWindows(previous).Length);
+            Equal(0, VibeMeters.TaskbarWidgetWindow.MeasuredWindows(previous with { Windows = [] }).Length);
         });
         Test("Widget graph titles mark monthly business and enterprise budgets M", () =>
         {

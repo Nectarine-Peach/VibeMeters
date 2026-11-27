@@ -1,0 +1,65 @@
+{
+  "Version": "1.4.15",
+  "Date": "2026-11-27",
+  "Method": "Shown WPF client RenderTargetBitmap; --smoke-test --settings-layout-only",
+  "Data": "Synthetic settings and CLI completion states; no real installation, update, login or user settings write",
+  "Verification": "43 passed; 0 failed",
+  "Images": [
+    {
+      "File": "settings-general-dark-ko.png",
+      "Width": 410,
+      "Height": 640,
+      "Dpi": 96,
+      "Sha256": "a28997bf1bdefa51c380c9584820afe0ed0f6317068c61e35b8b627cecce04f3"
+    },
+    {
+      "File": "settings-general-dark-en.png",
+      "Width": 410,
+      "Height": 640,
+      "Dpi": 96,
+      "Sha256": "469e5c88e3b4e91f49f22df21320750f3deead77de5490965b64245b8159656d"
+    },
+    {
+      "File": "settings-general-light-ko.png",
+      "Width": 410,
+      "Height": 640,
+      "Dpi": 96,
+      "Sha256": "afb32b4da09e3fce4ab690e3a8d5c24d9e00a37c98c2972cd711548a0c7596ad"
+    },
+    {
+      "File": "settings-general-light-en.png",
+      "Width": 410,
+      "Height": 640,
+      "Dpi": 96,
+      "Sha256": "95c519d94f6891800f24d8a6df297b3dcb280dd56217781a8669180efb8d9899"
+    },
+    {
+      "File": "settings-accounts-dark-ko.png",
+      "Width": 410,
+      "Height": 640,
+      "Dpi": 96,
+      "Sha256": "ad07a01c4d48515a41c9251afa3ca0a7a6f5100cd469e3ea610730d301ab93c8"
+    },
+    {
+      "File": "settings-accounts-dark-en.png",
+      "Width": 410,
+      "Height": 640,
+      "Dpi": 96,
+      "Sha256": "900e1c0ba797a1182af904ab84f535af97cb97fb4bc29e24f0d3b83063edfbe0"
+    },
+    {
+      "File": "settings-accounts-light-ko.png",
+      "Width": 410,
+      "Height": 640,
+      "Dpi": 96,
+      "Sha256": "6e2e0322d18f89bb493c11fed64957cf806f597003f430f8b09da49cf90751d9"
+    },
+    {
+      "File": "settings-accounts-light-en.png",
+      "Width": 410,
+      "Height": 640,
+      "Dpi": 96,
+      "Sha256": "4528041d67e3a3ee05d446b429808dd539fda5f95bb14349b9fcb3bbcb73bc03"
+    }
+  ]
+}

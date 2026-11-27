@@ -19,7 +19,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     private AppSettings? _settings;
     private Dictionary<UsageProviderKind, UsageSnapshot> _selected = new();
-    private bool _scanFailed;
+    private long _lastSuccessfulScan;
     private Layout? _lastLayout;
     private Rectangle _free;
     private bool _scanning;
@@ -80,6 +80,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
         _lastLayout = null;
         _free = Rectangle.Empty;
         _nextScan = default;
+        _lastSuccessfulScan = default;
         _generation++;
     }
 
@@ -92,7 +93,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
         if (layout != _lastLayout)
         {
             _lastLayout = layout;
-            _scanFailed = false;
+            _lastSuccessfulScan = default;
             _free = Rectangle.Empty;
             _nextScan = default;
             _generation++;
@@ -172,7 +173,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
         return fitting <= 0 ? 0 : (length - (fitting + 1) * gap) / fitting;
     }
 
-    private static void Move(TaskbarWidgetWindow view, Rectangle target, IntPtr taskbar)
+    internal static void Move(TaskbarWidgetWindow view, Rectangle target, IntPtr taskbar)
     {
         // Owned top-level windows stay above their owner's surface when Explorer takes
         // focus. Changing only our own HWND's owner avoids repeatedly raising it.
@@ -187,18 +188,33 @@ internal sealed class TaskbarWidgetHost : IDisposable
         bool show = !view.IsVisible;
         if (!show && IsIconic(hwnd)) ShowWindow(hwnd, 4 /* SW_SHOWNOACTIVATE */);
         bool nativeHidden = !IsWindowVisible(hwnd);
-        if (!show && !nativeHidden && Bounds(hwnd) == target) return;
+        bool lostTopmost = (GetWindowLong(hwnd, -20) & 0x00000008) == 0;
+        bool behindTaskbar = IsBehindWindow(hwnd, taskbar);
+        if (!show && !nativeHidden && !lostTopmost && !behindTaskbar && Bounds(hwnd) == target) return;
 
         const uint keepZOrderAndFocus = 0x0004 | 0x0010;
         // Explorer can hide an owned HWND without changing its WPF Visibility.
         uint flags = !show && nativeHidden ? keepZOrderAndFocus | 0x0040 /* SWP_SHOWWINDOW */ : keepZOrderAndFocus;
-        SetWindowPos(hwnd, IntPtr.Zero, target.X, target.Y, target.Width, target.Height, flags);
+        // Explorer can change an owned window's native band without updating WPF's
+        // Topmost property. Repair only a lost band/order; never activate the widget.
+        if (lostTopmost || behindTaskbar) flags &= ~0x0004u;
+        SetWindowPos(hwnd, lostTopmost || behindTaskbar ? new IntPtr(-1) : IntPtr.Zero,
+            target.X, target.Y, target.Width, target.Height, flags);
         if (show)
         {
             view.Show();
             if (Bounds(hwnd) != target)
                 SetWindowPos(hwnd, IntPtr.Zero, target.X, target.Y, target.Width, target.Height, keepZOrderAndFocus);
         }
+    }
+
+    private static bool IsBehindWindow(IntPtr window, IntPtr reference)
+    {
+        int remaining = 1024;
+        for (var previous = GetWindow(window, 3 /* GW_HWNDPREV */); previous != IntPtr.Zero && remaining-- > 0;
+            previous = GetWindow(previous, 3))
+            if (previous == reference) return true;
+        return false;
     }
 
     private sealed record Layout(IntPtr Taskbar, Rectangle Bar, Rectangle Monitor, bool Vertical, bool Far, double Scale);
@@ -259,13 +275,19 @@ internal sealed class TaskbarWidgetHost : IDisposable
         finally { _scanning = false; }
 
         if (generation != _generation) return;
-        _nextScan = Environment.TickCount64 + (area.HasValue ? 2000 : 1000);
-        var nextArea = area ?? (_scanFailed ? Rectangle.Empty : _free);
-        _scanFailed = !area.HasValue;
+        long now = Environment.TickCount64;
+        _nextScan = now + (area.HasValue ? 2000 : 1000);
+        if (area.HasValue) _lastSuccessfulScan = now;
+        // Shell focus transitions can temporarily remove UIA descendants. Reuse only
+        // this layout's recent geometry; an actual empty gap still hides immediately.
+        var nextArea = area ?? (ReuseRecentArea(now, _lastSuccessfulScan) ? _free : Rectangle.Empty);
         if (_free == nextArea) return;
         _free = nextArea;
         Place();
     }
+
+    internal static bool ReuseRecentArea(long now, long lastSuccessfulScan) =>
+        lastSuccessfulScan > 0 && now >= lastSuccessfulScan && now - lastSuccessfulScan <= 6000;
 
     private static Rectangle? ReadFreeArea(Layout layout)
     {
@@ -337,7 +359,26 @@ internal sealed class TaskbarWidgetHost : IDisposable
                  node.Cached.AutomationId.StartsWith("Appid:", StringComparison.OrdinalIgnoreCase)))) found = true;
             occupiedRects.Add(occupied);
         }
-        return found ? LargestFreeArea(available, occupiedRects, layout.Vertical, far) : null;
+        return found ? NotificationEndFreeArea(available, occupiedRects, layout.Vertical, far) : null;
+    }
+
+    internal static Rectangle NotificationEndFreeArea(Rectangle available, IReadOnlyList<Rectangle> occupied, bool vertical, bool far)
+    {
+        // Use only the gap adjoining the notification end. A wider gap across the
+        // centered Start/apps cluster must not move widgets to the opposite side.
+        var clipped = occupied.Select(rect => Rectangle.Intersect(available, rect))
+            .Where(rect => rect.Width > 0 && rect.Height > 0).ToArray();
+        if (vertical)
+        {
+            int edge = clipped.Length == 0 ? (far ? available.Top : available.Bottom)
+                : far ? clipped.Max(rect => rect.Bottom) : clipped.Min(rect => rect.Top);
+            return far ? Rectangle.FromLTRB(available.Left, edge, available.Right, available.Bottom)
+                : Rectangle.FromLTRB(available.Left, available.Top, available.Right, edge);
+        }
+        int boundary = clipped.Length == 0 ? (far ? available.Left : available.Right)
+            : far ? clipped.Max(rect => rect.Right) : clipped.Min(rect => rect.Left);
+        return far ? Rectangle.FromLTRB(boundary, available.Top, available.Right, available.Bottom)
+            : Rectangle.FromLTRB(available.Left, available.Top, boundary, available.Bottom);
     }
 
     internal static Rectangle LargestFreeArea(Rectangle available, IReadOnlyList<Rectangle> occupied, bool vertical, bool far)
@@ -383,6 +424,7 @@ internal sealed class TaskbarWidgetHost : IDisposable
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hwnd, StringBuilder name, int count);
     [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern IntPtr GetWindow(IntPtr hwnd, uint command);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr hwnd, int command);

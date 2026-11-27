@@ -1,3 +1,73 @@
+# v1.4.15 공개 릴리즈 검증 기준 · 2026-11-27
+
+v1.4.14 이후의 좁은 세로 위젯 대응, 알림 영역 쪽 배치·native 순서 복구, 이전 수치 표시, 세 CLI 관리, Claude 버전 조회 보완과 두 탭 설정을 포함합니다. 제품 코드의 유효한 검증 근거는 아래의 **서비스 회귀 325개**, 설정·CLI 행동 검사에서 성공한 항목, 관련 수정 후 **최종 설정 레이아웃 43개**입니다. 예전 **132개 WPF** 결과는 당시의 작업표시줄·CLI 및 한 화면 설정에 대한 기록이며, 현재 두 탭 설정 전체의 검사 수로 합산하지 않습니다.
+
+이번 공개 준비에서는 사용자 안내·한영 릴리즈 노트·현재 설정 갤러리를 최종 동작에 맞춰 정리하고 이미 확인한 설정 PNG 8개를 보존했습니다. 문서와 릴리즈 메타데이터만 정리한 뒤 같은 기능 검사를 반복하지 않습니다. 새 스크린샷은 실제 설치 결과가 아닌 합성 CLI 상태입니다.
+
+공개 패키지는 커밋과 깨끗한 HEAD를 고정한 뒤 기존 `scripts/publish.ps1`로 준비합니다. 필수 오프라인 runtime 2개 검사와 Release self-contained publish, 모든 ZIP 항목·원본 문서·EXE 버전/커밋·SHA256 비교를 수행하며 이전 로컬 패키지를 보존합니다. 태그는 패키지와 같은 커밋에 고정합니다. 산출물 해시·검사 결과·공개 URL·로컬 적용 결과처럼 패키징 뒤 결정되는 값은 `dist/releases/v1.4.15-public-20261127/verification/`에 기록해 릴리즈 커밋과 패키지 안의 문서를 동일하게 유지합니다. [패키징 절차](docs/packaging.md) · [최종 릴리즈 노트](docs/releases/v1.4.15.md)
+
+실제 CLI 설치·업데이트·로그인, Windows 11 가로 작업표시줄 실기 및 사용자가 겪은 실제 포커스 전환의 미검증 경계는 아래 기록과 같습니다.
+
+---
+
+# 설정 탭 UI 정리 및 로컬 적용 · 2026-11-27
+
+길어진 설정을 **일반**(서비스 표시·동작)과 **계정 · CLI**(계정 연결·CLI 관리) 두 native 탭으로 나눴습니다. 기본 창은 **410×640 DIP**, 최소 높이는 **420 DIP**입니다. 글자나 기존 컨트롤을 줄이지 않고 기본 크기의 상시 스크롤을 없앴으며, 작은 창이나 긴 오류 안내에서만 해당 탭에 스크롤을 표시합니다. 흰 트랙과 화살표 대신 투명 트랙·6 DIP thumb를 사용하되 실제 native hit area는 14 DIP이며 page-up/down·drag·접근성 ScrollBar 역할을 유지합니다. 새 탭의 선택은 밑줄과 굵기로 구분하고 키보드 포커스는 PrimaryText 테두리로 표시합니다.
+
+| 실행한 검증 | 결과와 범위 |
+| --- | --- |
+| `dotnet build VibeMeters.csproj -c Release -r win-x64 --self-contained true` | 최종 **경고 0 / 오류 0**. 초기 검증 fixture의 TabItemAutomationPeer 생성자 인수를 실제 WPF API에 맞춰 수정했습니다. |
+| `VibeMeters.exe --smoke-test --settings-only` | 초기 **66 통과 / 2 실패**. 기존 설정·CLI 설치/업데이트/취소/재시도와 탭 왕복 중 작업 유지 등 성공 근거를 확보했습니다. 두 실패는 native theme의 scrollbar 최소 폭 17 DIP 제약이었으며, Width·MinWidth·MaxWidth를 모두 14 DIP로 지정해 해결했습니다. 관련 실패와 새 영향 범위만 재검증했습니다. |
+| `VibeMeters.exe --smoke-test --settings-layout-only` | 최종 **43 통과 / 0 실패**. 메인 visual review 후 기본 높이를 700→640 DIP로 조정하고, 세 CLI가 모두 정상 완료되어 결과·설치 버전이 각 2줄인 상태에서 **두 탭 × 한영 × dark/light 8개** 기본 레이아웃이 스크롤 없이 맞음을 확인했습니다. 최소 창·긴 오류의 fallback, native page-down/drag 이벤트·마지막 설정 노출, 기본 크기로 복귀 후 스크롤 제거, 새 탭 접근성/포커스 및 텍스트 4.5:1·thumb/focus 3:1 기준도 확인했습니다. 실제 설치/로그인은 메모리 stub으로 대체했습니다. |
+| 고유 staging self-contained publish | **성공**. `dotnet publish VibeMeters.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true -o dist\VibeMeters-settings-tabs-local-20261127`. 검증·publish·적용 전후 앱 소스 SHA256 일치를 확인했습니다. 기존 서비스 회귀·작업표시줄 전체 검사는 무관하여 반복하지 않았습니다. |
+| 로컬 적용 | 기존 PID **44616**/시작 시각/EXE 해시를 확인한 뒤 정확한 프로세스만 Restart Manager **flags=0 비강제 종료**했습니다. 백업 없이 `D:\Applications\VibeMeters\VibeMeters.exe` 하나를 교체하고 **16:06:46 KST**, 새 PID **22160**을 `--startup`으로 실행했습니다. 버전은 **1.4.15**로 유지했습니다. 설정 변경 **0개**, 기존 runtime **7파일** 변경 **0개**, 실행 프로세스 **1개**, 실제 위젯 **3개**의 `visible/topmost/noactivate=true`와 서로 겹치지 않는 위치를 확인했습니다. |
+
+설치 EXE와 staging EXE의 SHA256은 **9948D7A64AFBDF9EE68FFADDD7E820A7E98A7902309F433D63C79E312D81D084**입니다. 기존 `dist/releases/v1.4.15/VibeMeters-win-x64.zip`과 과거 릴리즈 노트는 수정하지 않았으며, 원래 ZIP SHA256 **10EF529AABDDB281476FBB225EDDC6DFC99DFD894EBA5FDF469BD359B0C2BDB1**을 유지합니다. 새 버전·릴리즈 파일·Git commit/push/게시를 만들지 않았습니다. 기존 미커밋 변경과 업무 저장·로그인·CLI 동작을 보존했습니다.
+
+증거는 `dist/settings-tabs-verify-20261127/`의 `build-final.txt`, `smoke-settings-initial.txt`, `smoke-scroll-width17.txt`, `smoke-layout-final.txt`, `source-inputs-final.json`, `publish.txt`, `local-apply.json`, `final-state.json` 및 `settings-general-*.png`·`settings-accounts-*.png`·`settings-minimum-*-dark-ko.png`·`settings-long-error-dark-ko.png`입니다. PNG는 합성 상태의 실제 WPF client 캡처로 메인에서 기본 dark/light·한영·420 DIP fallback을 직접 열어 확인했습니다. 실제 CLI 설치나 로그인, 물리 Ctrl+Tab/방향키 입력 또는 사용자가 겪은 실제 포커스 전환 재현은 이번에 수행하지 않았습니다. 키 탐색 의미는 native TabControl/TabItem을 유지하고 WPF focus outline 및 접근성 selection pattern으로 확인했습니다.
+
+UI gate(변경 범위): Hard Gate **PASS** · 연결된 native 탭/scroll 동작과 기존 CLI 제어·오류 상태 보존. Purpose Gate **PASS** · 항목을 업무별 두 탭으로 나눠 기본 상시 스크롤 제거. Liveliness **PASS** · 기존 유틸리티 디자인의 ENERGY/RHYTHM/MOTION **1/1/1**, 기존 색·폰트·서비스 행 유지. Craftsmanship **PASS** · 8개 기본 레이아웃, 정상 2줄 CLI 결과, 작은 창/긴 오류 fallback과 실제 PNG 확인. 실제 OS 입력과 합성 검증의 경계를 위에 구분했습니다.
+
+---
+
+# v1.4.15 로컬 릴리즈 생성 및 실행 앱 교체 · 2026-11-27
+
+사용자 요청에 따라 앱 백업을 만들지 않고 새 릴리즈 EXE를 현재 설치 위치에 적용했습니다. Git commit·push·GitHub 릴리즈 게시는 실행하지 않았습니다.
+
+- `VibeMeters.csproj`를 **1.4.15**로 올리고 한영 릴리즈 노트·README 링크를 갱신했습니다. 아래의 유효한 회귀 **325개** 및 관련 WPF **132개** 성공 증거를 재사용하며 버전 변경만을 이유로 같은 검사를 반복하지 않았습니다.
+- 기존 `scripts/publish.ps1 -Node dist\releases\v1.4.15\build-tools\node.exe -OutputDirectory dist\releases\v1.4.15\VibeMeters-win-x64`를 실행했습니다. 기존 설치 runtime의 Node **24.22.0**과 라이선스를 packaging 입력으로 재사용했고, 잠금 의존성 복원·오프라인 runtime **2개 검사**·Release self-contained single-file publish·ZIP 생성이 성공했습니다. 출력은 기존 dist 정리 범위 밖의 새 경로를 사용해 이전 산출물을 보존했습니다. 잠금 의존성의 npm deprecation 경고는 있었으며 의존성 버전을 바꾸지 않았습니다.
+- `dist/releases/v1.4.15/VibeMeters-win-x64.zip`의 **98개 항목**과 배포 폴더를 SHA256으로 비교하고, EXE 버전 **1.4.15** 및 패키지 내 README·문서·릴리즈 노트와 현재 원본의 일치를 확인합니다. 최종 ZIP 해시와 항목별 결과는 같은 릴리즈의 `verification/archive-verification.json`에 기록합니다. 소스 입력 해시는 publish 전후 및 적용 전 동일했습니다.
+- **15:38:58 KST**에 `D:\Applications\VibeMeters\VibeMeters.exe`를 새 PID **44616**으로 시작했습니다. 이전 PID **13580**과 시작 시각을 Restart Manager에 정확히 등록하고 영향 목록이 해당 프로세스 하나임을 확인한 뒤, **flags=0 비강제 종료**로 교체했습니다. Explorer와 다른 앱을 종료하지 않았습니다. 별도 이전 EXE 백업을 만들지 않았습니다.
+- 설치 EXE와 ZIP 내 EXE의 SHA256은 **FE2334C747B00D4ED8446DAAC0FE3CBF429C9BB6096F09445F9CE22107427574**, ProductVersion은 `1.4.15+34be33079e7d908edee3abe03f78972196d54f98`입니다. `--startup`으로 기존 숨김 선호를 유지했으며 실행 프로세스는 **1개**, 비교한 표시·계정 슬롯·주기·위젯·테마 등 설정 변경은 **0개**, 기존 runtime **7파일**의 해시 변화는 **0개**였습니다. 설정·runtime·인증 파일을 복사하거나 교체하지 않았습니다.
+- 실제 새 프로세스의 위젯 **3개**는 native `visible/topmost/noactivate=true`, 오른쪽 세로 작업표시줄의 `x=1819..1920`과 서로 겹치지 않는 `y=929..975 / 977..1023 / 1025..1071`에서 확인했습니다. 이는 네이티브 표시 상태 관찰이며 사용자의 실제 포커스 전환 현상 재현은 아닙니다.
+
+증거: `dist/releases/v1.4.15/verification/publish.txt`, `source-inputs.json`, `local-apply.json`, `archive-verification.json`. 이 릴리즈에는 아래 변경 외에 기존 미커밋 Claude 버전 조회 대기/성공 캐시와 공급자가 유지한 이전 수치의 위젯·툴팁 표시 개선도 포함됩니다. 실제 CLI 설치·업데이트·로그인, Windows 11 가로 작업표시줄 실기와 포커스 전환의 미검증 경계는 그대로입니다.
+
+---
+
+# 작업표시줄 위치·표시 복구 및 CLI 관리 검증 · 2026-11-27
+
+가로 작업표시줄에서는 알림 영역 바로 왼쪽, 세로 작업표시줄에서는 알림 영역 쪽의 연속 빈 공간만 사용하도록 변경했습니다. 중앙 시작·앱 버튼 반대편의 더 넓은 빈 공간으로 옮기지 않으며, 가독성 최소 폭이 부족하면 기존 축약·숨김을 적용합니다. 실제 네이티브 topmost band가 내려가거나 소유 작업표시줄 뒤로 간 경우에만 비활성 배치로 복구합니다. 같은 작업표시줄 레이아웃의 UI Automation 일시 실패는 마지막 정상 측정부터 최대 6초까지 재사용하며, 레이아웃 변경·확인된 빈 공간 없음·자동 숨김·전체 화면 제외 처리는 유지합니다.
+
+설정에 Codex CLI·Claude Code·Antigravity CLI 설치 상태/버전과 한 번 클릭 설치·업데이트·진행 중 취소를 연결했습니다. 로그인과 분리하며 기존 npm prefix·native updater·WinGet 관리 경로를 사용합니다. CLI별 동시 작업을 막고 작업 후 실행 경로와 `--version` 성공을 확인합니다. 버전이 같다는 이유만으로 최신이라고 표시하지 않습니다. 설정에 세로 스크롤을 추가해 낮은 창에서도 모든 항목에 접근할 수 있게 했습니다.
+
+| 실제 실행한 검사 | 결과와 범위 |
+| --- | --- |
+| `dotnet run --project tests\VibeMeters.Tests.csproj -c Release -r win-x64 --self-contained true` | **325 통과 / 0 실패**. 프로젝트 참조 앱 빌드를 포함합니다. 신규 13개는 notification-end gap, 공간 부족·세로·음수 좌표, 6초 경계, 공식 설치원 계획, native update, 실패·버전/경로 검증, 취소/중복 gate, npm prefix/WinGet을 합성 입력·fake command runner로 확인합니다. 실제 CLI 설치·업데이트를 실행하지 않습니다. |
+| 최초 `VibeMeters.exe --smoke-test` | **420 통과 / 5 실패**. 지연 `Progress<T>` callback이 완료 상태를 덮는 실제 결함 4항목과 synthetic native 테스트의 HWND 초기화 누락 1항목을 확인했습니다. 완료된 operation의 callback을 무시하도록 수정하고, 테스트는 production과 같은 `EnsureHandle` 사전조건 및 유효 HWND 확인으로 강화했습니다. |
+| 수정 후 `dotnet build VibeMeters.csproj -c Release -r win-x64 --self-contained true` | **경고 0 / 오류 0**. 변경된 UI와 네이티브 관련 경로를 다시 빌드했습니다. |
+| 수정 후 `VibeMeters.exe --smoke-test --taskbar-cli-only` | **132 통과 / 0 실패**. 기존 설정/CLI·작업표시줄 관련 전체 경로를 재검증했습니다. 실제 WPF 컨트롤 이벤트로 설치·업데이트·실패·재시도·취소·창 닫기 취소, 한영 전환·dark/light·스크롤을 확인하되 CLI 서비스는 메모리 stub으로 교체했습니다. 이전 full 검사에서 성공한 무관한 검사는 반복하지 않았습니다. |
+| Single-file self-contained publish | **성공**. 검증 후 소스 SHA256을 publish 전후 비교해 동일함을 확인했습니다. 준비 파일은 `dist/VibeMeters-widget-cli-local-20261127/VibeMeters.exe`이며, 이 기록 시점에는 기존 실행 앱을 교체하지 않았습니다. Gemini runtime 변경이 없어 기존 runtime을 그대로 사용할 수 있습니다. |
+| `git diff --check` 및 PNG 확인 | **통과**. `settings-cli-dark-ko.png`, `settings-cli-dark-en.png`, `settings-cli-light-ko.png`의 하단 CLI 섹션을 열어 상태 문구·버튼·스크롤·잘림을 확인했습니다. 합성 상태의 WPF client 캡처이며 실제 설치 상태나 네이티브 작업표시줄 픽셀 캡처가 아닙니다. |
+
+증거는 `dist/widget-cli-verify-20261127/`의 `regression.txt`, `smoke-initial.txt`, `smoke-focused.txt`, `build-after-repair.txt`, `publish.txt`, `source-inputs-after-repair.json`, `apply-plan.json` 및 위 PNG 3개입니다. 최종 native 합성 검사에서는 독립 owner를 사용해 Explorer를 내리지 않고 topmost 해제 후 동일 배치 경로로 복구했으며, native style `0x80008`, target `(20,20)-(180,66)` 일치, foreground `0 → 0`을 기록했습니다. 기존 placement timer의 native hide 후 복구와 선택 위젯 재생성 검사도 통과했습니다.
+
+UI gate(변경 범위): Hard Gate **PASS** · 새로운 버튼의 실제 이벤트·로딩/실패/취소와 접근성 이름/키보드 포커스 스타일을 확인했습니다. Purpose Gate **PASS** · 기존 설정 스타일의 행과 작업 상태만 추가하고 세로 스크롤로 낮은 높이에 대응했습니다. Liveliness **PASS** · 기존 데스크톱 유틸리티 방향(ENERGY/RHYTHM/MOTION 1/1/1), 서비스 이름·작업 버튼·상태의 구분을 유지했습니다. Craftsmanship **PASS** · dark/light·한영 실제 컨트롤과 오류/취소를 132개 관련 검사 및 PNG로 확인했습니다. 새 CLI 행의 Primary/Secondary 텍스트 대비는 dark 13.32/8.86, light 17.20/6.59로 4.5 이상입니다.
+
+남은 검증 한계: 이 PC의 실제 작업표시줄은 오른쪽 세로형 `(1819,0)-(1920,1200)`으로 관찰되어 Windows 11 가로형은 합성 좌표로 검증했습니다. Computer Use의 앱/창 목록에서 현재 VibeMeters 창이 반환되지 않았고 네이티브 foreground도 0이어서 사용자가 겪는 실제 포커스 전환을 재현했다고 주장하지 않습니다. 자동 숨김·실제 전체 화면·혼합 DPI 화면 전환도 이번에 직접 조작하지 않았습니다. 실제 CLI 다운로드·설치·업데이트·로그인, 회사 CA/프록시·권한 차단, 자연스러운 Explorer 재시작은 실행하지 않았습니다. 기존 사용자 미커밋 변경 4파일은 보존했습니다.
+
+---
+
 # v1.4.11 네 서비스 조회 복구 검증 — 2026-11-08
 
 Claude 갱신과 429 대기, Codex 공식 CLI 복구, Gemini 재시도 시각 전달, Grok 인증 교체 후 재조회를 검증했습니다. 사용한 합성 응답과 실계정 관찰을 아래에 구분합니다.
